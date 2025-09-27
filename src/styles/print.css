@@ -1,0 +1,75 @@
+/* Estilos específicos para impresión */
+@media print {
+  /* Ocultar elementos no necesarios para impresión */
+  .print\\:hidden {
+    display: none !important;
+  }
+
+  /* Mostrar elementos solo en impresión */
+  .print\\:block {
+    display: block !important;
+  }
+
+  /* Ajustes de fondo para impresión */
+  .print\\:bg-white {
+    background-color: white !important;
+  }
+
+  .print\\:bg-gray-100 {
+    background-color: #f3f4f6 !important;
+  }
+
+  /* Ajustes de color de texto para impresión */
+  .print\\:text-gray-900 {
+    color: #111827 !important;
+  }
+
+  .print\\:text-gray-600 {
+    color: #4b5563 !important;
+  }
+
+  .print\\:text-gray-500 {
+    color: #6b7280 !important;
+  }
+
+  /* Ajustes de bordes para impresión */
+  .print\\:border {
+    border: 1px solid #d1d5db !important;
+  }
+
+  .print\\:border-gray-300 {
+    border-color: #d1d5db !important;
+  }
+
+  /* Eliminar bordes redondeados en impresión */
+  .print\\:rounded-none {
+    border-radius: 0 !important;
+  }
+
+  /* Ajustes de padding para impresión */
+  .print\\:px-0 {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .print\\:py-0 {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  /* Configuraciones generales de página */
+  @page {
+    size: A4;
+    margin: 1cm;
+  }
+
+  body {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  /* Prevenir saltos de página dentro de elementos importantes */
+  .avoid-break {
+    page-break-inside: avoid;
+  }
+}
