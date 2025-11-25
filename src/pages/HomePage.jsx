@@ -26,6 +26,11 @@ import {
   Activity,
   Target,
 } from "lucide-react";
+import DashboardAdmin from "./DashboardAdmin";
+import DashboardProfesor from "./DashboardProfesor";
+import DashboardEstudiante from "./DashboardEstudiante";
+import DashboardPadre from "./DashboardPadre";
+import api from "../api/axiosConfig";
 
 // Datos simulados más realistas
 const data = [
@@ -149,6 +154,9 @@ const recentActivities = [
 function HomePage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [animatedValues, setAnimatedValues] = useState(data.map(() => 0));
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -161,6 +169,75 @@ function HomePage() {
     }, 500);
     return () => clearTimeout(timer);
   }, []);
+
+  // Obtener información del usuario
+  useEffect(() => {
+    const obtenerUsuario = async () => {
+      try {
+        const res = await api.get("/api/usuarios/perfil", {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setUser({
+          nombre: res.data.usuario?.nombre || res.data.nombre,
+          apellido: res.data.usuario?.apellido || res.data.apellido,
+          rol: res.data.usuario?.rol || res.data.rol,
+          email: res.data.usuario?.email || res.data.email,
+        });
+      } catch (error) {
+        console.error("Error al obtener usuario:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (token) {
+      obtenerUsuario();
+    } else {
+      setLoading(false);
+    }
+  }, [token]);
+
+  // Mostrar loader mientras carga
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+        <div className="text-white text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-cyan-500 mx-auto mb-4"></div>
+          <p className="text-lg">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Redirigir a dashboard específico según el rol
+  if (user && user.rol) {
+    console.log("🔍 Debug - Rol del usuario:", user.rol);
+    console.log("🔍 Debug - Usuario completo:", user);
+
+    // Normalizar el rol si viene del backend sin normalizar
+    const normalizedRole =
+      user.rol.toLowerCase() === "estudiante"
+        ? "alumno"
+        : user.rol.toLowerCase();
+    console.log("🔄 Rol normalizado:", normalizedRole);
+
+    switch (normalizedRole) {
+      case "admin":
+      case "administrador":
+      case "director":
+        return <DashboardAdmin user={user} />;
+      case "profesor":
+        return <DashboardProfesor user={user} />;
+      case "alumno":
+      case "estudiante":
+        return <DashboardEstudiante user={user} />;
+      case "padre":
+        return <DashboardPadre user={user} />;
+      default:
+        // Si no tiene rol definido, mostrar dashboard genérico
+        break;
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">

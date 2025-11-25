@@ -1,4 +1,4 @@
-import React, {useState} from "react";
+import React, {useState, useEffect} from "react";
 import {
   HomeIcon,
   BuildingLibraryIcon,
@@ -20,17 +20,11 @@ import {
   FolderIcon,
   ShieldCheckIcon,
   UserIcon,
-  CameraIcon,
-  PrinterIcon,
-  GlobeAltIcon,
   EnvelopeIcon,
-  PhoneIcon,
-  MapPinIcon,
   TrophyIcon,
   StarIcon,
   ClipboardDocumentListIcon,
   ComputerDesktopIcon,
-  DevicePhoneMobileIcon,
   QuestionMarkCircleIcon,
   InformationCircleIcon,
   ChevronDownIcon,
@@ -38,7 +32,7 @@ import {
 } from "@heroicons/react/24/solid";
 import {useNavigate, useLocation} from "react-router-dom";
 import ConfirmModal from "./ConfirmModal";
-import {ExclamationTriangleIcon} from "@heroicons/react/24/outline";
+import {filterMenuByRole} from "../config/roles";
 
 const menuSections = [
   {
@@ -50,6 +44,13 @@ const menuSections = [
         icon: <HomeIcon className="h-5 w-5" />,
         path: "/",
         color: "text-cyan-400",
+      },
+      {
+        key: "mis_calificaciones",
+        label: "Mis Calificaciones",
+        icon: <ClipboardDocumentCheckIcon className="h-5 w-5" />,
+        path: "/mis-calificaciones",
+        color: "text-emerald-400",
       },
       {
         key: "notifications",
@@ -345,16 +346,27 @@ const menuSections = [
   },
 ];
 
-function Sidebar({setToken}) {
+function Sidebar({setToken, user}) {
   const [collapsed, setCollapsed] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     Principal: true,
     "Gestión Académica": true,
   });
+  const [filteredMenu, setFilteredMenu] = useState([]);
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Filtrar menú según el rol del usuario
+  useEffect(() => {
+    if (user && user.rol) {
+      const filtered = filterMenuByRole(menuSections, user.rol);
+      setFilteredMenu(filtered);
+    } else {
+      setFilteredMenu([]);
+    }
+  }, [user]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -412,7 +424,7 @@ function Sidebar({setToken}) {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
         <div className="p-2">
-          {menuSections.map((section, sectionIndex) => (
+          {filteredMenu.map((section, sectionIndex) => (
             <div key={section.title} className="mb-4">
               {/* Section Header */}
               {!collapsed && (
@@ -502,20 +514,25 @@ function Sidebar({setToken}) {
 
       {/* User Profile & Logout */}
       <div className="p-4 border-t border-gray-700 bg-gradient-to-r from-gray-800 to-gray-900">
-        {!collapsed && (
-          <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-gradient-to-r from-gray-700/50 to-gray-600/50 ring-1 ring-gray-600">
+        {!collapsed && user && (
+          <button
+            onClick={() => navigate("/perfil")}
+            className="w-full flex items-center gap-3 mb-3 p-3 rounded-xl bg-gradient-to-r from-gray-700/50 to-gray-600/50 ring-1 ring-gray-600 hover:ring-cyan-500/50 hover:from-cyan-900/30 hover:to-blue-900/30 transition-all duration-300 group"
+          >
             <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
                 <UserIcon className="h-6 w-6 text-white" />
               </div>
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">
-                Administrador
+            <div className="flex-1 min-w-0 text-left">
+              <p className="text-sm font-medium text-white truncate group-hover:text-cyan-300 transition-colors duration-200">
+                {user.nombre} {user.apellido}
               </p>
-              <p className="text-xs text-gray-400 truncate">Sistema AOC</p>
+              <p className="text-xs text-gray-400 truncate capitalize">
+                {user.rol || "Usuario"}
+              </p>
             </div>
-          </div>
+          </button>
         )}
 
         <button

@@ -19,6 +19,9 @@ import HorarioPage from "./pages/HorarioPage";
 import HorarioClases from "./pages/HorarioClases";
 import RegistroAlumno from "./pages/RegistroAlumno";
 import Asistencia from "./pages/Asistencia";
+import ProtectedRoute from "./components/ProtectedRoute";
+import PerfilUsuario from "./pages/PerfilUsuario";
+import MisCalificaciones from "./pages/MisCalificaciones";
 import api from "./api/axiosConfig";
 
 function AuthWrapper({ token, setToken, selected, setSelected, user }) {
@@ -37,6 +40,7 @@ function AuthWrapper({ token, setToken, selected, setSelected, user }) {
       <div className="flex flex-1">
         <Sidebar
           setToken={setToken}
+          user={user}
           onSelect={setSelected}
           active={selected}
           onLogout={() => {
@@ -47,20 +51,102 @@ function AuthWrapper({ token, setToken, selected, setSelected, user }) {
         <main className="flex-1 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-auto">
           <Header user={user} />
           <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/escuelas" element={<EscuelasList setToken={setToken} />} />
-            <Route path="/alumnos" element={<Alumnos />} />
-            <Route path="/alumnos/detalle/:id" element={<DetalleAlumno />} />
-            <Route path="/alumnos/registro" element={<RegistroAlumno />} />
-            <Route path="/profesores" element={<Profesores setToken={setToken} />} />
-            <Route path="/materias" element={<MateriasPage />} />
-            <Route path="/calificaciones" element={<CalificacionesPage />} />
-            <Route path="/grados" element={<GradosPage />} />
-            <Route path="/secciones" element={<SeccionesPage />} />
-            <Route path="/horario" element={<HorarioPage />} />
-            <Route path="/registro" element={<Registro setToken={setToken} />} />
-            <Route path="/horario-clases" element={<HorarioClases />} />
-            <Route path="/asistencia" element={<Asistencia />} />
+            <Route path="/" element={
+              <ProtectedRoute user={user}>
+                <HomePage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/escuelas" element={
+              <ProtectedRoute user={user}>
+                <EscuelasList setToken={setToken} />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/alumnos" element={
+              <ProtectedRoute user={user}>
+                <Alumnos />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/alumnos/detalle/:id" element={
+              <ProtectedRoute user={user}>
+                <DetalleAlumno />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/alumnos/registro" element={
+              <ProtectedRoute user={user}>
+                <RegistroAlumno />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/profesores" element={
+              <ProtectedRoute user={user}>
+                <Profesores setToken={setToken} />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/materias" element={
+              <ProtectedRoute user={user}>
+                <MateriasPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/calificaciones" element={
+              <ProtectedRoute user={user}>
+                <CalificacionesPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/grados" element={
+              <ProtectedRoute user={user}>
+                <GradosPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/secciones" element={
+              <ProtectedRoute user={user}>
+                <SeccionesPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/horario" element={
+              <ProtectedRoute user={user}>
+                <HorarioPage />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/registro" element={
+              <ProtectedRoute user={user}>
+                <Registro setToken={setToken} />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/horario-clases" element={
+              <ProtectedRoute user={user}>
+                <HorarioClases />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/asistencia" element={
+              <ProtectedRoute user={user}>
+                <Asistencia />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/perfil" element={
+              <ProtectedRoute user={user}>
+                <PerfilUsuario />
+              </ProtectedRoute>
+            } />
+
+            <Route path="/mis-calificaciones" element={
+              <ProtectedRoute user={user}>
+                <MisCalificaciones />
+              </ProtectedRoute>
+            } />
+
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
@@ -68,6 +154,18 @@ function AuthWrapper({ token, setToken, selected, setSelected, user }) {
     </div>
   );
 }
+
+// Función para normalizar roles del backend al frontend
+const normalizeRole = (backendRole) => {
+  const roleMap = {
+    'Administrador': 'admin',
+    'Profesor': 'profesor',
+    'Estudiante': 'alumno',
+    'Director': 'director',
+    'Padre': 'padre'
+  };
+  return roleMap[backendRole] || backendRole?.toLowerCase();
+};
 
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
@@ -84,10 +182,14 @@ function App() {
       })
         .then(res => {
           console.log("Datos del usuario obtenidos:", res.data); // Debug
+          const backendRole = res.data.usuario?.rol || res.data.rol;
+          const normalizedRole = normalizeRole(backendRole);
+          console.log("Rol del backend:", backendRole, "→ Normalizado:", normalizedRole); // Debug
+
           setUser({
             nombre: res.data.usuario?.nombre || res.data.nombre,
             apellido: res.data.usuario?.apellido || res.data.apellido,
-            rol: res.data.usuario?.rol || res.data.rol,
+            rol: normalizedRole,
             email: res.data.usuario?.email || res.data.email,
             imagen: res.data.usuario?.imagen
               ? `http://localhost:4000${res.data.usuario.imagen}`
