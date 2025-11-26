@@ -13,8 +13,10 @@ import {
 
 function MateriasPage() {
   const [materias, setMaterias] = useState([]);
+  const [grados, setGrados] = useState([]);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
+  const [idGrado, setIdGrado] = useState("");
   const [creditos, setCreditos] = useState("");
   const [horasSemanales, setHorasSemanales] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -25,6 +27,7 @@ function MateriasPage() {
   const [editId, setEditId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [user, setUser] = useState(null);
 
   // Nuevos estados para funcionalidades adicionales
   const [searchTerm, setSearchTerm] = useState("");
@@ -37,10 +40,47 @@ function MateriasPage() {
 
   const token = localStorage.getItem("token");
 
+  // Verificar si el usuario puede editar/eliminar (solo admin, director, secretaria)
+  const canEdit =
+    user &&
+    [
+      "admin",
+      "administrador",
+      "director",
+      "secretariado",
+      "secretaria",
+    ].includes(user.rol?.toLowerCase());
+
   useEffect(() => {
     fetchMaterias();
+    fetchGrados();
+    fetchUser();
     // eslint-disable-next-line
   }, []);
+
+  const fetchUser = async () => {
+    try {
+      const res = await api.get("/api/usuarios/perfil", {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      setUser({
+        rol: res.data.usuario?.rol || res.data.rol,
+      });
+    } catch (error) {
+      console.error("Error al cargar usuario:", error);
+    }
+  };
+
+  const fetchGrados = async () => {
+    try {
+      const res = await api.get("/api/grados", {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      setGrados(res.data);
+    } catch (error) {
+      console.error("Error al cargar grados:", error);
+    }
+  };
 
   useEffect(() => {
     if (mensaje) {
@@ -65,6 +105,12 @@ function MateriasPage() {
 
   const handleCrear = async (e) => {
     e.preventDefault();
+
+    if (!idGrado) {
+      setMensaje("Debe seleccionar un grado para la materia");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await api.post(
@@ -72,6 +118,7 @@ function MateriasPage() {
         {
           nombre,
           descripcion,
+          id_grado: idGrado,
           creditos: creditos || null,
           horas_semanales: horasSemanales || null,
           categoria,
@@ -85,13 +132,22 @@ function MateriasPage() {
       setMensaje("Materia creada correctamente");
       fetchMaterias();
     } catch (error) {
-      setMensaje("Error al crear materia");
+      setMensaje(
+        error.response?.data?.error ||
+          error.response?.data?.message ||
+          "Error al crear materia"
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleActualizar = async (id) => {
+    if (!idGrado) {
+      setMensaje("Debe seleccionar un grado para la materia");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await api.put(
@@ -99,6 +155,7 @@ function MateriasPage() {
         {
           nombre,
           descripcion,
+          id_grado: idGrado,
           creditos: creditos || null,
           horas_semanales: horasSemanales || null,
           categoria,
@@ -112,7 +169,11 @@ function MateriasPage() {
       setMensaje("Materia actualizada correctamente");
       fetchMaterias();
     } catch (error) {
-      setMensaje("Error al actualizar materia");
+      setMensaje(
+        error.response?.data?.error ||
+          error.response?.data?.message ||
+          "Error al actualizar materia"
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -136,6 +197,7 @@ function MateriasPage() {
   const limpiarFormulario = () => {
     setNombre("");
     setDescripcion("");
+    setIdGrado("");
     setCreditos("");
     setHorasSemanales("");
     setCategoria("");
@@ -148,6 +210,7 @@ function MateriasPage() {
     setEditId(materia.id_materia);
     setNombre(materia.nombre);
     setDescripcion(materia.descripcion || "");
+    setIdGrado(materia.id_grado || "");
     setCreditos(materia.creditos || "");
     setHorasSemanales(materia.horas_semanales || "");
     setCategoria(materia.categoria || "");
@@ -222,13 +285,15 @@ function MateriasPage() {
                 cursos del sistema educativo.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="px-8 py-4 bg-white text-indigo-600 rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center"
-                >
-                  <PlusIcon className="w-5 h-5 mr-2" />
-                  Crear Nueva Materia
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="px-8 py-4 bg-white text-indigo-600 rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center"
+                  >
+                    <PlusIcon className="w-5 h-5 mr-2" />
+                    Crear Nueva Materia
+                  </button>
+                )}
                 <button
                   onClick={() => setShowFilters(!showFilters)}
                   className="px-8 py-4 bg-white/10 text-white rounded-2xl font-semibold backdrop-blur-sm hover:bg-white/20 transform transition-all duration-300 flex items-center justify-center"
@@ -431,13 +496,15 @@ function MateriasPage() {
                 Comienza creando la primera materia para organizar el catálogo
                 académico.
               </p>
-              <button
-                onClick={() => setShowModal(true)}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg transform hover:scale-105 transition-all duration-200"
-              >
-                <PlusIcon className="w-5 h-5 mr-2 inline" />
-                Crear Primera Materia
-              </button>
+              {canEdit && (
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg transform hover:scale-105 transition-all duration-200"
+                >
+                  <PlusIcon className="w-5 h-5 mr-2 inline" />
+                  Crear Primera Materia
+                </button>
+              )}
             </div>
           )}
 
@@ -555,44 +622,53 @@ function MateriasPage() {
 
                 {/* Botones de acción */}
                 <div className="bg-gray-700 px-6 py-4 flex justify-between items-center">
-                  <button
-                    onClick={() => handleEditarMateria(materia)}
-                    className="flex items-center space-x-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium shadow-sm transform hover:scale-105 transition-all duration-200"
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                      />
-                    </svg>
-                    <span>Editar</span>
-                  </button>
-                  <button
-                    onClick={() => handleEliminar(materia.id_materia)}
-                    className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-sm transform hover:scale-105 transition-all duration-200"
-                    title="Eliminar"
-                  >
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
+                  {canEdit && (
+                    <>
+                      <button
+                        onClick={() => handleEditarMateria(materia)}
+                        className="flex items-center space-x-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium shadow-sm transform hover:scale-105 transition-all duration-200"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                          />
+                        </svg>
+                        <span>Editar</span>
+                      </button>
+                      <button
+                        onClick={() => handleEliminar(materia.id_materia)}
+                        className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-sm transform hover:scale-105 transition-all duration-200"
+                        title="Eliminar"
+                      >
+                        <svg
+                          className="w-4 h-4"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                          />
+                        </svg>
+                      </button>
+                    </>
+                  )}
+                  {!canEdit && (
+                    <div className="w-full text-center py-2 text-gray-400 text-sm">
+                      Solo lectura
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -666,46 +742,52 @@ function MateriasPage() {
                           : "-"}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <div className="flex items-center justify-center space-x-2">
-                          <button
-                            onClick={() => handleEditarMateria(materia)}
-                            className="p-2 bg-yellow-500/20 text-yellow-300 rounded-lg hover:bg-yellow-500/30 transition-colors duration-200"
-                            title="Editar"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
+                        {canEdit ? (
+                          <div className="flex items-center justify-center space-x-2">
+                            <button
+                              onClick={() => handleEditarMateria(materia)}
+                              className="p-2 bg-yellow-500/20 text-yellow-300 rounded-lg hover:bg-yellow-500/30 transition-colors duration-200"
+                              title="Editar"
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                              />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleEliminar(materia.id_materia)}
-                            className="p-2 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-colors duration-200"
-                            title="Eliminar"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleEliminar(materia.id_materia)}
+                              className="p-2 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-colors duration-200"
+                              title="Eliminar"
                             >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
-                          </button>
-                        </div>
+                              <svg
+                                className="w-4 h-4"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-sm">
+                            Solo lectura
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -802,6 +884,24 @@ function MateriasPage() {
                         value={descripcion}
                         onChange={(e) => setDescripcion(e.target.value)}
                       />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Grado *
+                      </label>
+                      <select
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                        value={idGrado}
+                        onChange={(e) => setIdGrado(e.target.value)}
+                        required
+                      >
+                        <option value="">Seleccionar grado</option>
+                        {grados.map((grado) => (
+                          <option key={grado.id_grado} value={grado.id_grado}>
+                            {grado.nombre}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">

@@ -10,7 +10,6 @@ import {
 } from "@heroicons/react/24/solid";
 
 function RegistroAlumno() {
-  const [escuelas, setEscuelas] = useState([]);
   const [grados, setGrados] = useState([]);
   const [secciones, setSecciones] = useState([]);
   const [mensaje, setMensaje] = useState("");
@@ -23,8 +22,15 @@ function RegistroAlumno() {
   const [email, setEmail] = useState("");
   const [direccion_exacta, setDireccionExacta] = useState("");
   const [fecha_nacimiento, setFechaNacimiento] = useState("");
+  const [edad, setEdad] = useState("");
   const [codigo_mined, setCodigoMined] = useState("");
   const [genero, setGenero] = useState("");
+  const [nacionalidad, setNacionalidad] = useState("Nicaragüense");
+  const [etnia, setEtnia] = useState("");
+  const [enfermedad, setEnfermedad] = useState("");
+  const [pin, setPin] = useState(
+    Math.floor(100000 + Math.random() * 900000).toString()
+  );
   const [nombre_padre, setNombrePadre] = useState("");
   const [correo_padre, setCorreoPadre] = useState("");
   const [telefono_padre, setTelefonoPadre] = useState("");
@@ -33,7 +39,6 @@ function RegistroAlumno() {
   const [municipio, setMunicipio] = useState("");
   const [departamento, setDepartamento] = useState("");
   const [nivel_educativo, setNivelEducativo] = useState("");
-  const [escuelaId, setEscuelaId] = useState("");
   const [gradoId, setGradoId] = useState("");
   const [seccionId, setSeccionId] = useState("");
   const [imagen, setImagen] = useState("");
@@ -41,14 +46,32 @@ function RegistroAlumno() {
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
 
+  // Función para calcular edad
+  const calcularEdad = (fechaNac) => {
+    if (!fechaNac) return "";
+    const hoy = new Date();
+    const nacimiento = new Date(fechaNac);
+    let edadCalculada = hoy.getFullYear() - nacimiento.getFullYear();
+    const m = hoy.getMonth() - nacimiento.getMonth();
+    if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) {
+      edadCalculada--;
+    }
+    return edadCalculada >= 0 ? edadCalculada : "";
+  };
+
+  // Actualizar edad cuando cambia fecha de nacimiento
+  useEffect(() => {
+    if (fecha_nacimiento) {
+      const edadCalculada = calcularEdad(fecha_nacimiento);
+      setEdad(edadCalculada);
+    }
+  }, [fecha_nacimiento]);
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [escRes, gradRes, secRes] = await Promise.all([
-          api.get(services.obtenerEscuelas, {
-            headers: {Authorization: `Bearer ${token}`},
-          }),
+        const [gradRes, secRes] = await Promise.all([
           api.get("http://localhost:4000/api/grados", {
             headers: {Authorization: `Bearer ${token}`},
           }),
@@ -56,7 +79,6 @@ function RegistroAlumno() {
             headers: {Authorization: `Bearer ${token}`},
           }),
         ]);
-        setEscuelas(escRes.data);
         setGrados(gradRes.data);
         setSecciones(secRes.data);
       } catch (err) {
@@ -68,24 +90,9 @@ function RegistroAlumno() {
     fetchData();
   }, [token]);
 
-  // Cargar grados cuando cambia escuela
-  useEffect(() => {
-    if (escuelaId && grados.length > 0) {
-      const gradosFiltrados = grados.filter(
-        (g) => String(g.id_escuela) === String(escuelaId)
-      );
-      // Reset grado y sección cuando cambia escuela
-      setGradoId("");
-      setSeccionId("");
-    }
-  }, [escuelaId, grados]);
-
   // Cargar secciones cuando cambia grado
   useEffect(() => {
     if (gradoId && secciones.length > 0) {
-      const seccionesFiltradas = secciones.filter(
-        (s) => String(s.id_grado) === String(gradoId)
-      );
       // Reset sección cuando cambia grado
       setSeccionId("");
     }
@@ -93,30 +100,59 @@ function RegistroAlumno() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (
-      !nombre ||
-      !apellido ||
-      !email ||
-      !escuelaId ||
-      !gradoId ||
-      !seccionId
-    ) {
+    if (!nombre || !apellido || !email || !gradoId || !seccionId) {
       setMensaje("Complete todos los campos obligatorios.");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await api.post(
-        "http://localhost:4000/api/alumnos",
-        {
+      // Usar FormData si hay imagen, de lo contrario enviar JSON
+      let dataToSend;
+      let headers = {Authorization: `Bearer ${token}`};
+
+      if (imagen) {
+        const formData = new FormData();
+        formData.append("nombre", nombre);
+        formData.append("apellido", apellido);
+        formData.append("email", email);
+        formData.append("direccion_exacta", direccion_exacta);
+        formData.append("fecha_nacimiento", fecha_nacimiento);
+        formData.append("edad", edad);
+        formData.append("codigo_mined", codigo_mined);
+        formData.append("genero", genero);
+        formData.append("nacionalidad", nacionalidad);
+        formData.append("etnia", etnia);
+        formData.append("enfermedad", enfermedad);
+        formData.append("pin", pin);
+        formData.append("nombre_padre", nombre_padre);
+        formData.append("correo_padre", correo_padre);
+        formData.append("telefono_padre", telefono_padre);
+        formData.append("movil_alumno", movil_alumno);
+        formData.append("turno", turno);
+        formData.append("municipio", municipio);
+        formData.append("departamento", departamento);
+        formData.append("nivel_educativo", nivel_educativo);
+        formData.append("gradoId", gradoId);
+        formData.append("seccionId", seccionId);
+        formData.append("imagen", imagen);
+
+        dataToSend = formData;
+        headers["Content-Type"] = "multipart/form-data";
+      } else {
+        dataToSend = {
           nombre,
           apellido,
           email,
           direccion_exacta,
           fecha_nacimiento,
+          edad,
           codigo_mined,
           genero,
+          nacionalidad,
+          etnia,
+          enfermedad,
+          pin,
           nombre_padre,
           correo_padre,
           telefono_padre,
@@ -125,15 +161,15 @@ function RegistroAlumno() {
           municipio,
           departamento,
           nivel_educativo,
-          escuelaId,
           gradoId,
           seccionId,
-          imagen,
-        },
-        {
-          headers: {Authorization: `Bearer ${token}`},
-        }
-      );
+        };
+      }
+
+      await api.post("http://localhost:4000/api/alumnos", dataToSend, {
+        headers,
+      });
+
       setMensaje("Alumno registrado correctamente");
       setTimeout(() => navigate("/alumnos"), 2000);
     } catch (err) {
@@ -160,16 +196,13 @@ function RegistroAlumno() {
     setMunicipio("");
     setDepartamento("");
     setNivelEducativo("");
-    setEscuelaId("");
     setGradoId("");
     setSeccionId("");
     setImagen("");
   };
 
-  // Obtener grados filtrados por escuela seleccionada
-  const gradosFiltrados = grados.filter(
-    (g) => String(g.id_escuela) === String(escuelaId)
-  );
+  // En sistema multi-tenant, todos los grados ya pertenecen a la escuela del usuario
+  const gradosFiltrados = grados;
 
   // Obtener secciones filtradas por grado seleccionado
   const seccionesFiltradas = secciones.filter(
@@ -237,12 +270,12 @@ function RegistroAlumno() {
                       <span>Información Académica</span>
                       <span
                         className={`font-bold ${
-                          escuelaId && gradoId && seccionId
+                          gradoId && seccionId
                             ? "text-green-400"
                             : "text-gray-400"
                         }`}
                       >
-                        {escuelaId && gradoId && seccionId ? "✓" : "○"}
+                        {gradoId && seccionId ? "✓" : "○"}
                       </span>
                     </div>
                     <div className="flex justify-between text-white">
@@ -261,7 +294,7 @@ function RegistroAlumno() {
                         style={{
                           width: `${
                             (((nombre && apellido ? 1 : 0) +
-                              (escuelaId && gradoId && seccionId ? 1 : 0) +
+                              (gradoId && seccionId ? 1 : 0) +
                               (email ? 1 : 0)) /
                               3) *
                             100
@@ -396,6 +429,105 @@ function RegistroAlumno() {
                     onChange={(e) => setCodigoMined(e.target.value)}
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Edad
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Se calcula automáticamente"
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-gray-400 focus:outline-none transition-all duration-200"
+                    value={edad}
+                    readOnly
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Se calcula automáticamente con la fecha de nacimiento
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Nacionalidad *
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Nacionalidad del estudiante"
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                    value={nacionalidad}
+                    onChange={(e) => setNacionalidad(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Etnia
+                  </label>
+                  <select
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                    value={etnia}
+                    onChange={(e) => setEtnia(e.target.value)}
+                  >
+                    <option value="">Seleccionar etnia</option>
+                    <option value="Mestizo">Mestizo</option>
+                    <option value="Miskito">Miskito</option>
+                    <option value="Mayangna">Mayangna (Sumu)</option>
+                    <option value="Garífuna">Garífuna</option>
+                    <option value="Rama">Rama</option>
+                    <option value="Creole">Creole (Afrodescendiente)</option>
+                    <option value="Xiu-Sutiava">Xiu-Sutiava</option>
+                    <option value="Ulwa">Ulwa</option>
+                    <option value="Nahoa-Nicarao">Nahoa-Nicarao</option>
+                    <option value="Chorotega">Chorotega</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    PIN de Acceso
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-gray-400 focus:outline-none transition-all duration-200"
+                    value={pin}
+                    readOnly
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    PIN de 6 dígitos para acceso del alumno
+                  </p>
+                </div>
+                <div className="md:col-span-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Condición de Salud / Enfermedad
+                  </label>
+                  <textarea
+                    placeholder="Especifique si el alumno padece alguna enfermedad o condición médica importante"
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                    value={enfermedad}
+                    onChange={(e) => setEnfermedad(e.target.value)}
+                    rows={2}
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Esta información es confidencial y se usa para atención
+                    médica en caso de emergencia
+                  </p>
+                </div>
+                <div className="md:col-span-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Fotografía del Estudiante (Opcional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        setImagen(file);
+                      }
+                    }}
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-500 file:text-white hover:file:bg-blue-600 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                  />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Formatos permitidos: JPG, PNG, GIF (máximo 2MB)
+                  </p>
+                </div>
               </div>
             </section>
 
@@ -410,24 +542,6 @@ function RegistroAlumno() {
                 </h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Escuela *
-                  </label>
-                  <select
-                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
-                    value={escuelaId}
-                    onChange={(e) => setEscuelaId(e.target.value)}
-                    required
-                  >
-                    <option value="">Seleccionar escuela</option>
-                    {escuelas.map((esc) => (
-                      <option key={esc.id_escuela} value={esc.id_escuela}>
-                        {esc.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Grado *

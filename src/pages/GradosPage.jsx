@@ -4,7 +4,6 @@ import services from "../api/services";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
-  FunnelIcon,
   AcademicCapIcon,
   BuildingOfficeIcon,
   BookOpenIcon,
@@ -27,9 +26,7 @@ import {CSS} from "@dnd-kit/utilities";
 
 function GradosPage() {
   const [grados, setGrados] = useState([]);
-  const [escuelas, setEscuelas] = useState([]);
   const [materias, setMaterias] = useState([]);
-  const [id_escuela, setIdEscuela] = useState("");
   const [idMaterias, setIdMaterias] = useState([]);
   const [nombre, setNombre] = useState("");
   const [editId, setEditId] = useState(null);
@@ -43,20 +40,34 @@ function GradosPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterEscuela, setFilterEscuela] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [user, setUser] = useState(null);
 
   const token = localStorage.getItem("token");
+  const canEdit =
+    user &&
+    [
+      "admin",
+      "administrador",
+      "director",
+      "secretariado",
+      "secretaria",
+    ].includes(user.rol?.toLowerCase());
 
   useEffect(() => {
-    fetchGrados();
+    fetchUser();
     // eslint-disable-next-line
   }, []);
 
   useEffect(() => {
+    if (user) {
+      fetchGrados();
+    }
+    // eslint-disable-next-line
+  }, [user]);
+
+  useEffect(() => {
     if (showModal) {
-      fetchEscuelas();
       fetchMaterias();
     }
     // eslint-disable-next-line
@@ -65,20 +76,22 @@ function GradosPage() {
   useEffect(() => {
     if (showEditModal) {
       fetchMaterias();
-      fetchEscuelas(); // Opcional, si necesitas escuelas en edición
     }
     // eslint-disable-next-line
   }, [showEditModal]);
 
-  const fetchEscuelas = async () => {
+  const fetchUser = async () => {
     try {
-      const res = await api.get(services.escuelas, {
+      const res = await api.get("/api/usuarios/perfil", {
         headers: {Authorization: `Bearer ${token}`},
       });
-      setEscuelas(res.data);
-      if (res.data.length > 0) setIdEscuela(res.data[0].id_escuela);
-    } catch (err) {
-      setMensaje("Error al cargar escuelas");
+      setUser({
+        rol: res.data.usuario?.rol || res.data.rol,
+        id_profesor: res.data.usuario?.id_profesor || res.data.id_profesor,
+        id_escuela: res.data.usuario?.id_escuela || res.data.id_escuela,
+      });
+    } catch (error) {
+      console.error("Error al cargar usuario:", error);
     }
   };
 
@@ -96,11 +109,78 @@ function GradosPage() {
   const fetchGrados = async () => {
     setIsLoading(true);
     try {
-      const res = await api.get(services.grados, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      setGrados(res.data);
+      const esProfesor = user?.rol?.toLowerCase() === "profesor";
+
+      if (esProfesor && user?.id_profesor) {
+        // Si es profesor, cargar sus grados asignados
+        const asignacionesRes = await api.get(
+          `/api/profesores/${user.id_profesor}/asignaciones`,
+          {headers: {Authorization: `Bearer ${token}`}}
+        );
+
+        const asignacionesData = asignacionesRes.data.asignaciones || [];
+
+        // Cargar información de escuela usando id_escuela del usuario
+        let nombreEscuela = "Sin escuela";
+        if (user.id_escuela) {
+          try {
+            const escuelaRes = await api.get(
+              `/api/escuelas/${user.id_escuela}`,
+              {
+                headers: {Authorization: `Bearer ${token}`},
+              }
+            );
+            nombreEscuela = escuelaRes.data?.nombre || "Sin escuela";
+          } catch (error) {
+            console.error("Error al cargar escuela:", error);
+          }
+        }
+
+        // Cargar todas las materias de la escuela
+        const materiasRes = await api.get("/api/materias", {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        const todasMaterias = materiasRes.data || [];
+
+        // Transformar asignaciones a formato de grados únicos
+        const gradosUnicos = [
+          ...new Map(
+            asignacionesData.map((a) => [
+              a.id_grado,
+              {
+                id_grado: a.id_grado,
+                nombre: a.nombre_grado,
+                nivel: a.nivel,
+                nombre_escuela: nombreEscuela,
+                // Filtrar materias que pertenecen a este grado
+                materias: todasMaterias
+                  .filter((m) => m.id_grado === a.id_grado)
+                  .map((m) => m.nombre),
+                // Agregar info de secciones asociadas
+                secciones: asignacionesData
+                  .filter(
+                    (asig) => asig.id_grado === a.id_grado && asig.id_seccion
+                  )
+                  .map((asig) => ({
+                    id_seccion: asig.id_seccion,
+                    nombre: asig.nombre_seccion,
+                  })),
+              },
+            ])
+          ).values(),
+        ];
+
+        console.log("📊 Grados procesados para profesor:", gradosUnicos);
+        setGrados(gradosUnicos);
+      } else {
+        // Si es admin/director/secretaria, cargar todos los grados
+        const res = await api.get(services.grados, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setGrados(res.data);
+      }
     } catch (err) {
+      console.error("Error al cargar grados:", err);
       setMensaje("Error al cargar grados");
     } finally {
       setIsLoading(false);
@@ -116,7 +196,7 @@ function GradosPage() {
       const idMateriasInt = idMaterias.map(Number);
       await api.post(
         services.grados,
-        {nombre, id_escuela, id_materias: idMateriasInt},
+        {nombre, id_materias: idMateriasInt},
         {headers: {Authorization: `Bearer ${token}`}}
       );
       limpiarFormulario();
@@ -162,20 +242,12 @@ function GradosPage() {
 
   // Filtros y búsqueda
   const gradosFiltrados = grados.filter((grado) => {
-    const matchesSearch =
-      grado.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (grado.nombre_escuela &&
-        grado.nombre_escuela.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesEscuela =
-      filterEscuela === "" || grado.id_escuela === parseInt(filterEscuela);
-    return matchesSearch && matchesEscuela;
+    return grado.nombre.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   // Estadísticas
   const estadisticas = {
     total: grados.length,
-    escuelas: [...new Set(grados.map((g) => g.id_escuela).filter(Boolean))]
-      .length,
     conMaterias: grados.filter((g) => g.materias && g.materias.length > 0)
       .length,
     conSecciones: grados.filter((g) => g.secciones && g.secciones.length > 0)
@@ -299,57 +371,65 @@ function GradosPage() {
 
         {/* Botones de acción */}
         <div className="bg-gray-700 px-6 py-4 flex justify-between items-center">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              props.startEdit(grado);
-            }}
-            className="flex items-center space-x-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium shadow-sm transform hover:scale-105 transition-all duration-200"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-              />
-            </svg>
-            <span>Editar</span>
-          </button>
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              props.handleEliminar(grado.id_grado);
-            }}
-            className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-sm transform hover:scale-105 transition-all duration-200"
-            title="Eliminar"
-          >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-              />
-            </svg>
-          </button>
+          {props.canEdit ? (
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.startEdit(grado);
+                }}
+                className="flex items-center space-x-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium shadow-sm transform hover:scale-105 transition-all duration-200"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                </svg>
+                <span>Editar</span>
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.handleEliminar(grado.id_grado);
+                }}
+                className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-sm transform hover:scale-105 transition-all duration-200"
+                title="Eliminar"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+              </button>
+            </>
+          ) : (
+            <div className="w-full text-center py-2 text-gray-400 text-sm">
+              Solo lectura
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
   function DraggableCard(props) {
-    const {grado, startEdit, handleEliminar} = props;
+    const {grado, startEdit, handleEliminar, canEdit} = props;
     const {
       attributes,
       listeners,
@@ -368,6 +448,7 @@ function GradosPage() {
         grado={grado}
         startEdit={startEdit}
         handleEliminar={handleEliminar}
+        canEdit={canEdit}
         setNodeRef={setNodeRef}
         listeners={listeners}
         attributes={attributes}
@@ -422,20 +503,15 @@ function GradosPage() {
                 correspondientes. Ordena por drag & drop.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="px-8 py-4 bg-white text-indigo-600 rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center"
-                >
-                  <PlusIcon className="w-5 h-5 mr-2" />
-                  Crear Nuevo Grado
-                </button>
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="px-8 py-4 bg-white/10 text-white rounded-2xl font-semibold backdrop-blur-sm hover:bg-white/20 transform transition-all duration-300 flex items-center justify-center"
-                >
-                  <FunnelIcon className="w-5 h-5 mr-2" />
-                  {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => setShowModal(true)}
+                    className="px-8 py-4 bg-white text-indigo-600 rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center"
+                  >
+                    <PlusIcon className="w-5 h-5 mr-2" />
+                    Crear Nuevo Grado
+                  </button>
+                )}
               </div>
             </div>
 
@@ -502,7 +578,7 @@ function GradosPage() {
               </div>
               <input
                 type="text"
-                placeholder="Buscar grados por nombre o escuela..."
+                placeholder="Buscar grados por nombre..."
                 className="block w-full pl-10 pr-3 py-3 border border-gray-600 rounded-xl bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -518,39 +594,6 @@ function GradosPage() {
               </div>
             </div>
           </div>
-
-          {/* Filtros avanzados */}
-          {showFilters && (
-            <div className="mt-6 pt-6 border-t border-gray-700">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Filtrar por Escuela
-                  </label>
-                  <select
-                    className="w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-700 text-white"
-                    value={filterEscuela}
-                    onChange={(e) => setFilterEscuela(e.target.value)}
-                  >
-                    <option value="">Todas las escuelas</option>
-                    {escuelas.map((escuela) => (
-                      <option
-                        key={escuela.id_escuela}
-                        value={escuela.id_escuela}
-                      >
-                        {escuela.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex items-end">
-                  <div className="text-sm text-gray-400">
-                    Mostrando {gradosFiltrados.length} de {grados.length} grados
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Loading state */}
@@ -574,13 +617,15 @@ function GradosPage() {
               Comienza creando el primer grado para organizar tu sistema
               académico.
             </p>
-            <button
-              onClick={() => setShowModal(true)}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg transform hover:scale-105 transition-all duration-200"
-            >
-              <PlusIcon className="w-5 h-5 mr-2 inline" />
-              Crear Primer Grado
-            </button>
+            {canEdit && (
+              <button
+                onClick={() => setShowModal(true)}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg transform hover:scale-105 transition-all duration-200"
+              >
+                <PlusIcon className="w-5 h-5 mr-2 inline" />
+                Crear Primer Grado
+              </button>
+            )}
           </div>
         )}
 
@@ -641,6 +686,7 @@ function GradosPage() {
                       grado={grado}
                       startEdit={startEdit}
                       handleEliminar={handleEliminar}
+                      canEdit={canEdit}
                       isDragging={isDragging}
                     />
                   ))}
@@ -719,24 +765,6 @@ function GradosPage() {
                         onChange={(e) => setNombre(e.target.value)}
                         required
                       />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Escuela *
-                      </label>
-                      <select
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
-                        value={id_escuela}
-                        onChange={(e) => setIdEscuela(e.target.value)}
-                        required
-                      >
-                        <option value="">Seleccionar escuela</option>
-                        {escuelas.map((esc) => (
-                          <option key={esc.id_escuela} value={esc.id_escuela}>
-                            {esc.nombre}
-                          </option>
-                        ))}
-                      </select>
                     </div>
                   </div>
                 </section>

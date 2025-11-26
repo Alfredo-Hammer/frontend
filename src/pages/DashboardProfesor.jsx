@@ -27,6 +27,9 @@ function DashboardProfesor({user}) {
   });
   const [misMaterias, setMisMaterias] = useState([]);
   const [proximasClases, setProximasClases] = useState([]);
+  const [escuela, setEscuela] = useState(null);
+  const [asignaciones, setAsignaciones] = useState([]);
+  const [misGrados, setMisGrados] = useState([]);
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem("token");
 
@@ -39,21 +42,108 @@ function DashboardProfesor({user}) {
     try {
       setLoading(true);
 
-      // Cargar materias del profesor
-      const materiasRes = await api.get(services.materias, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
+      // Cargar datos de la escuela
+      if (user?.id_escuela) {
+        try {
+          const escuelaRes = await api.get(`/api/escuelas/${user.id_escuela}`, {
+            headers: {Authorization: `Bearer ${token}`},
+          });
+          setEscuela(escuelaRes.data);
+        } catch (error) {
+          console.error("Error al cargar escuela:", error);
+        }
+      }
 
-      // TODO: Filtrar solo las materias asignadas al profesor actual
-      // Por ahora mostramos todas
-      setMisMaterias(materiasRes.data?.slice(0, 4) || []);
+      // Cargar asignaciones y materias del profesor
+      if (user?.id_profesor) {
+        try {
+          // Cargar asignaciones (grados y secciones)
+          const asignacionesRes = await api.get(
+            `/api/profesores/${user.id_profesor}/asignaciones`,
+            {headers: {Authorization: `Bearer ${token}`}}
+          );
 
-      setStats({
-        materiasAsignadas: 5,
-        totalEstudiantes: 120,
-        tareasCreadas: 15,
-        calificacionesPendientes: 8,
-      });
+          const asignacionesData = asignacionesRes.data.asignaciones || [];
+          setAsignaciones(asignacionesData);
+
+          const gradosUnicos = [
+            ...new Map(
+              asignacionesData.map((a) => [
+                a.id_grado,
+                {
+                  id_grado: a.id_grado,
+                  nombre_grado: a.nombre_grado,
+                  nivel: a.nivel,
+                  secciones: asignacionesData
+                    .filter(
+                      (asig) => asig.id_grado === a.id_grado && asig.id_seccion
+                    )
+                    .map((asig) => asig.nombre_seccion),
+                },
+              ])
+            ).values(),
+          ];
+          setMisGrados(gradosUnicos);
+
+          // Cargar materias de los grados asignados
+          const gradosIds = [
+            ...new Set(asignacionesData.map((a) => a.id_grado)),
+          ];
+          const seccionesIds = asignacionesData
+            .filter((a) => a.id_seccion)
+            .map((a) => a.id_seccion);
+
+          console.log("🎓 Grados IDs:", gradosIds);
+          console.log("📋 Secciones IDs:", seccionesIds);
+
+          // Cargar todas las materias de la escuela
+          const materiasRes = await api.get("/api/materias", {
+            headers: {Authorization: `Bearer ${token}`},
+          });
+
+          console.log("📚 Todas las materias:", materiasRes.data);
+
+          // Filtrar materias que pertenecen a los grados asignados
+          const materiasAsignadas = materiasRes.data.filter((materia) =>
+            gradosIds.includes(materia.id_grado)
+          );
+          console.log("📚 Materias cargadas:", materiasAsignadas);
+          console.log("📊 Cantidad de materias:", materiasAsignadas.length);
+          setMisMaterias(materiasAsignadas);
+
+          // Cargar alumnos para las estadísticas
+          const alumnosRes = await api.get("/api/alumnos", {
+            headers: {Authorization: `Bearer ${token}`},
+          });
+
+          const alumnosAsignados =
+            seccionesIds.length > 0
+              ? alumnosRes.data.filter((alumno) =>
+                  seccionesIds.includes(alumno.seccionid)
+                )
+              : alumnosRes.data.filter((alumno) =>
+                  gradosIds.includes(alumno.gradoid)
+                );
+
+          console.log("👥 Alumnos filtrados:", alumnosAsignados);
+          console.log("📊 Cantidad de alumnos:", alumnosAsignados.length);
+
+          // Actualizar estadísticas
+          const newStats = {
+            materiasAsignadas: materiasAsignadas.length,
+            totalEstudiantes: alumnosAsignados.length,
+            tareasCreadas: 0,
+            calificacionesPendientes: 0,
+          };
+          console.log("📈 Stats a actualizar:", newStats);
+          setStats(newStats);
+        } catch (error) {
+          console.error(
+            "Error al cargar datos del profesor (asignaciones/materias):",
+            error
+          );
+        }
+      }
 
       setProximasClases([
         {
@@ -106,6 +196,20 @@ function DashboardProfesor({user}) {
               <p className="text-purple-100">
                 Panel del Docente - Gestiona tus clases y estudiantes
               </p>
+              {escuela && (
+                <div className="mt-3 flex items-center gap-2">
+                  {escuela.logo && (
+                    <img
+                      src={`http://localhost:4000${escuela.logo}`}
+                      alt={escuela.nombre}
+                      className="w-8 h-8 rounded-full object-cover border-2 border-white"
+                    />
+                  )}
+                  <p className="text-purple-200 text-sm font-medium">
+                    {escuela.nombre}
+                  </p>
+                </div>
+              )}
             </div>
             <div className="text-right">
               <p className="text-purple-100 text-sm">
@@ -177,6 +281,52 @@ function DashboardProfesor({user}) {
             <p className="text-3xl font-bold text-white">
               {stats.calificacionesPendientes}
             </p>
+          </div>
+        </div>
+
+        {/* Mis Grados Asignados */}
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <AcademicCapIcon className="w-6 h-6 text-cyan-400" />
+            Mis Grados Asignados
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {misGrados.map((grado, idx) => (
+              <div
+                key={grado.id_grado || idx}
+                className="p-6 bg-gradient-to-br from-cyan-600/10 to-blue-600/10 border border-cyan-500/20 rounded-xl hover:scale-105 transition-transform cursor-pointer"
+                onClick={() => navigate("/alumnos")}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-cyan-500/20 rounded-lg">
+                    <AcademicCapIcon className="w-8 h-8 text-cyan-400" />
+                  </div>
+                  <div>
+                    <h3 className="text-white font-bold text-lg">
+                      {grado.nombre_grado}
+                    </h3>
+                    {grado.nivel && (
+                      <p className="text-cyan-300 text-sm">{grado.nivel}</p>
+                    )}
+                    {grado.secciones && grado.secciones.length > 0 && (
+                      <p className="text-purple-300 text-sm mt-1">
+                        Secciones: {grado.secciones.join(", ")}
+                      </p>
+                    )}
+                    <p className="text-gray-400 text-sm mt-1">
+                      Ver estudiantes →
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {misGrados.length === 0 && (
+              <div className="col-span-3 text-center py-8">
+                <AcademicCapIcon className="w-12 h-12 text-gray-600 mx-auto mb-2" />
+                <p className="text-gray-400">No tienes grados asignados</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -310,7 +460,7 @@ function DashboardProfesor({user}) {
         <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
           <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
             <BookOpenIcon className="w-6 h-6 text-purple-400" />
-            Mis Materias
+            Mis Materias Asignadas
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {misMaterias.map((materia, idx) => (
@@ -323,7 +473,9 @@ function DashboardProfesor({user}) {
                 <h3 className="text-white font-semibold mb-1">
                   {materia.nombre || materia.materia}
                 </h3>
-                <p className="text-gray-400 text-sm">Ver detalles →</p>
+                <p className="text-gray-400 text-sm">
+                  {materia.descripcion || "Ver detalles →"}
+                </p>
               </div>
             ))}
 

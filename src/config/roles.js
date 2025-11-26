@@ -15,6 +15,7 @@ export const ROLES = {
   PROFESOR: 'profesor',
   ALUMNO: 'alumno',
   PADRE: 'padre',
+  SECRETARIADO: 'secretariado',
 };
 
 // Permisos por módulo y acción
@@ -45,7 +46,7 @@ export const PERMISSIONS = {
 
   // Gestión de Secciones
   secciones: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     crear: [ROLES.ADMIN, ROLES.DIRECTOR],
     editar: [ROLES.ADMIN, ROLES.DIRECTOR],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
@@ -53,11 +54,11 @@ export const PERMISSIONS = {
 
   // Gestión de Estudiantes
   alumnos: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
     verPropio: [ROLES.ALUMNO], // Ver solo su propia información
     verPropias: [ROLES.ALUMNO], // Alternativa para compatibilidad
-    crear: [ROLES.ADMIN, ROLES.DIRECTOR],
-    editar: [ROLES.ADMIN, ROLES.DIRECTOR],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
   },
 
@@ -82,12 +83,12 @@ export const PERMISSIONS = {
 
   // Asistencia
   asistencia: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
     verPropia: [ROLES.ALUMNO],
     verHijos: [ROLES.PADRE],
-    registrar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
-    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
-    exportar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
+    registrar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
+    exportar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
   },
 
   // Horarios
@@ -126,11 +127,11 @@ export const PERMISSIONS = {
 
   // Pagos
   pagos: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PADRE],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PADRE, ROLES.SECRETARIADO],
     verPropios: [ROLES.ALUMNO],
-    crear: [ROLES.ADMIN, ROLES.DIRECTOR],
-    registrar: [ROLES.PADRE],
-    exportar: [ROLES.ADMIN, ROLES.DIRECTOR],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    registrar: [ROLES.PADRE, ROLES.SECRETARIADO],
+    exportar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
   },
 
   // Reportes
@@ -163,7 +164,7 @@ export const PERMISSIONS = {
 
   // Dashboard/Inicio
   dashboard: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE, ROLES.SECRETARIADO],
   },
 
   // Mis Calificaciones (vista específica para alumnos)
@@ -240,7 +241,18 @@ export const canAccessRoute = (userRole, path) => {
     '/registro': 'configuracion',
   };
 
-  const module = routeModuleMap[path];
+  let module = routeModuleMap[path];
+
+  // Si no encuentra la ruta exacta, buscar patrones dinámicos
+  if (!module) {
+    // Manejar rutas con parámetros dinámicos como /alumnos/detalle/:id
+    if (path.startsWith('/alumnos/detalle/')) {
+      module = 'alumnos';
+    } else if (path.startsWith('/profesores/detalle/')) {
+      module = 'profesores';
+    }
+  }
+
   if (!module) return false;
 
   return hasPermission(userRole, module, 'ver') ||

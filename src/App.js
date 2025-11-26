@@ -2,9 +2,8 @@ import React, { useEffect, useState } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import './App.css';
 import Sidebar from "./components/Sidebar";
-import EscuelasList from "./components/EsuelasList";
-import Registro from "./components/Registro";
 import Login from "./components/Login";
+import SetupInicial from "./pages/SetupInicial";
 import Alumnos from "./pages/Alumnos";
 import DetalleAlumno from "./components/DetalleAlumno";
 import HomePage from "./pages/HomePage";
@@ -24,12 +23,20 @@ import PerfilUsuario from "./pages/PerfilUsuario";
 import MisCalificaciones from "./pages/MisCalificaciones";
 import api from "./api/axiosConfig";
 
-function AuthWrapper({ token, setToken, selected, setSelected, user }) {
+function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSetup, setNecesitaSetup }) {
+  if (necesitaSetup) {
+    return (
+      <Routes>
+        <Route path="/setup" element={<SetupInicial setToken={setToken} setNecesitaSetup={setNecesitaSetup} />} />
+        <Route path="*" element={<Navigate to="/setup" />} />
+      </Routes>
+    );
+  }
+
   if (!token) {
     return (
       <Routes>
         <Route path="/login" element={<Login setToken={setToken} />} />
-        <Route path="/register" element={<Registro setToken={setToken} />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
     );
@@ -54,12 +61,6 @@ function AuthWrapper({ token, setToken, selected, setSelected, user }) {
             <Route path="/" element={
               <ProtectedRoute user={user}>
                 <HomePage />
-              </ProtectedRoute>
-            } />
-
-            <Route path="/escuelas" element={
-              <ProtectedRoute user={user}>
-                <EscuelasList setToken={setToken} />
               </ProtectedRoute>
             } />
 
@@ -117,12 +118,6 @@ function AuthWrapper({ token, setToken, selected, setSelected, user }) {
               </ProtectedRoute>
             } />
 
-            <Route path="/registro" element={
-              <ProtectedRoute user={user}>
-                <Registro setToken={setToken} />
-              </ProtectedRoute>
-            } />
-
             <Route path="/horario-clases" element={
               <ProtectedRoute user={user}>
                 <HorarioClases />
@@ -162,7 +157,8 @@ const normalizeRole = (backendRole) => {
     'Profesor': 'profesor',
     'Estudiante': 'alumno',
     'Director': 'director',
-    'Padre': 'padre'
+    'Padre': 'padre',
+    'Secretariado': 'secretariado'
   };
   return roleMap[backendRole] || backendRole?.toLowerCase();
 };
@@ -170,12 +166,32 @@ const normalizeRole = (backendRole) => {
 function App() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [user, setUser] = useState(null);
-  const [selected, setSelected] = useState("escuelas");
+  const [selected, setSelected] = useState("dashboard");
   const [loading, setLoading] = useState(false);
+  const [necesitaSetup, setNecesitaSetup] = useState(false);
+  const [checkingSetup, setCheckingSetup] = useState(true);
+
+  // Verificar si el sistema necesita configuración inicial
+  useEffect(() => {
+    const verificarSetup = async () => {
+      try {
+        const response = await api.get("/api/auth/necesita-setup");
+        console.log("📋 Verificación de setup:", response.data);
+        setNecesitaSetup(response.data.necesitaSetup);
+      } catch (err) {
+        console.error("Error verificando setup:", err);
+        setNecesitaSetup(false);
+      } finally {
+        setCheckingSetup(false);
+      }
+    };
+
+    verificarSetup();
+  }, []);
 
   // Obtén los datos del usuario cuando haya token
   useEffect(() => {
-    if (token) {
+    if (token && !necesitaSetup) {
       setLoading(true);
       api.get("/api/usuarios/perfil", {
         headers: { Authorization: `Bearer ${token}` }
@@ -187,13 +203,25 @@ function App() {
           console.log("Rol del backend:", backendRole, "→ Normalizado:", normalizedRole); // Debug
 
           setUser({
+            id_usuario: res.data.usuario?.id_usuario,
             nombre: res.data.usuario?.nombre || res.data.nombre,
             apellido: res.data.usuario?.apellido || res.data.apellido,
             rol: normalizedRole,
             email: res.data.usuario?.email || res.data.email,
+            id_escuela: res.data.usuario?.id_escuela,
+            id_profesor: res.data.usuario?.id_profesor,
             imagen: res.data.usuario?.imagen
               ? `http://localhost:4000${res.data.usuario.imagen}`
               : null
+          });
+          console.log("Debug - Usuario completo:", {
+            id_usuario: res.data.usuario?.id_usuario,
+            nombre: res.data.usuario?.nombre,
+            apellido: res.data.usuario?.apellido,
+            rol: normalizedRole,
+            email: res.data.usuario?.email,
+            id_escuela: res.data.usuario?.id_escuela,
+            id_profesor: res.data.usuario?.id_profesor
           });
         })
         .catch(err => {
@@ -204,7 +232,11 @@ function App() {
     } else {
       setUser(null);
     }
-  }, [token]);
+  }, [token, necesitaSetup]);
+
+  if (checkingSetup) {
+    return <Loader />;
+  }
 
   return (
     <Router>
@@ -216,6 +248,8 @@ function App() {
         setSelected={setSelected}
         setLoading={setLoading}
         user={user}
+        necesitaSetup={necesitaSetup}
+        setNecesitaSetup={setNecesitaSetup}
       />
     </Router>
   );

@@ -1,7 +1,6 @@
 import React, {useState, useEffect} from "react";
 import {
   HomeIcon,
-  BuildingLibraryIcon,
   UserGroupIcon,
   AcademicCapIcon,
   BookOpenIcon,
@@ -65,13 +64,6 @@ const menuSections = [
   {
     title: "Gestión Académica",
     items: [
-      {
-        key: "escuelas",
-        label: "Escuelas",
-        icon: <BuildingLibraryIcon className="h-5 w-5" />,
-        path: "/escuelas",
-        color: "text-blue-400",
-      },
       {
         key: "materias",
         label: "Materias",

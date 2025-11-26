@@ -30,6 +30,7 @@ import DashboardAdmin from "./DashboardAdmin";
 import DashboardProfesor from "./DashboardProfesor";
 import DashboardEstudiante from "./DashboardEstudiante";
 import DashboardPadre from "./DashboardPadre";
+import DashboardSecretariado from "./DashboardSecretariado";
 import api from "../api/axiosConfig";
 
 // Datos simulados más realistas
@@ -177,11 +178,23 @@ function HomePage() {
         const res = await api.get("/api/usuarios/perfil", {
           headers: {Authorization: `Bearer ${token}`},
         });
+        console.log("📥 Datos del backend:", res.data);
         setUser({
+          id_usuario: res.data.usuario?.id_usuario,
           nombre: res.data.usuario?.nombre || res.data.nombre,
           apellido: res.data.usuario?.apellido || res.data.apellido,
           rol: res.data.usuario?.rol || res.data.rol,
           email: res.data.usuario?.email || res.data.email,
+          id_escuela: res.data.usuario?.id_escuela,
+          id_profesor: res.data.usuario?.id_profesor,
+          imagen: res.data.usuario?.imagen,
+        });
+        console.log("✅ Usuario configurado:", {
+          id_usuario: res.data.usuario?.id_usuario,
+          nombre: res.data.usuario?.nombre,
+          rol: res.data.usuario?.rol,
+          id_escuela: res.data.usuario?.id_escuela,
+          id_profesor: res.data.usuario?.id_profesor,
         });
       } catch (error) {
         console.error("Error al obtener usuario:", error);
@@ -211,15 +224,11 @@ function HomePage() {
 
   // Redirigir a dashboard específico según el rol
   if (user && user.rol) {
-    console.log("🔍 Debug - Rol del usuario:", user.rol);
-    console.log("🔍 Debug - Usuario completo:", user);
-
     // Normalizar el rol si viene del backend sin normalizar
     const normalizedRole =
       user.rol.toLowerCase() === "estudiante"
         ? "alumno"
         : user.rol.toLowerCase();
-    console.log("🔄 Rol normalizado:", normalizedRole);
 
     switch (normalizedRole) {
       case "admin":
@@ -233,6 +242,9 @@ function HomePage() {
         return <DashboardEstudiante user={user} />;
       case "padre":
         return <DashboardPadre user={user} />;
+      case "secretariado":
+      case "secretaria":
+        return <DashboardSecretariado user={user} />;
       default:
         // Si no tiene rol definido, mostrar dashboard genérico
         break;

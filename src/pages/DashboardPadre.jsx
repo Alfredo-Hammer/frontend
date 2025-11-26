@@ -6,8 +6,6 @@ import {
   TrendingUp,
   Award,
   CheckCircle,
-  AlertCircle,
-  Clock,
   Star,
   FileText,
   Activity,
@@ -17,8 +15,6 @@ import {
   Trophy,
 } from "lucide-react";
 import {
-  AreaChart,
-  Area,
   BarChart,
   Bar,
   XAxis,

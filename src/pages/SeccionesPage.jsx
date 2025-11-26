@@ -4,7 +4,6 @@ import services from "../api/services";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
-  FunnelIcon,
   UserGroupIcon,
   BuildingOfficeIcon,
   AcademicCapIcon,
@@ -13,9 +12,7 @@ import {
 
 function SeccionesPage() {
   const [secciones, setSecciones] = useState([]);
-  const [escuelas, setEscuelas] = useState([]);
   const [grados, setGrados] = useState([]);
-  const [id_escuela, setIdEscuela] = useState("");
   const [id_grado, setIdGrado] = useState("");
   const [nombre, setNombre] = useState("");
   const [editId, setEditId] = useState(null);
@@ -27,7 +24,6 @@ function SeccionesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterEscuela, setFilterEscuela] = useState("");
   const [filterGrado, setFilterGrado] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState("groups"); // "groups" o "cards"
@@ -46,26 +42,13 @@ function SeccionesPage() {
     // eslint-disable-next-line
   }, []);
 
-  // Cargar escuelas y grados del profesor cuando se abre el modal
+  // Cargar grados cuando se abre el modal
   useEffect(() => {
     if (showModal) {
-      fetchEscuelas();
       fetchGrados();
     }
     // eslint-disable-next-line
   }, [showModal]);
-
-  const fetchEscuelas = async () => {
-    try {
-      const res = await api.get(services.escuelas, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      setEscuelas(res.data);
-      if (res.data.length > 0) setIdEscuela(res.data[0].id_escuela);
-    } catch (err) {
-      setMensaje("Error al cargar escuelas");
-    }
-  };
 
   const fetchGrados = async () => {
     try {
@@ -95,13 +78,13 @@ function SeccionesPage() {
 
   const handleCrear = async (e) => {
     e.preventDefault();
-    if (!nombre.trim() || !id_escuela || !id_grado) return;
+    if (!nombre.trim() || !id_grado) return;
 
     setIsSubmitting(true);
     try {
       await api.post(
         services.secciones,
-        {nombre, id_profesor, id_escuela, id_grado},
+        {nombre, id_profesor, id_grado},
         {headers: {Authorization: `Bearer ${token}`}}
       );
       limpiarFormulario();
@@ -166,11 +149,9 @@ function SeccionesPage() {
         seccion.nombre_escuela
           .toLowerCase()
           .includes(searchTerm.toLowerCase()));
-    const matchesEscuela =
-      filterEscuela === "" || seccion.id_escuela === parseInt(filterEscuela);
     const matchesGrado =
       filterGrado === "" || seccion.id_grado === parseInt(filterGrado);
-    return matchesSearch && matchesEscuela && matchesGrado;
+    return matchesSearch && matchesGrado;
   });
 
   // Agrupa las secciones filtradas por grado
@@ -191,8 +172,6 @@ function SeccionesPage() {
   // Estadísticas
   const estadisticas = {
     total: secciones.length,
-    escuelas: [...new Set(secciones.map((s) => s.id_escuela).filter(Boolean))]
-      .length,
     grados: [...new Set(secciones.map((s) => s.id_grado).filter(Boolean))]
       .length,
     grupos: Object.keys(seccionesPorGrado).length,
@@ -237,7 +216,7 @@ function SeccionesPage() {
                   onClick={() => setShowFilters(!showFilters)}
                   className="px-8 py-4 bg-white/10 text-white rounded-2xl font-semibold backdrop-blur-sm hover:bg-white/20 transform transition-all duration-300 flex items-center justify-center"
                 >
-                  <FunnelIcon className="w-5 h-5 mr-2" />
+                  <Squares2X2Icon className="w-5 h-5 mr-2" />
                   {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
                 </button>
               </div>
@@ -256,12 +235,6 @@ function SeccionesPage() {
                       <span>Total de Secciones</span>
                       <span className="font-bold text-yellow-400">
                         {estadisticas.total}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Escuelas</span>
-                      <span className="font-bold text-cyan-400">
-                        {estadisticas.escuelas}
                       </span>
                     </div>
                     <div className="flex justify-between text-white">
@@ -306,7 +279,7 @@ function SeccionesPage() {
               </div>
               <input
                 type="text"
-                placeholder="Buscar secciones por nombre, grado o escuela..."
+                placeholder="Buscar secciones por nombre o grado..."
                 className="block w-full pl-10 pr-3 py-3 border border-gray-600 rounded-xl bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all duration-200"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -344,27 +317,7 @@ function SeccionesPage() {
           {/* Filtros avanzados */}
           {showFilters && (
             <div className="mt-6 pt-6 border-t border-gray-700">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Filtrar por Escuela
-                  </label>
-                  <select
-                    className="w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-teal-500 bg-gray-700 text-white"
-                    value={filterEscuela}
-                    onChange={(e) => setFilterEscuela(e.target.value)}
-                  >
-                    <option value="">Todas las escuelas</option>
-                    {escuelas.map((escuela) => (
-                      <option
-                        key={escuela.id_escuela}
-                        value={escuela.id_escuela}
-                      >
-                        {escuela.nombre}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Filtrar por Grado
@@ -783,24 +736,6 @@ function SeccionesPage() {
                       </h4>
                     </div>
                     <div className="grid grid-cols-1 gap-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Escuela *
-                        </label>
-                        <select
-                          className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-                          value={id_escuela}
-                          onChange={(e) => setIdEscuela(e.target.value)}
-                          required
-                        >
-                          <option value="">Seleccionar escuela</option>
-                          {escuelas.map((esc) => (
-                            <option key={esc.id_escuela} value={esc.id_escuela}>
-                              {esc.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-300 mb-2">
                           Grado *

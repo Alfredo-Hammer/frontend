@@ -21,16 +21,24 @@ function calcularEdad(fechaNacimiento) {
   return edad >= 0 ? edad : "";
 }
 
-function FormularioAlumno({escuelas, grados, secciones, onSubmit, onCancel}) {
+// Función para generar PIN de 6 dígitos
+function generarPIN() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function FormularioAlumno({grados, secciones, onSubmit, onCancel}) {
   const [form, setForm] = useState({
     nombre: "",
     apellido: "",
     edad: "",
     fechaNacimiento: "",
     codigo_mined: "",
-    id_escuela: "",
     id_grado: "",
     id_seccion: "",
+    nacionalidad: "Nicaragüense",
+    etnia: "",
+    enfermedad: "",
+    pin: generarPIN(),
     nombrePadre: "",
     telefonoPadre: "",
     nombreMadre: "",
@@ -111,7 +119,7 @@ function FormularioAlumno({escuelas, grados, secciones, onSubmit, onCancel}) {
             inputProps={{min: 1, readOnly: true}}
           />
         </Grid>
-        {/* Fila 3: Código MINED y Escuela */}
+        {/* Fila 3: Código MINED y PIN */}
         <Grid item xs={12} md={6}>
           <TextField
             label="Código MINED"
@@ -121,29 +129,68 @@ function FormularioAlumno({escuelas, grados, secciones, onSubmit, onCancel}) {
             fullWidth
           />
         </Grid>
-
-        {/* Escuela: campo completo */}
-        <Grid item xs={12} md={12}>
+        <Grid item xs={12} md={6}>
           <TextField
-            select
-            label="Escuela"
-            name="id_escuela"
-            value={form.id_escuela}
+            label="PIN de acceso (generado automáticamente)"
+            name="pin"
+            value={form.pin}
+            fullWidth
+            inputProps={{readOnly: true}}
+            helperText="Este PIN será usado para el login del alumno"
+          />
+        </Grid>
+
+        {/* Fila 4: Nacionalidad y Etnia */}
+        <Grid item xs={12} md={6}>
+          <TextField
+            label="Nacionalidad"
+            name="nacionalidad"
+            value={form.nacionalidad}
             onChange={handleChange}
             fullWidth
             required
+          />
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <TextField
+            select
+            label="Etnia"
+            name="etnia"
+            value={form.etnia}
+            onChange={handleChange}
+            fullWidth
           >
             <MenuItem value="">Seleccione una opción</MenuItem>
-            {escuelas.map((esc) => (
-              <MenuItem key={esc.id_escuela} value={String(esc.id_escuela)}>
-                {esc.nombre}
-              </MenuItem>
-            ))}
+            <MenuItem value="Mestizo">Mestizo</MenuItem>
+            <MenuItem value="Miskito">Miskito</MenuItem>
+            <MenuItem value="Mayangna">Mayangna</MenuItem>
+            <MenuItem value="Garífuna">Garífuna</MenuItem>
+            <MenuItem value="Rama">Rama</MenuItem>
+            <MenuItem value="Creole">Creole</MenuItem>
+            <MenuItem value="Xiu-Sutiava">Xiu-Sutiava</MenuItem>
+            <MenuItem value="Ulwa">Ulwa</MenuItem>
+            <MenuItem value="Nahoa-Nicarao">Nahoa-Nicarao</MenuItem>
+            <MenuItem value="Chorotega">Chorotega</MenuItem>
+            <MenuItem value="Otro">Otro</MenuItem>
           </TextField>
         </Grid>
 
-        {/* Grado: campo completo */}
-        <Grid item xs={12} md={12}>
+        {/* Enfermedades o condiciones especiales */}
+        <Grid item xs={12}>
+          <TextField
+            label="Enfermedades o condiciones especiales"
+            name="enfermedad"
+            value={form.enfermedad}
+            onChange={handleChange}
+            fullWidth
+            multiline
+            rows={2}
+            helperText="Indicar si el alumno padece de alguna enfermedad, alergia o condición especial"
+          />
+        </Grid>
+
+        {/* Grado */}
+        <Grid item xs={12} md={6}>
           <TextField
             select
             label="Grado"
@@ -162,8 +209,7 @@ function FormularioAlumno({escuelas, grados, secciones, onSubmit, onCancel}) {
           </TextField>
         </Grid>
 
-        {/* Sección: campo completo */}
-        <Grid item xs={12} md={12}>
+        <Grid item xs={12} md={6}>
           <TextField
             select
             label="Sección"

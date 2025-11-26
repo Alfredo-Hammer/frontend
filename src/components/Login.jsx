@@ -1,7 +1,6 @@
 import {useState} from "react";
 import api from "../api/axiosConfig";
 import services from "../api/services";
-import {Link} from "react-router-dom";
 import Loader from "./Loader";
 import {
   EyeIcon,
@@ -241,7 +240,7 @@ function Login({setToken}) {
               </div>
 
               {/* Remember & Forgot */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-6">
                 <label className="flex items-center">
                   <input
                     type="checkbox"
@@ -249,12 +248,6 @@ function Login({setToken}) {
                   />
                   <span className="ml-2 text-sm text-gray-600">Recordarme</span>
                 </label>
-                <Link
-                  to="/forgot-password"
-                  className="text-sm text-cyan-600 hover:text-cyan-700 font-medium"
-                >
-                  ¿Olvidaste tu contraseña?
-                </Link>
               </div>
 
               {/* Login Button */}
@@ -298,19 +291,6 @@ function Login({setToken}) {
                 )}
               </button>
             </form>
-
-            {/* Register Link */}
-            <div className="mt-8 pt-6 border-t border-gray-200 text-center">
-              <p className="text-gray-600">
-                ¿No tienes una cuenta?{" "}
-                <Link
-                  to="/register"
-                  className="text-cyan-600 hover:text-cyan-700 font-semibold hover:underline transition-colors"
-                >
-                  Regístrate aquí
-                </Link>
-              </p>
-            </div>
           </div>
 
           {/* Footer */}

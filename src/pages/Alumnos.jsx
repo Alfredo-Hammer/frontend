@@ -262,14 +262,7 @@ function Alumnos() {
 
   const handleRegistrar = async (e) => {
     e.preventDefault();
-    if (
-      !nombre ||
-      !apellido ||
-      !email ||
-      !escuelaId ||
-      !gradoId ||
-      !seccionId
-    ) {
+    if (!nombre || !apellido || !email || !gradoId || !seccionId) {
       setMensaje("Completa todos los campos obligatorios.");
       return;
     }
@@ -283,10 +276,8 @@ function Alumnos() {
           email,
           fecha_nacimiento,
           codigo_mined,
-          escuelaid: escuelaId, // Cambio: usar escuelaid como en la BD
-          gradoid: gradoId, // Cambio: usar gradoid como en la BD
-          seccionid: seccionId, // Cambio: usar seccionid como en la BD
-          id_escuela: escuelaId, // También mantener id_escuela por la relación FK
+          gradoid: gradoId,
+          seccionid: seccionId,
           genero,
           nombre_padre,
           correo_padre,
@@ -337,8 +328,81 @@ function Alumnos() {
     }
   };
 
+  const handleActualizarAlumno = async (e) => {
+    e.preventDefault();
+    if (!alumnoEditar) return;
+
+    try {
+      await api.put(
+        `/api/alumnos/${alumnoEditar.id_estudiante}`,
+        {
+          nombre,
+          apellido,
+          email,
+          direccion_exacta,
+          fecha_nacimiento,
+          codigo_mined,
+          genero,
+          nombre_padre,
+          correo_padre,
+          telefono_padre,
+          movil_alumno,
+          turno,
+          municipio,
+          departamento,
+          nivel_educativo,
+          gradoId,
+          seccionId,
+        },
+        {headers: {Authorization: `Bearer ${token}`}}
+      );
+      setMensaje("Alumno actualizado correctamente");
+      setShowEditModal(false);
+      setAlumnoEditar(null);
+      // Limpiar formulario
+      setNombre("");
+      setApellido("");
+      setEmail("");
+      setDireccionExacta("");
+      setFechaNacimiento("");
+      setCodigoMined("");
+      setGenero("");
+      setNombrePadre("");
+      setCorreoPadre("");
+      setTelefonoPadre("");
+      setMovilAlumno("");
+      setTurno("");
+      setMunicipio("");
+      setDepartamento("");
+      setNivelEducativo("");
+      setGradoId("");
+      setSeccionId("");
+      fetchAlumnos();
+    } catch (err) {
+      setMensaje(err.response?.data?.message || "Error al actualizar alumno");
+    }
+  };
+
   const handleAbrirEditar = (alumno) => {
     setAlumnoEditar({...alumno});
+    // Cargar los valores en los estados del formulario
+    setNombre(alumno.nombre || "");
+    setApellido(alumno.apellido || "");
+    setEmail(alumno.email || "");
+    setDireccionExacta(alumno.direccion_exacta || "");
+    setFechaNacimiento(alumno.fecha_nacimiento || "");
+    setCodigoMined(alumno.codigo_mined || "");
+    setGenero(alumno.genero || "");
+    setNombrePadre(alumno.nombre_padre || "");
+    setCorreoPadre(alumno.correo_padre || "");
+    setTelefonoPadre(alumno.telefono_padre || "");
+    setMovilAlumno(alumno.movil_alumno || "");
+    setTurno(alumno.turno || "");
+    setMunicipio(alumno.municipio || "");
+    setDepartamento(alumno.departamento || "");
+    setNivelEducativo(alumno.nivel_educativo || "");
+    setGradoId(alumno.gradoid || "");
+    setSeccionId(alumno.seccionid || "");
     setShowEditModal(true);
   };
 
@@ -711,6 +775,9 @@ function Alumnos() {
                       Código Mined
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      PIN
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                       Nombre Completo
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
@@ -751,6 +818,11 @@ function Alumnos() {
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="px-3 py-1 text-xs font-medium bg-blue-500/20 text-blue-300 rounded-full">
                           {alumno.codigo_mined || "Sin código"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="px-3 py-1 text-xs font-semibold bg-purple-500/20 text-purple-300 rounded-full">
+                          {alumno.pin || "------"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1056,22 +1128,30 @@ function Alumnos() {
             </div>
           </div>
         )}
-        {/* Modal para registrar alumno */}
-        {showModal && (
+        {/* Modal para registrar/editar alumno */}
+        {(showModal || (showEditModal && alumnoEditar)) && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-gray-900 rounded-3xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto border border-gray-700">
               <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6 rounded-t-3xl">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-2xl font-bold text-white">
-                      Registrar Nuevo Alumno
+                      {showEditModal && alumnoEditar
+                        ? "Editar Alumno"
+                        : "Registrar Nuevo Alumno"}
                     </h3>
                     <p className="text-blue-100 text-sm">
-                      Complete la información del estudiante
+                      {showEditModal && alumnoEditar
+                        ? "Actualice la información del estudiante"
+                        : "Complete la información del estudiante"}
                     </p>
                   </div>
                   <button
-                    onClick={() => setShowModal(false)}
+                    onClick={() => {
+                      setShowModal(false);
+                      setShowEditModal(false);
+                      setAlumnoEditar(null);
+                    }}
                     className="p-2 hover:bg-white/20 rounded-full transition-colors duration-200"
                   >
                     <svg
@@ -1091,7 +1171,14 @@ function Alumnos() {
                 </div>
               </div>
 
-              <form onSubmit={handleRegistrar} className="p-8 space-y-8">
+              <form
+                onSubmit={
+                  showEditModal && alumnoEditar
+                    ? handleActualizarAlumno
+                    : handleRegistrar
+                }
+                className="p-8 space-y-8"
+              >
                 {/* Datos del Alumno */}
                 <section>
                   <div className="flex items-center mb-6">
@@ -1356,13 +1443,8 @@ function Alumnos() {
                       </label>
                       <input
                         type="text"
-                        value={alumnoEditar.nombre_padre || ""}
-                        onChange={(e) =>
-                          setAlumnoEditar({
-                            ...alumnoEditar,
-                            nombre_padre: e.target.value,
-                          })
-                        }
+                        value={nombre_padre}
+                        onChange={(e) => setNombrePadre(e.target.value)}
                         className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200"
                         placeholder="Nombre completo del padre/tutor"
                       />
@@ -1373,13 +1455,8 @@ function Alumnos() {
                       </label>
                       <input
                         type="text"
-                        value={alumnoEditar.telefono_padre || ""}
-                        onChange={(e) =>
-                          setAlumnoEditar({
-                            ...alumnoEditar,
-                            telefono_padre: e.target.value,
-                          })
-                        }
+                        value={telefono_padre}
+                        onChange={(e) => setTelefonoPadre(e.target.value)}
                         className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200"
                         placeholder="Número de contacto del tutor"
                       />
@@ -1390,13 +1467,8 @@ function Alumnos() {
                       </label>
                       <input
                         type="email"
-                        value={alumnoEditar.correo_padre || ""}
-                        onChange={(e) =>
-                          setAlumnoEditar({
-                            ...alumnoEditar,
-                            correo_padre: e.target.value,
-                          })
-                        }
+                        value={correo_padre}
+                        onChange={(e) => setCorreoPadre(e.target.value)}
                         className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200"
                         placeholder="correo@tutor.com"
                       />
