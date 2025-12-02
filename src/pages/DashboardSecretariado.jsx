@@ -1,4 +1,5 @@
 import React, {useState, useEffect} from "react";
+import api from "../api/axiosConfig";
 import {
   Users,
   UserPlus,
@@ -15,6 +16,7 @@ import {
   BookOpen,
   Printer,
   Search,
+  UserCheck,
 } from "lucide-react";
 import {
   BarChart,
@@ -31,34 +33,43 @@ import {
 
 function DashboardSecretariado({user}) {
   const [loading, setLoading] = useState(true);
+  const [escuela, setEscuela] = useState(null);
+  const [estadisticas, setEstadisticas] = useState({
+    estudiantesActivos: 0,
+    nuevasInscripciones: 0,
+    pendientesPago: 0,
+    citasPendientes: 0,
+    constanciasEmitidas: 0,
+    asistenciaHoy: 0,
+  });
+  const [alumnos, setAlumnos] = useState([]);
+  const [profesores, setProfesores] = useState([]);
+  const [grados, setGrados] = useState([]);
+  const [secciones, setSecciones] = useState([]);
+  const [materias, setMaterias] = useState([]);
+  const token = localStorage.getItem("token");
 
-  // Datos simulados para el dashboard
-  const estadisticas = {
-    estudiantesActivos: 1247,
-    nuevasInscripciones: 48,
-    pendientesPago: 23,
-    citasPendientes: 12,
-    constanciasEmitidas: 156,
-    asistenciaHoy: 94.5,
-  };
-
-  const inscripcionesMensuales = [
-    {mes: "Ene", inscripciones: 45},
-    {mes: "Feb", inscripciones: 38},
-    {mes: "Mar", inscripciones: 52},
-    {mes: "Abr", inscripciones: 41},
-    {mes: "May", aumentó: 35},
-    {mes: "Jun", inscripciones: 48},
-  ];
-
-  const distribucionGrados = [
-    {grado: "1er Grado", estudiantes: 180, color: "#3b82f6"},
-    {grado: "2do Grado", estudiantes: 165, color: "#10b981"},
-    {grado: "3er Grado", estudiantes: 170, color: "#f59e0b"},
-    {grado: "4to Grado", estudiantes: 155, color: "#ef4444"},
-    {grado: "5to Grado", estudiantes: 142, color: "#8b5cf6"},
-    {grado: "6to Grado", estudiantes: 135, color: "#ec4899"},
-  ];
+  // Calcular distribución por grados con datos reales
+  const distribucionGrados = grados.map((grado, index) => {
+    const colores = [
+      "#3b82f6",
+      "#10b981",
+      "#f59e0b",
+      "#ef4444",
+      "#8b5cf6",
+      "#ec4899",
+      "#06b6d4",
+      "#f97316",
+    ];
+    const estudiantesEnGrado = alumnos.filter(
+      (a) => a.gradoid === grado.id_grado
+    ).length;
+    return {
+      grado: grado.nombre,
+      estudiantes: estudiantesEnGrado,
+      color: colores[index % colores.length],
+    };
+  });
 
   const tareasPendientes = [
     {
@@ -115,10 +126,73 @@ function DashboardSecretariado({user}) {
   ];
 
   useEffect(() => {
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
+    cargarDatos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const cargarDatos = async () => {
+    try {
+      setLoading(true);
+
+      // Cargar datos en paralelo
+      const [
+        escuelaRes,
+        alumnosRes,
+        profesoresRes,
+        gradosRes,
+        seccionesRes,
+        materiasRes,
+      ] = await Promise.all([
+        user?.id_escuela
+          ? api.get(`/api/escuelas/${user.id_escuela}`, {
+              headers: {Authorization: `Bearer ${token}`},
+            })
+          : Promise.resolve({data: null}),
+        api.get("/api/alumnos", {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+        api.get("/api/profesores", {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+        api.get("/api/grados", {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+        api.get("/api/secciones", {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+        api.get("/api/materias", {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+      ]);
+
+      setEscuela(escuelaRes.data);
+      setAlumnos(alumnosRes.data);
+      setProfesores(profesoresRes.data);
+      setGrados(gradosRes.data);
+      setSecciones(seccionesRes.data);
+      setMaterias(materiasRes.data);
+
+      // Calcular estadísticas reales
+      setEstadisticas({
+        estudiantesActivos: alumnosRes.data.length,
+        nuevasInscripciones: alumnosRes.data.filter((a) => {
+          // Contar alumnos registrados en los últimos 30 días
+          const fechaRegistro = new Date(a.fecha_registro || a.createdAt);
+          const hace30dias = new Date();
+          hace30dias.setDate(hace30dias.getDate() - 30);
+          return fechaRegistro > hace30dias;
+        }).length,
+        pendientesPago: 0, // Placeholder - implementar cuando tengas módulo de pagos
+        citasPendientes: 0, // Placeholder - implementar cuando tengas módulo de citas
+        constanciasEmitidas: 0, // Placeholder - implementar cuando tengas módulo de documentos
+        asistenciaHoy: 94.5, // Placeholder - obtener del módulo de asistencia
+      });
+    } catch (error) {
+      console.error("Error al cargar datos:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -135,31 +209,64 @@ function DashboardSecretariado({user}) {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="relative bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl p-8 overflow-hidden">
+        <div className="relative bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 rounded-2xl p-8 overflow-hidden shadow-2xl">
           <div className="absolute inset-0 bg-black/20"></div>
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-300/10 rounded-full blur-2xl"></div>
+          <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-300/10 rounded-full blur-2xl animate-pulse delay-700"></div>
+          <div className="absolute top-1/2 left-1/2 w-48 h-48 bg-pink-300/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
 
           <div className="relative z-10">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between">
+            {/* Fila superior: Logo y nombre de escuela */}
+            {(escuela?.logo || escuela?.nombre) && (
+              <div className="flex items-center justify-end gap-4 mb-6 pb-4 border-b border-white/20">
+                {escuela?.nombre && (
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-white">
+                      {escuela.nombre}
+                    </p>
+                    <p className="text-sm text-purple-100">
+                      Sistema de Gestión Educativa
+                    </p>
+                  </div>
+                )}
+                {escuela?.logo && (
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-white/20 rounded-xl blur-xl"></div>
+                    <img
+                      src={`http://localhost:4000${escuela.logo}`}
+                      alt={escuela.nombre}
+                      className="relative w-16 h-16 lg:w-20 lg:h-20 rounded-xl object-cover border-4 border-white/40 shadow-2xl"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
               <div className="flex-1">
-                <h1 className="text-4xl font-bold text-white mb-2 flex items-center gap-2">
-                  <FileText className="h-8 w-8" />
-                  ¡Bienvenido/a, {user.nombre}!
-                </h1>
-                <p className="text-purple-100 text-lg">
-                  Panel de Gestión Administrativa
-                </p>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="p-3 bg-white/20 backdrop-blur-sm rounded-xl">
+                    <FileText className="h-8 w-8 text-white" />
+                  </div>
+                  <div>
+                    <h1 className="text-3xl lg:text-4xl font-bold text-white">
+                      ¡Bienvenido/a, {user.nombre}!
+                    </h1>
+                    <p className="text-purple-100 text-base lg:text-lg">
+                      Panel de Gestión Administrativa
+                    </p>
+                  </div>
+                </div>
               </div>
 
-              <div className="mt-4 md:mt-0 flex gap-3">
-                <button className="bg-white/20 backdrop-blur-md hover:bg-white/30 transition-colors text-white border border-white/30 rounded-xl px-6 py-3 flex items-center gap-2">
+              <div className="flex flex-wrap gap-3">
+                <button className="bg-white/20 backdrop-blur-md hover:bg-white/30 hover:scale-105 transition-all duration-200 text-white border border-white/30 rounded-xl px-5 py-3 flex items-center gap-2 shadow-lg">
                   <UserPlus className="h-5 w-5" />
-                  Nuevo Estudiante
+                  <span className="font-semibold">Nuevo Estudiante</span>
                 </button>
-                <button className="bg-white/20 backdrop-blur-md hover:bg-white/30 transition-colors text-white border border-white/30 rounded-xl px-6 py-3 flex items-center gap-2">
+                <button className="bg-white/20 backdrop-blur-md hover:bg-white/30 hover:scale-105 transition-all duration-200 text-white border border-white/30 rounded-xl px-5 py-3 flex items-center gap-2 shadow-lg">
                   <FileText className="h-5 w-5" />
-                  Emitir Constancia
+                  <span className="font-semibold">Emitir Constancia</span>
                 </button>
               </div>
             </div>
@@ -193,7 +300,10 @@ function DashboardSecretariado({user}) {
         {/* Cards de estadísticas */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
           {/* Estudiantes Activos */}
-          <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 backdrop-blur-md border border-blue-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300">
+          <div
+            className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 backdrop-blur-md border border-blue-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300 cursor-pointer"
+            onClick={() => (window.location.href = "/alumnos")}
+          >
             <div className="flex items-center justify-between mb-3">
               <div className="p-2 bg-blue-500/30 rounded-lg">
                 <Users className="h-6 w-6 text-blue-300" />
@@ -205,89 +315,98 @@ function DashboardSecretariado({user}) {
             <p className="text-blue-200 text-sm">Estudiantes Activos</p>
           </div>
 
-          {/* Nuevas Inscripciones */}
-          <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 backdrop-blur-md border border-green-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300">
+          {/* Profesores */}
+          <div
+            className="bg-gradient-to-br from-green-500/20 to-green-600/20 backdrop-blur-md border border-green-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300 cursor-pointer"
+            onClick={() => (window.location.href = "/profesores")}
+          >
             <div className="flex items-center justify-between mb-3">
               <div className="p-2 bg-green-500/30 rounded-lg">
-                <UserPlus className="h-6 w-6 text-green-300" />
+                <UserCheck className="h-6 w-6 text-green-300" />
               </div>
-              <TrendingUp className="h-4 w-4 text-green-400" />
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-1">
+              {profesores.length}
+            </h3>
+            <p className="text-green-200 text-sm">Profesores</p>
+          </div>
+
+          {/* Grados */}
+          <div
+            className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 backdrop-blur-md border border-yellow-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300 cursor-pointer"
+            onClick={() => (window.location.href = "/grados")}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2 bg-yellow-500/30 rounded-lg">
+                <Award className="h-6 w-6 text-yellow-300" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-1">
+              {grados.length}
+            </h3>
+            <p className="text-yellow-200 text-sm">Grados</p>
+          </div>
+
+          {/* Secciones */}
+          <div
+            className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 backdrop-blur-md border border-purple-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300 cursor-pointer"
+            onClick={() => (window.location.href = "/secciones")}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2 bg-purple-500/30 rounded-lg">
+                <Users className="h-6 w-6 text-purple-300" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-1">
+              {secciones.length}
+            </h3>
+            <p className="text-purple-200 text-sm">Secciones</p>
+          </div>
+
+          {/* Materias */}
+          <div
+            className="bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 backdrop-blur-md border border-cyan-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300 cursor-pointer"
+            onClick={() => (window.location.href = "/materias")}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2 bg-cyan-500/30 rounded-lg">
+                <BookOpen className="h-6 w-6 text-cyan-300" />
+              </div>
+            </div>
+            <h3 className="text-2xl font-bold text-white mb-1">
+              {materias.length}
+            </h3>
+            <p className="text-cyan-200 text-sm">Materias</p>
+          </div>
+
+          {/* Nuevas Inscripciones */}
+          <div className="bg-gradient-to-br from-pink-500/20 to-pink-600/20 backdrop-blur-md border border-pink-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300">
+            <div className="flex items-center justify-between mb-3">
+              <div className="p-2 bg-pink-500/30 rounded-lg">
+                <UserPlus className="h-6 w-6 text-pink-300" />
+              </div>
+              <TrendingUp className="h-4 w-4 text-pink-400" />
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
               {estadisticas.nuevasInscripciones}
             </h3>
-            <p className="text-green-200 text-sm">Nuevas este mes</p>
-          </div>
-
-          {/* Pendientes de Pago */}
-          <div className="bg-gradient-to-br from-yellow-500/20 to-yellow-600/20 backdrop-blur-md border border-yellow-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 bg-yellow-500/30 rounded-lg">
-                <DollarSign className="h-6 w-6 text-yellow-300" />
-              </div>
-              <AlertCircle className="h-4 w-4 text-yellow-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-white mb-1">
-              {estadisticas.pendientesPago}
-            </h3>
-            <p className="text-yellow-200 text-sm">Pendientes Pago</p>
-          </div>
-
-          {/* Citas Pendientes */}
-          <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 backdrop-blur-md border border-purple-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 bg-purple-500/30 rounded-lg">
-                <Calendar className="h-6 w-6 text-purple-300" />
-              </div>
-            </div>
-            <h3 className="text-2xl font-bold text-white mb-1">
-              {estadisticas.citasPendientes}
-            </h3>
-            <p className="text-purple-200 text-sm">Citas Pendientes</p>
-          </div>
-
-          {/* Constancias Emitidas */}
-          <div className="bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 backdrop-blur-md border border-cyan-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 bg-cyan-500/30 rounded-lg">
-                <FileText className="h-6 w-6 text-cyan-300" />
-              </div>
-              <Printer className="h-4 w-4 text-cyan-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-white mb-1">
-              {estadisticas.constanciasEmitidas}
-            </h3>
-            <p className="text-cyan-200 text-sm">Constancias (mes)</p>
-          </div>
-
-          {/* Asistencia Hoy */}
-          <div className="bg-gradient-to-br from-rose-500/20 to-rose-600/20 backdrop-blur-md border border-rose-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300">
-            <div className="flex items-center justify-between mb-3">
-              <div className="p-2 bg-rose-500/30 rounded-lg">
-                <ClipboardCheck className="h-6 w-6 text-rose-300" />
-              </div>
-              <CheckCircle className="h-4 w-4 text-green-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-white mb-1">
-              {estadisticas.asistenciaHoy}%
-            </h3>
-            <p className="text-rose-200 text-sm">Asistencia Hoy</p>
+            <p className="text-pink-200 text-sm">Nuevos este mes</p>
           </div>
         </div>
 
         {/* Gráficos */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Inscripciones Mensuales */}
+          {/* Distribución por Grados */}
           <div className="bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-xl p-6">
             <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-6">
-              <TrendingUp className="h-5 w-5 text-green-400" />
-              Inscripciones Mensuales
+              <BookOpen className="h-5 w-5 text-blue-400" />
+              Estudiantes por Grado
             </h2>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={inscripcionesMensuales}>
+              <BarChart data={distribucionGrados}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
-                  dataKey="mes"
+                  dataKey="grado"
                   stroke="#9ca3af"
                   tick={{fill: "#9ca3af"}}
                 />
@@ -300,14 +419,12 @@ function DashboardSecretariado({user}) {
                     color: "#fff",
                   }}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="inscripciones"
-                  stroke="#10b981"
-                  strokeWidth={3}
-                  dot={{fill: "#10b981", r: 5}}
-                />
-              </LineChart>
+                <Bar dataKey="estudiantes" radius={[8, 8, 0, 0]}>
+                  {distribucionGrados.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
             </ResponsiveContainer>
           </div>
 

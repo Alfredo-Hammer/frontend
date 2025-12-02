@@ -31,6 +31,8 @@ import {
 function DashboardPadre({user}) {
   const [loading, setLoading] = useState(true);
   const [selectedChild, setSelectedChild] = useState(0);
+  const [escuela, setEscuela] = useState(null);
+  const token = localStorage.getItem("token");
 
   // Datos simulados de los hijos
   const hijos = [
@@ -93,7 +95,26 @@ function DashboardPadre({user}) {
     setTimeout(() => {
       setLoading(false);
     }, 500);
+    cargarEscuela();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const cargarEscuela = async () => {
+    try {
+      if (user?.id_escuela) {
+        const res = await fetch(
+          `http://localhost:4000/api/escuelas/${user.id_escuela}`,
+          {
+            headers: {Authorization: `Bearer ${token}`},
+          }
+        );
+        const data = await res.json();
+        setEscuela(data);
+      }
+    } catch (error) {
+      console.error("Error al cargar escuela:", error);
+    }
+  };
 
   if (loading) {
     return (
@@ -130,8 +151,8 @@ function DashboardPadre({user}) {
               </div>
 
               {/* Selector de hijos */}
-              {hijos.length > 1 && (
-                <div className="mt-4 md:mt-0">
+              <div className="mt-4 md:mt-0 flex items-center gap-4">
+                {hijos.length > 1 && (
                   <select
                     value={selectedChild}
                     onChange={(e) => setSelectedChild(Number(e.target.value))}
@@ -147,8 +168,15 @@ function DashboardPadre({user}) {
                       </option>
                     ))}
                   </select>
-                </div>
-              )}
+                )}
+                {escuela?.logo && (
+                  <img
+                    src={`http://localhost:4000${escuela.logo}`}
+                    alt={escuela.nombre}
+                    className="w-20 h-20 rounded-lg object-cover border-4 border-white shadow-lg"
+                  />
+                )}
+              </div>
             </div>
 
             {/* Info del hijo seleccionado */}

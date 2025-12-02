@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import api from "../api/axiosConfig";
+import {setTokenWithExpiration} from "../utils/tokenUtils";
 
 function SetupInicial({setToken, setNecesitaSetup}) {
   const navigate = useNavigate();
@@ -160,7 +161,7 @@ function SetupInicial({setToken, setNecesitaSetup}) {
       console.log("✅ Respuesta del servidor:", response.data);
 
       // Guardar token
-      localStorage.setItem("token", response.data.token);
+      setTokenWithExpiration(response.data.token);
       setToken(response.data.token);
 
       // Actualizar estado de setup

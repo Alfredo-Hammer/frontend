@@ -72,4 +72,40 @@
   .avoid-break {
     page-break-inside: avoid;
   }
+
+  /* Estilos específicos para ProfesorDetalle */
+  button {
+    display: none !important;
+  }
+
+  /* Mantener colores de fondo en impresión */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ajustar contenedores con gradientes */
+  .bg-gradient-to-br,
+  .bg-gradient-to-r {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Asegurar que las imágenes se vean */
+  img {
+    max-width: 100% !important;
+    page-break-inside: avoid;
+  }
+
+  /* Mantener texto blanco en elementos oscuros */
+  .text-white {
+    color: white !important;
+  }
+
+  /* Evitar saltos de página en tarjetas */
+  .rounded-xl,
+  .rounded-2xl {
+    page-break-inside: avoid;
+    margin-bottom: 10px;
+  }
 }

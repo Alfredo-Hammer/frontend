@@ -9,7 +9,11 @@ import {
   CalendarIcon,
   EyeIcon,
 } from "@heroicons/react/24/solid";
-import {useNavigate} from "react-router-dom";
+import {useNavigate, useSearchParams} from "react-router-dom";
+import {departamentos, municipiosPorDepartamento} from "../data/nicaragua";
+import PageHeader from "../components/PageHeader";
+
+const API_BASE_URL = "http://localhost:4000";
 
 function Alumnos() {
   const [alumnos, setAlumnos] = useState([]);
@@ -49,6 +53,8 @@ function Alumnos() {
   const [gradoId, setGradoId] = useState("");
   const [seccionId, setSeccionId] = useState("");
   const [imagen, setImagen] = useState("");
+  const [imagenFile, setImagenFile] = useState(null);
+  const [municipiosFiltrados, setMunicipiosFiltrados] = useState([]);
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [alumnoEditar, setAlumnoEditar] = useState(null);
@@ -57,14 +63,49 @@ function Alumnos() {
   const [mostrarVistaReporte, setMostrarVistaReporte] = useState(false);
   const [datosEscuela, setDatosEscuela] = useState(null);
 
+  // Estado para usuario
+  const [user, setUser] = useState(null);
+  const [escuela, setEscuela] = useState(null);
+
   const token = localStorage.getItem("token");
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Cargar alumnos al inicio
   useEffect(() => {
-    fetchAlumnos();
+    fetchUser();
     // eslint-disable-next-line
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchAlumnos();
+    }
+    // eslint-disable-next-line
+  }, [user]);
+
+  const fetchUser = async () => {
+    try {
+      const res = await api.get("/api/usuarios/perfil", {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      setUser({
+        rol: res.data.usuario?.rol || res.data.rol,
+        id_profesor: res.data.usuario?.id_profesor || res.data.id_profesor,
+      });
+
+      // Cargar información de la escuela
+      if (res.data.usuario?.id_escuela || res.data.id_escuela) {
+        const escuelaId = res.data.usuario?.id_escuela || res.data.id_escuela;
+        const escuelaRes = await api.get(`/api/escuelas/${escuelaId}`, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setEscuela(escuelaRes.data);
+      }
+    } catch (error) {
+      console.error("Error al cargar usuario:", error);
+    }
+  };
 
   // Cargar escuelas al abrir modal
   useEffect(() => {
@@ -132,7 +173,47 @@ function Alumnos() {
         setError("Formato de datos incorrecto recibido del servidor.");
         setAlumnos([]);
       } else {
-        setAlumnos(res.data);
+        let alumnosData = res.data;
+
+        // Si es profesor, filtrar solo los alumnos de sus grados asignados
+        if (user?.rol?.toLowerCase() === "profesor" && user?.id_profesor) {
+          try {
+            const asignacionesRes = await api.get(
+              `/api/profesores/${user.id_profesor}/asignaciones`,
+              {headers: {Authorization: `Bearer ${token}`}}
+            );
+
+            const gradosProfesor = asignacionesRes.data.asignaciones.map(
+              (a) => a.id_grado
+            );
+
+            // Verificar si viene un grado específico desde la URL
+            const gradoFromUrl = searchParams.get("grado");
+
+            if (gradoFromUrl) {
+              // Filtrar solo por el grado específico
+              alumnosData = alumnosData.filter(
+                (alumno) => alumno.gradoid === parseInt(gradoFromUrl)
+              );
+              console.log(`👨‍🎓 Alumnos del grado ${gradoFromUrl}:`, alumnosData);
+            } else {
+              // Filtrar por todos los grados del profesor
+              alumnosData = alumnosData.filter((alumno) =>
+                gradosProfesor.includes(alumno.gradoid)
+              );
+              console.log(
+                "👨‍🎓 Alumnos de todos los grados del profesor:",
+                alumnosData
+              );
+            }
+
+            console.log("🎓 Grados del profesor:", gradosProfesor);
+          } catch (error) {
+            console.error("Error al filtrar alumnos del profesor:", error);
+          }
+        }
+
+        setAlumnos(alumnosData);
         setError(""); // Limpiar error si todo sale bien
       }
     } catch (err) {
@@ -267,30 +348,48 @@ function Alumnos() {
       return;
     }
     try {
-      await api.post(
-        "/api/alumnos",
-        {
-          nombre,
-          apellido,
-          direccion_exacta,
-          email,
-          fecha_nacimiento,
-          codigo_mined,
-          gradoid: gradoId,
-          seccionid: seccionId,
-          genero,
-          nombre_padre,
-          correo_padre,
-          telefono_padre,
-          movil_alumno,
-          turno,
-          municipio,
-          departamento,
-          nivel_educativo,
-          imagen,
-        },
-        {headers: {Authorization: `Bearer ${token}`}}
+      // Verificar si el email ya existe
+      const verificarEmail = await api.get(`/api/alumnos`, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const emailExistente = verificarEmail.data.some(
+        (alumno) =>
+          alumno.email && alumno.email.toLowerCase() === email.toLowerCase()
       );
+      if (emailExistente) {
+        setMensaje("El email ya está registrado. Por favor, usa otro.");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("nombre", nombre);
+      formData.append("apellido", apellido);
+      formData.append("direccion_exacta", direccion_exacta);
+      formData.append("email", email);
+      formData.append("fecha_nacimiento", fecha_nacimiento);
+      formData.append("codigo_mined", codigo_mined);
+      formData.append("gradoid", gradoId);
+      formData.append("seccionid", seccionId);
+      formData.append("genero", genero);
+      formData.append("nombre_padre", nombre_padre);
+      formData.append("correo_padre", correo_padre);
+      formData.append("telefono_padre", telefono_padre);
+      formData.append("movil_alumno", movil_alumno);
+      formData.append("turno", turno);
+      formData.append("municipio", municipio);
+      formData.append("departamento", departamento);
+      formData.append("nivel_educativo", nivel_educativo);
+
+      if (imagenFile) {
+        formData.append("imagen", imagenFile);
+      }
+
+      await api.post("/api/alumnos", formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
       setMensaje("Alumno registrado correctamente");
       setShowModal(false);
       setNombre("");
@@ -309,6 +408,7 @@ function Alumnos() {
       setDepartamento("");
       setNivelEducativo("");
       setImagen("");
+      setImagenFile(null);
       fetchAlumnos();
     } catch (err) {
       setMensaje(err.response?.data?.message || "Error al registrar alumno");
@@ -333,29 +433,52 @@ function Alumnos() {
     if (!alumnoEditar) return;
 
     try {
-      await api.put(
-        `/api/alumnos/${alumnoEditar.id_estudiante}`,
-        {
-          nombre,
-          apellido,
-          email,
-          direccion_exacta,
-          fecha_nacimiento,
-          codigo_mined,
-          genero,
-          nombre_padre,
-          correo_padre,
-          telefono_padre,
-          movil_alumno,
-          turno,
-          municipio,
-          departamento,
-          nivel_educativo,
-          gradoId,
-          seccionId,
-        },
-        {headers: {Authorization: `Bearer ${token}`}}
+      // Verificar si el email ya existe en otro alumno
+      const verificarEmail = await api.get(`/api/alumnos`, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const emailExistente = verificarEmail.data.some(
+        (alumno) =>
+          alumno.email &&
+          alumno.email.toLowerCase() === email.toLowerCase() &&
+          alumno.id_estudiante !== alumnoEditar.id_estudiante
       );
+      if (emailExistente) {
+        setMensaje(
+          "El email ya está registrado para otro alumno. Por favor, usa otro."
+        );
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("nombre", nombre);
+      formData.append("apellido", apellido);
+      formData.append("email", email);
+      formData.append("direccion_exacta", direccion_exacta);
+      formData.append("fecha_nacimiento", fecha_nacimiento);
+      formData.append("codigo_mined", codigo_mined);
+      formData.append("genero", genero);
+      formData.append("nombre_padre", nombre_padre);
+      formData.append("correo_padre", correo_padre);
+      formData.append("telefono_padre", telefono_padre);
+      formData.append("movil_alumno", movil_alumno);
+      formData.append("turno", turno);
+      formData.append("municipio", municipio);
+      formData.append("departamento", departamento);
+      formData.append("nivel_educativo", nivel_educativo);
+      formData.append("gradoId", gradoId);
+      formData.append("seccionId", seccionId);
+
+      if (imagenFile) {
+        formData.append("imagen", imagenFile);
+      }
+
+      await api.put(`/api/alumnos/${alumnoEditar.id_estudiante}`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
       setMensaje("Alumno actualizado correctamente");
       setShowEditModal(false);
       setAlumnoEditar(null);
@@ -377,6 +500,8 @@ function Alumnos() {
       setNivelEducativo("");
       setGradoId("");
       setSeccionId("");
+      setImagen("");
+      setImagenFile(null);
       fetchAlumnos();
     } catch (err) {
       setMensaje(err.response?.data?.message || "Error al actualizar alumno");
@@ -541,92 +666,45 @@ function Alumnos() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      {/* Header Hero Section */}
-      <div className="relative bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 overflow-hidden">
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="absolute inset-0">
-          <div className="absolute top-10 left-10 w-40 h-40 bg-blue-400/20 rounded-full blur-2xl animate-pulse"></div>
-          <div className="absolute bottom-10 right-10 w-60 h-60 bg-purple-400/20 rounded-full blur-2xl animate-pulse delay-1000"></div>
-        </div>
-
-        <div className="relative max-w-7xl mx-auto px-6 py-16">
-          <div className="flex flex-col lg:flex-row items-center justify-between">
-            <div className="flex-1">
-              <div className="inline-flex items-center px-4 py-2 bg-white/10 rounded-full text-sm text-white mb-4 backdrop-blur-sm">
-                <UserIcon className="w-4 h-4 mr-2" />
-                Gestión Estudiantil
-              </div>
-              <h1 className="text-4xl lg:text-6xl font-bold text-white mb-4">
-                Registro de
-                <span className="block bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
-                  Alumnos
-                </span>
-              </h1>
-              <p className="text-xl text-blue-100 mb-8 max-w-2xl">
-                Gestiona la información completa de todos los estudiantes
-                registrados en el sistema educativo.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={() => navigate("/alumnos/registro")}
-                  className="px-8 py-4 bg-white text-indigo-600 rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center"
-                >
-                  <PlusIcon className="w-5 h-5 mr-2" />
-                  Registrar Nuevo Alumno
-                </button>
-                <button
-                  onClick={generarReporte}
-                  className="px-8 py-4 bg-white/10 text-white rounded-2xl font-semibold backdrop-blur-sm hover:bg-white/20 transform transition-all duration-300 flex items-center justify-center"
-                >
-                  <AcademicCapIcon className="w-5 h-5 mr-2" />
-                  Generar Reporte
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 mt-12 lg:mt-0 flex justify-center">
-              <div className="relative">
-                <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-6 border border-white/20 w-80">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-white">
-                      Estadísticas Rápidas
-                    </h3>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-white">
-                      <span>Total de Alumnos</span>
-                      <span className="font-bold text-yellow-400">
-                        {estadisticas.total}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Masculinos</span>
-                      <span className="font-bold text-blue-400">
-                        {estadisticas.masculino}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Femeninas</span>
-                      <span className="font-bold text-pink-400">
-                        {estadisticas.femenino}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Escuelas Activas</span>
-                      <span className="font-bold text-green-400">
-                        {estadisticas.escuelas}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
+      <div className="max-w-7xl mx-auto px-6">
+        {/* Header Moderno y Compacto */}
+        <PageHeader
+          title="Registro de Alumnos"
+          subtitle="Gestiona la información completa de todos los estudiantes registrados"
+          icon={UserIcon}
+          gradientFrom="blue-600"
+          gradientTo="indigo-600"
+          badge="Gestión Estudiantil"
+          schoolLogo={
+            escuela?.logo ? `http://localhost:4000${escuela.logo}` : null
+          }
+          schoolName={escuela?.nombre}
+          stats={{
+            "Total de Alumnos": estadisticas.total,
+            Masculinos: estadisticas.masculino,
+            Femeninas: estadisticas.femenino,
+            "Escuelas Activas": estadisticas.escuelas,
+          }}
+          actions={
+            <>
+              <button
+                onClick={() => navigate("/alumnos/registro")}
+                className="px-4 py-2 bg-white text-blue-600 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+              >
+                <PlusIcon className="w-5 h-5" />
+                <span>Nuevo Alumno</span>
+              </button>
+              <button
+                onClick={generarReporte}
+                className="px-4 py-2 bg-white/20 text-white rounded-xl font-semibold backdrop-blur-sm hover:bg-white/30 transition-all duration-200 flex items-center space-x-2"
+              >
+                <AcademicCapIcon className="w-5 h-5" />
+                <span>Reporte</span>
+              </button>
+            </>
+          }
+        />
         {mensaje && (
           <div className="mb-6 p-4 bg-blue-500/10 border border-blue-500/20 rounded-2xl text-blue-300 text-center backdrop-blur-sm">
             {mensaje}
@@ -634,7 +712,7 @@ function Alumnos() {
         )}
 
         {/* Barra de búsqueda y filtros */}
-        <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700 -mt-16 relative z-10">
+        <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
           <div className="flex flex-col lg:flex-row gap-4 items-center">
             <div className="flex-1 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -804,16 +882,19 @@ function Alumnos() {
                         {indexOfFirstItem + idx + 1}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <img
-                          src={
-                            alumno.imagen ||
-                            `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                              alumno.nombre + " " + alumno.apellido
-                            )}&background=0D8ABC&color=fff`
-                          }
-                          alt="Alumno"
-                          className="w-12 h-12 rounded-full object-cover border-2 border-blue-500 shadow-lg"
-                        />
+                        <div className="w-12 h-12">
+                          <img
+                            src={
+                              alumno.imagen
+                                ? `${API_BASE_URL}${alumno.imagen}`
+                                : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                    alumno.nombre + " " + alumno.apellido
+                                  )}&background=0D8ABC&color=fff`
+                            }
+                            alt="Alumno"
+                            className="w-full h-full rounded-full object-cover border-2 border-blue-500 shadow-lg"
+                          />
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="px-3 py-1 text-xs font-medium bg-blue-500/20 text-blue-300 rounded-full">
@@ -931,16 +1012,19 @@ function Alumnos() {
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 relative">
                   <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
                   <div className="flex items-center space-x-4">
-                    <img
-                      src={
-                        alumno.imagen ||
-                        `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                          alumno.nombre + " " + alumno.apellido
-                        )}&background=0D8ABC&color=fff`
-                      }
-                      alt="Alumno"
-                      className="w-16 h-16 rounded-full object-cover border-4 border-white shadow-lg"
-                    />
+                    <div className="w-16 h-16 flex-shrink-0">
+                      <img
+                        src={
+                          alumno.imagen
+                            ? `${API_BASE_URL}${alumno.imagen}`
+                            : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                                alumno.nombre + " " + alumno.apellido
+                              )}&background=0D8ABC&color=fff`
+                        }
+                        alt="Alumno"
+                        className="w-full h-full rounded-full object-cover border-4 border-white shadow-lg"
+                      />
+                    </div>
                     <div>
                       <h3 className="text-lg font-bold text-white line-clamp-1">
                         {alumno.nombre} {alumno.apellido}
@@ -1151,6 +1235,9 @@ function Alumnos() {
                       setShowModal(false);
                       setShowEditModal(false);
                       setAlumnoEditar(null);
+                      setImagen("");
+                      setImagenFile(null);
+                      setMunicipiosFiltrados([]);
                     }}
                     className="p-2 hover:bg-white/20 rounded-full transition-colors duration-200"
                   >
@@ -1267,6 +1354,28 @@ function Alumnos() {
                         required
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Fotografía del Estudiante
+                      </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                        onChange={(e) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            setImagenFile(file);
+                            setImagen(file.name);
+                          }
+                        }}
+                      />
+                      {imagen && (
+                        <p className="text-sm text-gray-400 mt-2">
+                          Archivo: {imagen}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </section>
 
@@ -1329,9 +1438,15 @@ function Alumnos() {
                         required
                         disabled={!secciones.length}
                       >
-                        <option value="">Seleccionar sección</option>
+                        <option value="" className="text-white">
+                          Seleccionar sección
+                        </option>
                         {secciones.map((s) => (
-                          <option key={s.id_seccion} value={s.id_seccion}>
+                          <option
+                            key={s.id_seccion}
+                            value={s.id_seccion}
+                            className="text-white"
+                          >
                             {s.nombre}
                           </option>
                         ))}
@@ -1377,27 +1492,55 @@ function Alumnos() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Municipio
+                        Departamento
                       </label>
-                      <input
-                        type="text"
-                        placeholder="Municipio de residencia"
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                        value={municipio}
-                        onChange={(e) => setMunicipio(e.target.value)}
-                      />
+                      <select
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                        value={departamento}
+                        onChange={(e) => {
+                          const dept = e.target.value;
+                          setDepartamento(dept);
+                          setMunicipiosFiltrados(
+                            dept ? municipiosPorDepartamento[dept] || [] : []
+                          );
+                          setMunicipio("");
+                        }}
+                      >
+                        <option value="" className="text-white">
+                          Seleccionar departamento
+                        </option>
+                        {departamentos.map((d) => (
+                          <option
+                            key={d.value}
+                            value={d.value}
+                            className="text-white"
+                          >
+                            {d.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Departamento
+                        Municipio
                       </label>
-                      <input
-                        type="text"
-                        placeholder="Departamento"
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                        value={departamento}
-                        onChange={(e) => setDepartamento(e.target.value)}
-                      />
+                      <select
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                        value={municipio}
+                        onChange={(e) => setMunicipio(e.target.value)}
+                        disabled={!departamento}
+                      >
+                        <option value="" className="text-white">
+                          {departamento
+                            ? "Seleccionar municipio"
+                            : "Primero seleccione departamento"}
+                        </option>
+                        {municipiosFiltrados.map((m) => (
+                          <option key={m} value={m} className="text-white">
+                            {m}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">

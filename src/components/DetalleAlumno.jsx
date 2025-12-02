@@ -19,6 +19,8 @@ import {
   UsersIcon,
 } from "@heroicons/react/24/solid";
 
+const API_BASE_URL = "http://localhost:4000";
+
 const DetalleAlumno = () => {
   const {id} = useParams();
   const navigate = useNavigate();
@@ -330,10 +332,11 @@ const DetalleAlumno = () => {
                 <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-lg">
                   <img
                     src={
-                      alumno.imagen ||
-                      `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                        alumno.nombre + " " + alumno.apellido
-                      )}&background=0D8ABC&color=fff`
+                      alumno.imagen
+                        ? `${API_BASE_URL}${alumno.imagen}`
+                        : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                            alumno.nombre + " " + alumno.apellido
+                          )}&background=0D8ABC&color=fff`
                     }
                     alt="Alumno"
                     className="w-full h-full object-cover"
@@ -524,10 +527,11 @@ const DetalleAlumno = () => {
           <div className="inline-block">
             <img
               src={
-                alumno.imagen ||
-                `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                  alumno.nombre + " " + alumno.apellido
-                )}&background=0D8ABC&color=fff&size=150`
+                alumno.imagen
+                  ? `${API_BASE_URL}${alumno.imagen}`
+                  : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                      alumno.nombre + " " + alumno.apellido
+                    )}&background=0D8ABC&color=fff&size=150`
               }
               alt="Foto del estudiante"
               className="w-32 h-32 rounded-full object-cover border-4 border-gray-300 shadow-lg print:w-24 print:h-24"

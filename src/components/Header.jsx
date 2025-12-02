@@ -1,9 +1,14 @@
 import React, {useState, useRef, useEffect} from "react";
+import {useNavigate} from "react-router-dom";
+import {useMensajes} from "../context/MensajesContext";
+import {ChatBubbleLeftRightIcon} from "@heroicons/react/24/outline";
 
 function Header({user}) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const navigate = useNavigate();
+  const {contadorNoLeidos} = useMensajes();
   const [notifications] = useState([
     {
       id: 1,
@@ -133,6 +138,19 @@ function Header({user}) {
                   d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 />
               </svg>
+            </button>
+
+            {/* Mensajes */}
+            <button
+              onClick={() => navigate("/mensajes")}
+              className="relative p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-all duration-200"
+            >
+              <ChatBubbleLeftRightIcon className="w-6 h-6" />
+              {contadorNoLeidos > 0 && (
+                <span className="absolute -top-1 -right-1 h-5 w-5 bg-cyan-500 text-white text-xs rounded-full flex items-center justify-center animate-pulse">
+                  {contadorNoLeidos}
+                </span>
+              )}
             </button>
 
             {/* Notificaciones */}
@@ -319,7 +337,13 @@ function Header({user}) {
                   </div>
 
                   <div className="py-2">
-                    <button className="w-full px-4 py-3 text-left hover:bg-gray-700 flex items-center space-x-3 transition-colors duration-200">
+                    <button
+                      onClick={() => {
+                        navigate("/perfil");
+                        setShowUserMenu(false);
+                      }}
+                      className="w-full px-4 py-3 text-left hover:bg-gray-700 flex items-center space-x-3 transition-colors duration-200"
+                    >
                       <svg
                         className="w-5 h-5 text-gray-400"
                         fill="none"

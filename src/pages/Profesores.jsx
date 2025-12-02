@@ -1,4 +1,5 @@
 import {useState, useEffect} from "react";
+import {useNavigate} from "react-router-dom";
 import api from "../api/axiosConfig";
 import {
   PlusIcon,
@@ -12,8 +13,10 @@ import {
   TrashIcon,
   XMarkIcon,
 } from "@heroicons/react/24/solid";
+import PageHeader from "../components/PageHeader";
 
 function Profesores() {
+  const navigate = useNavigate();
   const [profesores, setProfesores] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -27,6 +30,7 @@ function Profesores() {
     email: "",
     password: "",
   });
+  const [escuela, setEscuela] = useState(null);
 
   // Estados del formulario
   const [nombre, setNombre] = useState("");
@@ -55,6 +59,7 @@ function Profesores() {
     fetchProfesores();
     fetchGrados();
     fetchSecciones();
+    fetchUser();
   }, []);
 
   const fetchGrados = async () => {
@@ -65,6 +70,23 @@ function Profesores() {
       setGrados(response.data);
     } catch (err) {
       console.error("Error al cargar grados:", err);
+    }
+  };
+
+  const fetchUser = async () => {
+    try {
+      const res = await api.get("/api/usuarios/perfil", {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const id_escuela = res.data.usuario?.id_escuela;
+      if (id_escuela) {
+        const escuelaRes = await api.get(`/api/escuelas/${id_escuela}`, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setEscuela(escuelaRes.data);
+      }
+    } catch (error) {
+      console.error("Error al cargar datos de escuela:", error);
     }
   };
 
@@ -181,6 +203,10 @@ function Profesores() {
     }
   };
 
+  const handleVerDetalle = (profesor) => {
+    navigate(`/profesores/detalle/${profesor.id_profesor}`);
+  };
+
   const handleEditar = async (profesor) => {
     try {
       // Cargar datos del profesor
@@ -288,33 +314,32 @@ function Profesores() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
-      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-8">
-        <div className="bg-gradient-to-r from-purple-600 to-blue-600 rounded-3xl shadow-2xl p-8 border border-purple-500/20">
-          <div className="flex flex-col lg:flex-row items-center justify-between gap-6">
-            <div className="flex items-center space-x-4">
-              <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-                <AcademicCapIcon className="w-10 h-10 text-white" />
-              </div>
-              <div>
-                <h1 className="text-4xl font-bold text-white mb-2">
-                  Gestión de Profesores
-                </h1>
-                <p className="text-purple-100">
-                  Administra el personal docente de tu institución
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={() => setShowModal(true)}
-              className="px-6 py-3 bg-white text-purple-600 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
-            >
-              <PlusIcon className="w-5 h-5" />
-              <span>Agregar Profesor</span>
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Header Moderno y Compacto */}
+      <PageHeader
+        title="Gestión de Profesores"
+        subtitle="Administra el personal docente de tu institución"
+        icon={AcademicCapIcon}
+        gradientFrom="purple-600"
+        gradientTo="blue-600"
+        badge="Personal Docente"
+        schoolLogo={
+          escuela?.logo ? `http://localhost:4000${escuela.logo}` : null
+        }
+        schoolName={escuela?.nombre}
+        stats={{
+          "Total Profesores": profesores.length,
+          Activos: profesores.filter((p) => p.activo !== false).length,
+        }}
+        actions={
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-white text-purple-600 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+          >
+            <PlusIcon className="w-5 h-5" />
+            <span>Agregar Profesor</span>
+          </button>
+        }
+      />
 
       {/* Mensaje */}
       {mensaje && (
@@ -420,6 +445,7 @@ function Profesores() {
                 {/* Acciones */}
                 <div className="p-4 bg-gray-900/50 border-t border-gray-700 flex justify-between">
                   <button
+                    onClick={() => handleVerDetalle(profesor)}
                     className="p-2 bg-blue-500/20 text-blue-300 rounded-lg hover:bg-blue-500/30 transition-colors"
                     title="Ver detalles"
                   >

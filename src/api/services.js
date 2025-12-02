@@ -21,6 +21,8 @@ const services = {
   calificaciones: `${API_BASE}/calificaciones`,
   calificacionesAlumnosLista: `${API_BASE}/calificaciones/alumnos-lista`,
   calificacionesMateriasAlumno: `${API_BASE}/calificaciones/materias-alumno`,
+  reportes: `${API_BASE}/reportes`,
+  reportesConsolidado: `${API_BASE}/reportes/consolidado`,
 };
 
 export default services;

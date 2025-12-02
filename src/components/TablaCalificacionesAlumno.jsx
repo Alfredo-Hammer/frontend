@@ -229,6 +229,12 @@ function TablaCalificacionesAlumno({alumnoId, nombreAlumno, onVolver, token}) {
   };
 
   const handleInputChange = (idx, campo, valor) => {
+    // Validar que el valor esté entre 0 y 100
+    const numValor = parseFloat(valor);
+    if (valor !== "" && (isNaN(numValor) || numValor < 0 || numValor > 100)) {
+      return; // No actualizar si está fuera del rango
+    }
+
     setCalificacionesAlumno((prev) =>
       prev.map((cal, i) => (i === idx ? {...cal, [campo]: valor} : cal))
     );
@@ -818,6 +824,12 @@ function TablaCalificacionesAlumno({alumnoId, nombreAlumno, onVolver, token}) {
                   <th className="px-2 py-2 text-center font-bold text-gray-900 border-b border-gray-300">
                     Final
                   </th>
+                  <th className="px-2 py-2 text-center font-bold text-blue-700 border-b border-gray-300 bg-blue-50">
+                    CUANT
+                  </th>
+                  <th className="px-2 py-2 text-center font-bold text-purple-700 border-b border-gray-300 bg-purple-50">
+                    CUAL
+                  </th>
                   <th className="px-3 py-2 text-left font-bold text-gray-900 border-b border-gray-300">
                     Observaciones
                   </th>
@@ -832,6 +844,32 @@ function TablaCalificacionesAlumno({alumnoId, nombreAlumno, onVolver, token}) {
                   const semestre_1 = (b1 + b2) / 2;
                   const semestre_2 = (b3 + b4) / 2;
                   const nota_final = (b1 + b2 + b3 + b4) / 4;
+
+                  // Calcular nota cuantitativa (MINED: mínimo 40)
+                  let nota_cuantitativa = nota_final;
+                  if (nota_cuantitativa > 0 && nota_cuantitativa < 40) {
+                    nota_cuantitativa = 40;
+                  }
+
+                  // Calcular nota cualitativa (MINED)
+                  let nota_cualitativa = "-";
+                  if (nota_cuantitativa >= 90) nota_cualitativa = "AA";
+                  else if (nota_cuantitativa >= 76) nota_cualitativa = "AS";
+                  else if (nota_cuantitativa >= 60) nota_cualitativa = "AF";
+                  else if (nota_cuantitativa >= 40) nota_cualitativa = "AI";
+
+                  // Color del badge cualitativo
+                  const getBadgeColor = () => {
+                    if (nota_cualitativa === "AA")
+                      return "bg-green-500 text-white";
+                    if (nota_cualitativa === "AS")
+                      return "bg-blue-500 text-white";
+                    if (nota_cualitativa === "AF")
+                      return "bg-yellow-500 text-white";
+                    if (nota_cualitativa === "AI")
+                      return "bg-red-500 text-white";
+                    return "bg-gray-300 text-gray-600";
+                  };
 
                   return (
                     <tr
@@ -917,6 +955,22 @@ function TablaCalificacionesAlumno({alumnoId, nombreAlumno, onVolver, token}) {
                         }`}
                       >
                         {isNaN(nota_final) ? "-" : nota_final.toFixed(1)}
+                      </td>
+                      <td className="px-2 py-2 text-center font-bold text-blue-700 bg-blue-50">
+                        {nota_cuantitativa > 0
+                          ? nota_cuantitativa.toFixed(0)
+                          : "-"}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        {nota_cuantitativa > 0 ? (
+                          <span
+                            className={`px-2 py-1 rounded-full text-xs font-bold ${getBadgeColor()}`}
+                          >
+                            {nota_cualitativa}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                       <td className="px-3 py-2 text-xs text-gray-600">
                         {cal.comentarios || "-"}
@@ -1078,219 +1132,257 @@ function TablaCalificacionesAlumno({alumnoId, nombreAlumno, onVolver, token}) {
 
         {/* Tabla de calificaciones */}
         {calificacionesAlumno.length > 0 && (
-          <div className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-700">
-            <div className="px-6 py-4 bg-gray-900 border-b border-gray-700 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-white flex items-center">
-                <ChartBarIcon className="w-5 h-5 mr-2 text-emerald-400" />
-                Registro de Calificaciones - {nombreAlumno}
-              </h3>
-              <button
-                onClick={guardarTodas}
-                disabled={guardando}
-                className="px-6 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {guardando ? "Guardando..." : "Guardar Todas"}
-              </button>
-            </div>
+          <>
+            <div className="bg-gradient-to-r from-blue-900/30 to-purple-900/30 rounded-2xl shadow-lg overflow-hidden border border-blue-700/30">
+              <div className="px-6 py-5 bg-gradient-to-r from-green-600 to-emerald-600 border-b border-gray-700">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center mb-3">
+                      <BuildingLibraryIcon className="w-8 h-8 mr-3 text-white" />
+                      <div>
+                        <h3 className="text-xl font-bold text-white">
+                          {datosCompletos.escuela?.nombre || "Cargando..."}
+                        </h3>
+                        <p className="text-green-100 text-sm">
+                          Registro de Calificaciones
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm text-white">
+                      <div>
+                        <span className="text-green-100 text-xs">
+                          Estudiante:
+                        </span>
+                        <p className="font-semibold">{nombreAlumno}</p>
+                      </div>
+                      <div>
+                        <span className="text-green-100 text-xs">Grado:</span>
+                        <p className="font-semibold">
+                          {datosCompletos.estudiante?.grado || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-green-100 text-xs">Sección:</span>
+                        <p className="font-semibold">
+                          {datosCompletos.estudiante?.seccion || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-green-100 text-xs">Docente:</span>
+                        <p className="font-semibold">
+                          {datosCompletos.profesor
+                            ? `${datosCompletos.profesor.nombre} ${datosCompletos.profesor.apellido}`
+                            : "N/A"}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    onClick={guardarTodas}
+                    disabled={guardando}
+                    className="px-6 py-3 bg-white text-green-600 rounded-lg font-bold hover:bg-green-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg"
+                  >
+                    {guardando ? "Guardando..." : "Guardar Todas"}
+                  </button>
+                </div>
+              </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-900">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Materia
-                    </th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      I Bimestre
-                    </th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      II Bimestre
-                    </th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      I Semestre
-                    </th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      III Bimestre
-                    </th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      IV Bimestre
-                    </th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      II Semestre
-                    </th>
-                    <th className="px-3 py-3 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Nota Final
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Comentarios
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {calificacionesAlumno.map((cal, idx) => {
-                    const b1 = Number(cal.bimestre_1) || 0;
-                    const b2 = Number(cal.bimestre_2) || 0;
-                    const b3 = Number(cal.bimestre_3) || 0;
-                    const b4 = Number(cal.bimestre_4) || 0;
-                    const semestre_1 = b1 > 0 && b2 > 0 ? (b1 + b2) / 2 : 0;
-                    const semestre_2 = b3 > 0 && b4 > 0 ? (b3 + b4) / 2 : 0;
-                    const nota_final =
-                      b1 > 0 && b2 > 0 && b3 > 0 && b4 > 0
-                        ? (b1 + b2 + b3 + b4) / 4
-                        : 0;
-
-                    return (
-                      <tr
-                        key={`${cal.id_materia}-${idx}`}
-                        className="hover:bg-gray-700 transition-colors"
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-green-600 to-emerald-600 text-white">
+                      <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">
+                        Materia
+                      </th>
+                      <th className="px-3 py-3 text-center text-xs font-bold uppercase tracking-wider">
+                        I BIM
+                      </th>
+                      <th className="px-3 py-3 text-center text-xs font-bold uppercase tracking-wider">
+                        II BIM
+                      </th>
+                      <th className="px-3 py-3 text-center text-xs font-bold uppercase tracking-wider">
+                        III BIM
+                      </th>
+                      <th className="px-3 py-3 text-center text-xs font-bold uppercase tracking-wider">
+                        IV BIM
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider">
+                        Comentarios
+                      </th>
+                    </tr>
+                    <tr className="bg-blue-50">
+                      <td
+                        colspan="6"
+                        className="px-4 py-2 text-xs text-gray-700 italic text-center"
                       >
-                        <td className="px-4 py-3 font-medium text-gray-200">
-                          {cal.materia}
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={cal.bimestre_1 || ""}
-                            onChange={(e) =>
-                              handleInputChange(
-                                idx,
-                                "bimestre_1",
-                                e.target.value
-                              )
-                            }
-                            className={`w-20 text-center border rounded bg-gray-700 text-white px-2 py-1 ${
-                              b1 < 60 && b1 > 0
-                                ? "border-red-500 text-red-400"
-                                : b1 >= 90
-                                ? "border-green-500 text-green-400"
-                                : "border-gray-600"
-                            }`}
-                            placeholder="0"
-                          />
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={cal.bimestre_2 || ""}
-                            onChange={(e) =>
-                              handleInputChange(
-                                idx,
-                                "bimestre_2",
-                                e.target.value
-                              )
-                            }
-                            className={`w-20 text-center border rounded bg-gray-700 text-white px-2 py-1 ${
-                              b2 < 60 && b2 > 0
-                                ? "border-red-500 text-red-400"
-                                : b2 >= 90
-                                ? "border-green-500 text-green-400"
-                                : "border-gray-600"
-                            }`}
-                            placeholder="0"
-                          />
-                        </td>
-                        <td className="px-3 py-3 text-center font-semibold text-blue-400">
-                          {semestre_1 > 0 ? semestre_1.toFixed(1) : "-"}
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={cal.bimestre_3 || ""}
-                            onChange={(e) =>
-                              handleInputChange(
-                                idx,
-                                "bimestre_3",
-                                e.target.value
-                              )
-                            }
-                            className={`w-20 text-center border rounded bg-gray-700 text-white px-2 py-1 ${
-                              b3 < 60 && b3 > 0
-                                ? "border-red-500 text-red-400"
-                                : b3 >= 90
-                                ? "border-green-500 text-green-400"
-                                : "border-gray-600"
-                            }`}
-                            placeholder="0"
-                          />
-                        </td>
-                        <td className="px-3 py-3 text-center">
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            value={cal.bimestre_4 || ""}
-                            onChange={(e) =>
-                              handleInputChange(
-                                idx,
-                                "bimestre_4",
-                                e.target.value
-                              )
-                            }
-                            className={`w-20 text-center border rounded bg-gray-700 text-white px-2 py-1 ${
-                              b4 < 60 && b4 > 0
-                                ? "border-red-500 text-red-400"
-                                : b4 >= 90
-                                ? "border-green-500 text-green-400"
-                                : "border-gray-600"
-                            }`}
-                            placeholder="0"
-                          />
-                        </td>
-                        <td className="px-3 py-3 text-center font-semibold text-blue-400">
-                          {semestre_2 > 0 ? semestre_2.toFixed(1) : "-"}
-                        </td>
-                        <td
-                          className={`px-3 py-3 text-center font-bold ${
-                            nota_final < 60 && nota_final > 0
-                              ? "text-red-400 bg-red-900/20"
-                              : nota_final >= 90
-                              ? "text-green-400 bg-green-900/20"
-                              : nota_final > 0
-                              ? "text-blue-400 bg-blue-900/20"
-                              : "text-gray-400"
-                          }`}
+                        <strong>Sistema MINED:</strong> Los promedios se
+                        calculan automáticamente | 90-100 (AA), 76-89 (AS),
+                        60-75 (AF), 0-59 (AI)
+                      </td>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700 bg-gray-800">
+                    {calificacionesAlumno.map((cal, idx) => {
+                      const b1 = Number(cal.bimestre_1) || 0;
+                      const b2 = Number(cal.bimestre_2) || 0;
+                      const b3 = Number(cal.bimestre_3) || 0;
+                      const b4 = Number(cal.bimestre_4) || 0;
+                      const semestre_1 = b1 > 0 && b2 > 0 ? (b1 + b2) / 2 : 0;
+                      const semestre_2 = b3 > 0 && b4 > 0 ? (b3 + b4) / 2 : 0;
+                      const nota_final =
+                        b1 > 0 && b2 > 0 && b3 > 0 && b4 > 0
+                          ? (b1 + b2 + b3 + b4) / 4
+                          : 0;
+
+                      // Calcular nota cuantitativa (MINED: mínimo 40)
+                      let nota_cuantitativa = nota_final;
+                      if (nota_cuantitativa > 0 && nota_cuantitativa < 40) {
+                        nota_cuantitativa = 40;
+                      }
+
+                      // Calcular nota cualitativa (MINED)
+                      let nota_cualitativa = "-";
+                      if (nota_cuantitativa >= 90) nota_cualitativa = "AA";
+                      else if (nota_cuantitativa >= 76) nota_cualitativa = "AS";
+                      else if (nota_cuantitativa >= 60) nota_cualitativa = "AF";
+                      else if (nota_cuantitativa >= 40) nota_cualitativa = "AI";
+
+                      // Color del badge cualitativo
+                      const getBadgeColor = () => {
+                        if (nota_cualitativa === "AA")
+                          return "bg-green-500 text-white";
+                        if (nota_cualitativa === "AS")
+                          return "bg-blue-500 text-white";
+                        if (nota_cualitativa === "AF")
+                          return "bg-yellow-500 text-white";
+                        if (nota_cualitativa === "AI")
+                          return "bg-red-500 text-white";
+                        return "bg-gray-600 text-gray-300";
+                      };
+
+                      return (
+                        <tr
+                          key={`${cal.id_materia}-${idx}`}
+                          className="hover:bg-gray-700 transition-colors"
                         >
-                          {nota_final > 0 ? nota_final.toFixed(1) : "-"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <textarea
-                            value={cal.comentarios || ""}
-                            onChange={(e) =>
-                              handleInputChange(
-                                idx,
-                                "comentarios",
-                                e.target.value
-                              )
-                            }
-                            className="w-full border rounded bg-gray-700 text-white border-gray-600 px-2 py-1 text-xs"
-                            placeholder="Comentarios..."
-                            rows="2"
-                          />
-                        </td>
-                        {/* Agregar una nueva columna para el botón individual */}
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() =>
-                              guardarCalificacionIndividual(cal, idx)
-                            }
-                            className="px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                          >
-                            Guardar
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          <td className="px-4 py-3 font-semibold text-gray-200">
+                            {cal.materia}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={cal.bimestre_1 || ""}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  idx,
+                                  "bimestre_1",
+                                  e.target.value
+                                )
+                              }
+                              className={`w-20 text-center border-2 rounded-lg bg-gray-700 px-2 py-1.5 font-semibold ${
+                                b1 < 60 && b1 > 0
+                                  ? "border-red-500 text-red-400"
+                                  : b1 >= 60
+                                  ? "border-green-500 text-green-400"
+                                  : "border-gray-600 text-gray-200"
+                              }`}
+                              placeholder="0"
+                            />
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={cal.bimestre_2 || ""}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  idx,
+                                  "bimestre_2",
+                                  e.target.value
+                                )
+                              }
+                              className={`w-20 text-center border-2 rounded-lg bg-gray-700 px-2 py-1.5 font-semibold ${
+                                b2 < 60 && b2 > 0
+                                  ? "border-red-500 text-red-400"
+                                  : b2 >= 60
+                                  ? "border-green-500 text-green-400"
+                                  : "border-gray-600 text-gray-200"
+                              }`}
+                              placeholder="0"
+                            />
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={cal.bimestre_3 || ""}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  idx,
+                                  "bimestre_3",
+                                  e.target.value
+                                )
+                              }
+                              className={`w-20 text-center border-2 rounded-lg bg-gray-700 px-2 py-1.5 font-semibold ${
+                                b3 < 60 && b3 > 0
+                                  ? "border-red-500 text-red-400"
+                                  : b3 >= 60
+                                  ? "border-green-500 text-green-400"
+                                  : "border-gray-600 text-gray-200"
+                              }`}
+                              placeholder="0"
+                            />
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              value={cal.bimestre_4 || ""}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  idx,
+                                  "bimestre_4",
+                                  e.target.value
+                                )
+                              }
+                              className={`w-20 text-center border-2 rounded-lg bg-gray-700 px-2 py-1.5 font-semibold ${
+                                b4 < 60 && b4 > 0
+                                  ? "border-red-500 text-red-400"
+                                  : b4 >= 60
+                                  ? "border-green-500 text-green-400"
+                                  : "border-gray-600 text-gray-200"
+                              }`}
+                              placeholder="0"
+                            />
+                          </td>
+                          <td className="px-4 py-3">
+                            <textarea
+                              value={cal.comentarios || ""}
+                              onChange={(e) =>
+                                handleInputChange(
+                                  idx,
+                                  "comentarios",
+                                  e.target.value
+                                )
+                              }
+                              className="w-full border-2 border-gray-600 rounded-lg bg-gray-700 text-gray-200 px-3 py-1.5 text-sm"
+                              placeholder="Comentarios..."
+                              rows="2"
+                            />
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>

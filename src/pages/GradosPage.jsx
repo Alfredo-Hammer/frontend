@@ -5,10 +5,10 @@ import {
   PlusIcon,
   MagnifyingGlassIcon,
   AcademicCapIcon,
-  BuildingOfficeIcon,
   BookOpenIcon,
   ArrowsUpDownIcon,
 } from "@heroicons/react/24/solid";
+import PageHeader from "../components/PageHeader";
 import {
   DndContext,
   closestCenter,
@@ -42,6 +42,7 @@ function GradosPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [isDragging, setIsDragging] = useState(false);
   const [user, setUser] = useState(null);
+  const [escuela, setEscuela] = useState(null);
 
   const token = localStorage.getItem("token");
   const canEdit =
@@ -90,6 +91,15 @@ function GradosPage() {
         id_profesor: res.data.usuario?.id_profesor || res.data.id_profesor,
         id_escuela: res.data.usuario?.id_escuela || res.data.id_escuela,
       });
+
+      // Cargar datos de la escuela
+      const id_escuela = res.data.usuario?.id_escuela;
+      if (id_escuela) {
+        const escuelaRes = await api.get(`/api/escuelas/${id_escuela}`, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setEscuela(escuelaRes.data);
+      }
     } catch (error) {
       console.error("Error al cargar usuario:", error);
     }
@@ -136,37 +146,51 @@ function GradosPage() {
           }
         }
 
-        // Cargar todas las materias de la escuela
+        // Cargar todas las materias de la escuela (con timestamp para evitar caché)
         const materiasRes = await api.get("/api/materias", {
           headers: {Authorization: `Bearer ${token}`},
+          params: {_t: new Date().getTime()},
         });
         const todasMaterias = materiasRes.data || [];
+
+        console.log("📚 Materias cargadas del servidor:", todasMaterias);
+        console.log("🎓 Procesando grados del profesor...");
 
         // Transformar asignaciones a formato de grados únicos
         const gradosUnicos = [
           ...new Map(
-            asignacionesData.map((a) => [
-              a.id_grado,
-              {
-                id_grado: a.id_grado,
-                nombre: a.nombre_grado,
-                nivel: a.nivel,
-                nombre_escuela: nombreEscuela,
-                // Filtrar materias que pertenecen a este grado
-                materias: todasMaterias
-                  .filter((m) => m.id_grado === a.id_grado)
-                  .map((m) => m.nombre),
-                // Agregar info de secciones asociadas
-                secciones: asignacionesData
-                  .filter(
-                    (asig) => asig.id_grado === a.id_grado && asig.id_seccion
-                  )
-                  .map((asig) => ({
-                    id_seccion: asig.id_seccion,
-                    nombre: asig.nombre_seccion,
-                  })),
-              },
-            ])
+            asignacionesData.map((a) => {
+              // Filtrar materias que pertenecen a este grado
+              const materiasDelGrado = todasMaterias
+                .filter(
+                  (m) => m.grados_ids && m.grados_ids.includes(a.id_grado)
+                )
+                .map((m) => m.nombre);
+
+              console.log(`📖 Grado ${a.nombre_grado} (ID: ${a.id_grado}):`, {
+                materias_encontradas: materiasDelGrado,
+                total_materias_sistema: todasMaterias.length,
+              });
+
+              return [
+                a.id_grado,
+                {
+                  id_grado: a.id_grado,
+                  nombre: a.nombre_grado,
+                  nivel: a.nivel,
+                  nombre_escuela: nombreEscuela,
+                  materias: materiasDelGrado,
+                  secciones: asignacionesData
+                    .filter(
+                      (asig) => asig.id_grado === a.id_grado && asig.id_seccion
+                    )
+                    .map((asig) => ({
+                      id_seccion: asig.id_seccion,
+                      nombre: asig.nombre_seccion,
+                    })),
+                },
+              ];
+            })
           ).values(),
         ];
 
@@ -244,15 +268,6 @@ function GradosPage() {
   const gradosFiltrados = grados.filter((grado) => {
     return grado.nombre.toLowerCase().includes(searchTerm.toLowerCase());
   });
-
-  // Estadísticas
-  const estadisticas = {
-    total: grados.length,
-    conMaterias: grados.filter((g) => g.materias && g.materias.length > 0)
-      .length,
-    conSecciones: grados.filter((g) => g.secciones && g.secciones.length > 0)
-      .length,
-  };
 
   const handleEliminar = async (id) => {
     if (!window.confirm("¿Seguro que deseas eliminar este grado?")) return;
@@ -476,87 +491,54 @@ function GradosPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      {/* Header Hero Section */}
-      <div className="relative bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600 overflow-hidden">
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="absolute inset-0">
-          <div className="absolute top-10 left-10 w-40 h-40 bg-indigo-400/20 rounded-full blur-2xl animate-pulse"></div>
-          <div className="absolute bottom-10 right-10 w-60 h-60 bg-purple-400/20 rounded-full blur-2xl animate-pulse delay-1000"></div>
-        </div>
-
-        <div className="relative max-w-7xl mx-auto px-6 py-16">
-          <div className="flex flex-col lg:flex-row items-center justify-between">
-            <div className="flex-1">
-              <div className="inline-flex items-center px-4 py-2 bg-white/10 rounded-full text-sm text-white mb-4 backdrop-blur-sm">
-                <AcademicCapIcon className="w-4 h-4 mr-2" />
-                Organización Académica
-              </div>
-              <h1 className="text-4xl lg:text-6xl font-bold text-white mb-4">
-                Gestión de
-                <span className="block bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
-                  Grados
-                </span>
-              </h1>
-              <p className="text-xl text-indigo-100 mb-8 max-w-2xl">
-                Organiza y administra los grados académicos con sus materias
-                correspondientes. Ordena por drag & drop.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                {canEdit && (
-                  <button
-                    onClick={() => setShowModal(true)}
-                    className="px-8 py-4 bg-white text-indigo-600 rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center"
-                  >
-                    <PlusIcon className="w-5 h-5 mr-2" />
-                    Crear Nuevo Grado
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="flex-1 mt-12 lg:mt-0 flex justify-center">
-              <div className="relative">
-                <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-6 border border-white/20 w-80">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-white">
-                      Estadísticas del Sistema
-                    </h3>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-white">
-                      <span>Total de Grados</span>
-                      <span className="font-bold text-yellow-400">
-                        {estadisticas.total}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Escuelas</span>
-                      <span className="font-bold text-indigo-400">
-                        {estadisticas.escuelas}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Con Materias</span>
-                      <span className="font-bold text-green-400">
-                        {estadisticas.conMaterias}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Con Secciones</span>
-                      <span className="font-bold text-purple-400">
-                        {estadisticas.conSecciones}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
+      <div className="max-w-7xl mx-auto px-6">
+        {/* Header Moderno y Compacto */}
+        <PageHeader
+          title="Gestión de Grados"
+          subtitle="Organiza y administra los grados académicos con sus materias correspondientes"
+          icon={AcademicCapIcon}
+          gradientFrom="indigo-600"
+          gradientTo="purple-600"
+          badge="Organización Académica"
+          schoolLogo={
+            escuela?.logo ? `http://localhost:4000${escuela.logo}` : null
+          }
+          schoolName={escuela?.nombre}
+          actions={
+            <>
+              {canEdit && (
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="px-4 py-2 bg-white text-indigo-600 rounded-xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-200 flex items-center space-x-2"
+                >
+                  <PlusIcon className="w-5 h-5" />
+                  <span>Crear Grado</span>
+                </button>
+              )}
+              <button
+                onClick={fetchGrados}
+                disabled={isLoading}
+                className="px-4 py-2 bg-white/20 text-white rounded-xl font-semibold hover:bg-white/30 transition-all duration-200 flex items-center space-x-2 disabled:opacity-50"
+              >
+                <svg
+                  className={`w-5 h-5 ${isLoading ? "animate-spin" : ""}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                  />
+                </svg>
+                <span>{isLoading ? "Actualizando..." : "Actualizar"}</span>
+              </button>
+            </>
+          }
+        />
         {mensaje && (
           <div
             className={`mb-6 p-4 rounded-2xl text-center backdrop-blur-sm border ${
@@ -570,7 +552,7 @@ function GradosPage() {
         )}
 
         {/* Barra de búsqueda y controles */}
-        <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700 -mt-16 relative z-10">
+        <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
           <div className="flex flex-col lg:flex-row gap-4 items-center">
             <div className="flex-1 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

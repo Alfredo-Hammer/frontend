@@ -8,6 +8,7 @@ import Alumnos from "./pages/Alumnos";
 import DetalleAlumno from "./components/DetalleAlumno";
 import HomePage from "./pages/HomePage";
 import Profesores from "./pages/Profesores";
+import ProfesorDetalle from "./pages/ProfesorDetalle";
 import Loader from "./components/Loader";
 import Header from "./components/Header";
 import GradosPage from "./pages/GradosPage";
@@ -21,9 +22,21 @@ import Asistencia from "./pages/Asistencia";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PerfilUsuario from "./pages/PerfilUsuario";
 import MisCalificaciones from "./pages/MisCalificaciones";
+import UsuariosPage from "./pages/UsuariosPage";
+import ExamenesPage from "./pages/ExamenesPage";
+import ReportesPage from "./pages/ReportesPage";
+import PadresFamilia from "./pages/PadresFamilia";
+import Mensajes from "./pages/Mensajes";
+import SessionWarningDialog from "./components/SessionWarningDialog";
+import useSessionTimeout from "./hooks/useSessionTimeout";
 import api from "./api/axiosConfig";
+import { setTokenWithExpiration, getTokenIfValid, clearToken } from "./utils/tokenUtils";
+import { MensajesProvider } from "./context/MensajesContext";
 
 function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSetup, setNecesitaSetup }) {
+  // Hook de gestión de sesión
+  const { showWarning, countdown, handleContinue, handleLogout } = useSessionTimeout();
+
   if (necesitaSetup) {
     return (
       <Routes>
@@ -43,110 +56,156 @@ function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSet
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <div className="flex flex-1">
-        <Sidebar
-          setToken={setToken}
-          user={user}
-          onSelect={setSelected}
-          active={selected}
-          onLogout={() => {
-            localStorage.removeItem("token");
-            setToken(null);
-          }}
+    <MensajesProvider>
+      <div className="flex flex-col min-h-screen">
+        {/* Diálogo de advertencia de sesión */}
+        <SessionWarningDialog
+          isOpen={showWarning}
+          countdown={countdown}
+          onContinue={handleContinue}
+          onLogout={handleLogout}
         />
-        <main className="flex-1 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-auto">
-          <Header user={user} />
-          <Routes>
-            <Route path="/" element={
-              <ProtectedRoute user={user}>
-                <HomePage />
-              </ProtectedRoute>
-            } />
 
-            <Route path="/alumnos" element={
-              <ProtectedRoute user={user}>
-                <Alumnos />
-              </ProtectedRoute>
-            } />
+        <div className="flex flex-1">
+          <Sidebar
+            setToken={setToken}
+            user={user}
+            onSelect={setSelected}
+            active={selected}
+            onLogout={() => {
+              clearToken();
+              setToken(null);
+            }}
+          />
+          <main className="flex-1 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-auto">
+            <Header user={user} />
+            <Routes>
+              <Route path="/" element={
+                <ProtectedRoute user={user}>
+                  <HomePage />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/alumnos/detalle/:id" element={
-              <ProtectedRoute user={user}>
-                <DetalleAlumno />
-              </ProtectedRoute>
-            } />
+              <Route path="/alumnos" element={
+                <ProtectedRoute user={user}>
+                  <Alumnos />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/alumnos/registro" element={
-              <ProtectedRoute user={user}>
-                <RegistroAlumno />
-              </ProtectedRoute>
-            } />
+              <Route path="/alumnos/detalle/:id" element={
+                <ProtectedRoute user={user}>
+                  <DetalleAlumno />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/profesores" element={
-              <ProtectedRoute user={user}>
-                <Profesores setToken={setToken} />
-              </ProtectedRoute>
-            } />
+              <Route path="/alumnos/registro" element={
+                <ProtectedRoute user={user}>
+                  <RegistroAlumno />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/materias" element={
-              <ProtectedRoute user={user}>
-                <MateriasPage />
-              </ProtectedRoute>
-            } />
+              <Route path="/profesores" element={
+                <ProtectedRoute user={user}>
+                  <Profesores setToken={setToken} />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/calificaciones" element={
-              <ProtectedRoute user={user}>
-                <CalificacionesPage />
-              </ProtectedRoute>
-            } />
+              <Route path="/profesores/detalle/:id" element={
+                <ProtectedRoute user={user}>
+                  <ProfesorDetalle />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/grados" element={
-              <ProtectedRoute user={user}>
-                <GradosPage />
-              </ProtectedRoute>
-            } />
+              <Route path="/materias" element={
+                <ProtectedRoute user={user}>
+                  <MateriasPage />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/secciones" element={
-              <ProtectedRoute user={user}>
-                <SeccionesPage />
-              </ProtectedRoute>
-            } />
+              <Route path="/calificaciones" element={
+                <ProtectedRoute user={user}>
+                  <CalificacionesPage />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/horario" element={
-              <ProtectedRoute user={user}>
-                <HorarioPage />
-              </ProtectedRoute>
-            } />
+              <Route path="/examenes" element={
+                <ProtectedRoute user={user}>
+                  <ExamenesPage />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/horario-clases" element={
-              <ProtectedRoute user={user}>
-                <HorarioClases />
-              </ProtectedRoute>
-            } />
+              <Route path="/reportes" element={
+                <ProtectedRoute user={user}>
+                  <ReportesPage />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/asistencia" element={
-              <ProtectedRoute user={user}>
-                <Asistencia />
-              </ProtectedRoute>
-            } />
+              <Route path="/grados" element={
+                <ProtectedRoute user={user}>
+                  <GradosPage />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/perfil" element={
-              <ProtectedRoute user={user}>
-                <PerfilUsuario />
-              </ProtectedRoute>
-            } />
+              <Route path="/secciones" element={
+                <ProtectedRoute user={user}>
+                  <SeccionesPage />
+                </ProtectedRoute>
+              } />
 
-            <Route path="/mis-calificaciones" element={
-              <ProtectedRoute user={user}>
-                <MisCalificaciones />
-              </ProtectedRoute>
-            } />
+              <Route path="/horario" element={
+                <ProtectedRoute user={user}>
+                  <HorarioPage />
+                </ProtectedRoute>
+              } />
 
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-        </main>
+              <Route path="/horario-clases" element={
+                <ProtectedRoute user={user}>
+                  <HorarioClases />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/asistencia" element={
+                <ProtectedRoute user={user}>
+                  <Asistencia />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/perfil" element={
+                <ProtectedRoute user={user}>
+                  <PerfilUsuario />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/mis-calificaciones" element={
+                <ProtectedRoute user={user}>
+                  <MisCalificaciones />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/usuarios" element={
+                <ProtectedRoute user={user}>
+                  <UsuariosPage />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/padres-familia" element={
+                <ProtectedRoute user={user}>
+                  <PadresFamilia />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/mensajes" element={
+                <ProtectedRoute user={user}>
+                  <Mensajes />
+                </ProtectedRoute>
+              } />
+
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </main>
+        </div>
       </div>
-    </div>
+    </MensajesProvider>
   );
 }
 
@@ -164,12 +223,29 @@ const normalizeRole = (backendRole) => {
 };
 
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(getTokenIfValid());
   const [user, setUser] = useState(null);
   const [selected, setSelected] = useState("dashboard");
   const [loading, setLoading] = useState(false);
   const [necesitaSetup, setNecesitaSetup] = useState(false);
   const [checkingSetup, setCheckingSetup] = useState(true);
+
+  // Verificar expiración del token periódicamente
+  useEffect(() => {
+    const checkTokenExpiration = () => {
+      const validToken = getTokenIfValid();
+      if (!validToken && token) {
+        console.log('⏰ Token expirado, cerrando sesión...');
+        setToken(null);
+        setUser(null);
+      }
+    };
+
+    // Verificar cada minuto
+    const interval = setInterval(checkTokenExpiration, 60000);
+
+    return () => clearInterval(interval);
+  }, [token]);
 
   // Verificar si el sistema necesita configuración inicial
   useEffect(() => {

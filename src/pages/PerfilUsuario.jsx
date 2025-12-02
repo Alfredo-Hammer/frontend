@@ -9,7 +9,12 @@ import {
   ShieldCheckIcon,
   PencilSquareIcon,
   CameraIcon,
+  KeyIcon,
+  XMarkIcon,
+  CheckIcon,
 } from "@heroicons/react/24/solid";
+
+const API_BASE_URL = "http://localhost:4000";
 
 /**
  * Página de Perfil de Usuario
@@ -20,6 +25,14 @@ function PerfilUsuario() {
   const [editando, setEditando] = useState(false);
   const [loading, setLoading] = useState(true);
   const [mensaje, setMensaje] = useState("");
+  const [imagenPreview, setImagenPreview] = useState(null);
+  const [imagenFile, setImagenFile] = useState(null);
+  const [mostrarCambioPassword, setMostrarCambioPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    passwordActual: "",
+    passwordNueva: "",
+    passwordConfirmar: "",
+  });
   const [formData, setFormData] = useState({
     nombre: "",
     apellido: "",
@@ -46,6 +59,7 @@ function PerfilUsuario() {
         email: res.data.usuario?.email || res.data.email,
         rol: res.data.usuario?.rol || res.data.rol,
         telefono: res.data.usuario?.telefono || res.data.telefono || "",
+        imagen: res.data.usuario?.imagen || res.data.imagen,
         fecha_registro:
           res.data.usuario?.fecha_registro || res.data.fecha_registro,
       };
@@ -57,6 +71,11 @@ function PerfilUsuario() {
         email: userData.email || "",
         telefono: userData.telefono || "",
       });
+
+      // Cargar imagen si existe
+      if (userData.imagen) {
+        setImagenPreview(`${API_BASE_URL}${userData.imagen}`);
+      }
     } catch (error) {
       console.error("Error al cargar perfil:", error);
       setMensaje("Error al cargar el perfil");
@@ -72,19 +91,105 @@ function PerfilUsuario() {
     });
   };
 
+  const handleImagenChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      if (file.size > 2 * 1024 * 1024) {
+        setMensaje("La imagen no debe superar 2MB");
+        setTimeout(() => setMensaje(""), 3000);
+        return;
+      }
+
+      setImagenFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagenPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleGuardar = async () => {
     try {
-      await api.put("/api/usuarios/perfil", formData, {
-        headers: {Authorization: `Bearer ${token}`},
+      const formDataToSend = new FormData();
+      formDataToSend.append("nombre", formData.nombre);
+      formDataToSend.append("apellido", formData.apellido);
+      formDataToSend.append("email", formData.email);
+      formDataToSend.append("telefono", formData.telefono || "");
+
+      console.log("📤 Datos a enviar:", {
+        nombre: formData.nombre,
+        apellido: formData.apellido,
+        email: formData.email,
+        telefono: formData.telefono,
+        tieneImagen: !!imagenFile,
       });
+
+      if (imagenFile) {
+        formDataToSend.append("imagen", imagenFile);
+      }
+
+      const response = await api.put("/api/usuarios/perfil", formDataToSend, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      console.log("✅ Respuesta del servidor:", response.data);
 
       setMensaje("Perfil actualizado correctamente");
       setEditando(false);
+      setImagenFile(null);
       cargarPerfil();
       setTimeout(() => setMensaje(""), 3000);
     } catch (error) {
       console.error("Error al actualizar perfil:", error);
-      setMensaje("Error al actualizar el perfil");
+      setMensaje(
+        error.response?.data?.error || "Error al actualizar el perfil"
+      );
+      setTimeout(() => setMensaje(""), 3000);
+    }
+  };
+
+  const handleCambiarPassword = async () => {
+    if (passwordData.passwordNueva !== passwordData.passwordConfirmar) {
+      setMensaje("Las contraseñas no coinciden");
+      setTimeout(() => setMensaje(""), 3000);
+      return;
+    }
+
+    if (passwordData.passwordNueva.length < 6) {
+      setMensaje("La contraseña debe tener al menos 6 caracteres");
+      setTimeout(() => setMensaje(""), 3000);
+      return;
+    }
+
+    try {
+      await api.put(
+        "/api/usuarios/cambiar-password",
+        {
+          passwordActual: passwordData.passwordActual,
+          passwordNueva: passwordData.passwordNueva,
+        },
+        {
+          headers: {Authorization: `Bearer ${token}`},
+        }
+      );
+
+      setMensaje("Contraseña actualizada correctamente");
+      setMostrarCambioPassword(false);
+      setPasswordData({
+        passwordActual: "",
+        passwordNueva: "",
+        passwordConfirmar: "",
+      });
+      setTimeout(() => setMensaje(""), 3000);
+    } catch (error) {
+      console.error("Error al cambiar contraseña:", error);
+      setMensaje(
+        error.response?.data?.error || "Error al cambiar la contraseña"
+      );
       setTimeout(() => setMensaje(""), 3000);
     }
   };
@@ -155,12 +260,28 @@ function PerfilUsuario() {
             {/* Avatar */}
             <div className="flex items-end justify-between -mt-16 mb-6">
               <div className="relative">
-                <div className="w-32 h-32 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center border-4 border-gray-800 shadow-xl">
-                  <UserIcon className="w-16 h-16 text-white" />
+                <div className="w-32 h-32 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center border-4 border-gray-800 shadow-xl overflow-hidden">
+                  {imagenPreview ? (
+                    <img
+                      src={imagenPreview}
+                      alt="Perfil"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <UserIcon className="w-16 h-16 text-white" />
+                  )}
                 </div>
-                <button className="absolute bottom-0 right-0 p-2 bg-blue-600 rounded-full hover:bg-blue-700 transition-colors shadow-lg">
-                  <CameraIcon className="w-5 h-5 text-white" />
-                </button>
+                {editando && (
+                  <label className="absolute bottom-0 right-0 p-2 bg-blue-600 rounded-full hover:bg-blue-700 transition-colors shadow-lg cursor-pointer">
+                    <CameraIcon className="w-5 h-5 text-white" />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImagenChange}
+                      className="hidden"
+                    />
+                  </label>
+                )}
               </div>
 
               {!editando && (
@@ -337,11 +458,128 @@ function PerfilUsuario() {
 
         {/* Sección de Seguridad */}
         <div className="bg-gray-800 border border-gray-700 rounded-2xl p-6 mt-6 shadow-xl">
-          <h3 className="text-xl font-bold text-white mb-4">Seguridad</h3>
-          <button className="w-full px-6 py-3 bg-gradient-to-r from-yellow-600 to-orange-600 text-white rounded-xl font-semibold hover:scale-105 transition-transform">
+          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <KeyIcon className="w-6 h-6 text-yellow-400" />
+            Seguridad
+          </h3>
+          <button
+            onClick={() => setMostrarCambioPassword(true)}
+            className="w-full px-6 py-3 bg-gradient-to-r from-yellow-600 to-orange-600 text-white rounded-xl font-semibold hover:scale-105 transition-transform flex items-center justify-center gap-2"
+          >
+            <KeyIcon className="w-5 h-5" />
             Cambiar Contraseña
           </button>
         </div>
+
+        {/* Modal de Cambio de Contraseña */}
+        {mostrarCambioPassword && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-800 border border-gray-700 rounded-2xl p-8 max-w-md w-full shadow-2xl">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                  <KeyIcon className="w-7 h-7 text-yellow-400" />
+                  Cambiar Contraseña
+                </h3>
+                <button
+                  onClick={() => {
+                    setMostrarCambioPassword(false);
+                    setPasswordData({
+                      passwordActual: "",
+                      passwordNueva: "",
+                      passwordConfirmar: "",
+                    });
+                  }}
+                  className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <XMarkIcon className="w-6 h-6 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Contraseña Actual */}
+                <div>
+                  <label className="block text-gray-400 text-sm font-medium mb-2">
+                    Contraseña Actual
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordData.passwordActual}
+                    onChange={(e) =>
+                      setPasswordData({
+                        ...passwordData,
+                        passwordActual: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    placeholder="Ingresa tu contraseña actual"
+                  />
+                </div>
+
+                {/* Nueva Contraseña */}
+                <div>
+                  <label className="block text-gray-400 text-sm font-medium mb-2">
+                    Nueva Contraseña
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordData.passwordNueva}
+                    onChange={(e) =>
+                      setPasswordData({
+                        ...passwordData,
+                        passwordNueva: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    placeholder="Ingresa tu nueva contraseña"
+                  />
+                </div>
+
+                {/* Confirmar Nueva Contraseña */}
+                <div>
+                  <label className="block text-gray-400 text-sm font-medium mb-2">
+                    Confirmar Nueva Contraseña
+                  </label>
+                  <input
+                    type="password"
+                    value={passwordData.passwordConfirmar}
+                    onChange={(e) =>
+                      setPasswordData({
+                        ...passwordData,
+                        passwordConfirmar: e.target.value,
+                      })
+                    }
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    placeholder="Confirma tu nueva contraseña"
+                  />
+                </div>
+
+                {/* Botones */}
+                <div className="flex gap-3 mt-6">
+                  <button
+                    onClick={handleCambiarPassword}
+                    className="flex-1 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl font-semibold hover:scale-105 transition-transform flex items-center justify-center gap-2"
+                  >
+                    <CheckIcon className="w-5 h-5" />
+                    Actualizar
+                  </button>
+                  <button
+                    onClick={() => {
+                      setMostrarCambioPassword(false);
+                      setPasswordData({
+                        passwordActual: "",
+                        passwordNueva: "",
+                        passwordConfirmar: "",
+                      });
+                    }}
+                    className="flex-1 px-6 py-3 bg-gray-700 text-white rounded-xl font-semibold hover:bg-gray-600 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -13,6 +13,7 @@ import {
   Cog6ToothIcon,
   CalendarDaysIcon,
   DocumentTextIcon,
+  DocumentChartBarIcon,
   CreditCardIcon,
   BellIcon,
   ChatBubbleLeftRightIcon,
@@ -32,6 +33,7 @@ import {
 import {useNavigate, useLocation} from "react-router-dom";
 import ConfirmModal from "./ConfirmModal";
 import {filterMenuByRole} from "../config/roles";
+import {useMensajes} from "../context/MensajesContext";
 
 const menuSections = [
   {
@@ -108,8 +110,15 @@ const menuSections = [
         key: "padres",
         label: "Padres de Familia",
         icon: <UserGroupIcon className="h-5 w-5" />,
-        path: "/padres",
+        path: "/padres-familia",
         color: "text-orange-400",
+      },
+      {
+        key: "usuarios",
+        label: "Usuarios",
+        icon: <ShieldCheckIcon className="h-5 w-5" />,
+        path: "/usuarios",
+        color: "text-indigo-400",
       },
       {
         key: "personal",
@@ -136,6 +145,13 @@ const menuSections = [
         icon: <DocumentTextIcon className="h-5 w-5" />,
         path: "/examenes",
         color: "text-violet-400",
+      },
+      {
+        key: "reportes",
+        label: "Reportes",
+        icon: <DocumentChartBarIcon className="h-5 w-5" />,
+        path: "/reportes",
+        color: "text-orange-400",
       },
       {
         key: "tareas",
@@ -214,7 +230,7 @@ const menuSections = [
         icon: <ChatBubbleLeftRightIcon className="h-5 w-5" />,
         path: "/mensajes",
         color: "text-blue-500",
-        badge: "2",
+        badgeDynamic: true, // Indica que el badge es dinámico
       },
       {
         key: "anuncios",
@@ -346,6 +362,7 @@ function Sidebar({setToken, user}) {
     "Gestión Académica": true,
   });
   const [filteredMenu, setFilteredMenu] = useState([]);
+  const {contadorNoLeidos} = useMensajes();
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -478,7 +495,14 @@ function Sidebar({setToken, user}) {
                           >
                             {item.label}
                           </span>
-                          {item.badge && (
+                          {/* Badge dinámico para mensajes */}
+                          {item.badgeDynamic && contadorNoLeidos > 0 && (
+                            <span className="flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full min-w-[1.25rem] h-5 animate-pulse">
+                              {contadorNoLeidos}
+                            </span>
+                          )}
+                          {/* Badge estático para otras notificaciones */}
+                          {item.badge && !item.badgeDynamic && (
                             <span className="flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full min-w-[1.25rem] h-5 animate-pulse">
                               {item.badge}
                             </span>
@@ -487,7 +511,14 @@ function Sidebar({setToken, user}) {
                       )}
 
                       {/* Badge for collapsed mode */}
-                      {collapsed && item.badge && (
+                      {collapsed &&
+                        item.badgeDynamic &&
+                        contadorNoLeidos > 0 && (
+                          <div className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full animate-pulse">
+                            {contadorNoLeidos}
+                          </div>
+                        )}
+                      {collapsed && item.badge && !item.badgeDynamic && (
                         <div className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full animate-pulse">
                           {item.badge}
                         </div>
@@ -512,9 +543,17 @@ function Sidebar({setToken, user}) {
             className="w-full flex items-center gap-3 mb-3 p-3 rounded-xl bg-gradient-to-r from-gray-700/50 to-gray-600/50 ring-1 ring-gray-600 hover:ring-cyan-500/50 hover:from-cyan-900/30 hover:to-blue-900/30 transition-all duration-300 group"
           >
             <div className="flex-shrink-0">
-              <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                <UserIcon className="h-6 w-6 text-white" />
-              </div>
+              {user.imagen ? (
+                <img
+                  src={user.imagen}
+                  alt={`${user.nombre} ${user.apellido}`}
+                  className="w-10 h-10 rounded-full object-cover border-2 border-cyan-400 group-hover:border-cyan-300 group-hover:scale-110 transition-all duration-200"
+                />
+              ) : (
+                <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                  <UserIcon className="h-6 w-6 text-white" />
+                </div>
+              )}
             </div>
             <div className="flex-1 min-w-0 text-left">
               <p className="text-sm font-medium text-white truncate group-hover:text-cyan-300 transition-colors duration-200">

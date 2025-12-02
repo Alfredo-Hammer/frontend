@@ -31,7 +31,7 @@ function CalificacionesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  const [viewMode, setViewMode] = useState("cards");
+  const [viewMode, setViewMode] = useState("table");
   const [sortBy, setSortBy] = useState("alumno");
   const [sortOrder, setSortOrder] = useState("asc");
   const [mensaje, setMensaje] = useState("");
@@ -112,6 +112,8 @@ function CalificacionesPage() {
       const params = [];
       if (filtroGrado) params.push(`id_grado=${filtroGrado}`);
       if (filtroSeccion) params.push(`id_seccion=${filtroSeccion}`);
+      // Agregar timestamp para evitar caché
+      params.push(`_t=${Date.now()}`);
       if (params.length) url += "?" + params.join("&");
       const res = await api.get(url, {
         headers: {Authorization: `Bearer ${token}`},

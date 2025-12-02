@@ -22,7 +22,7 @@ export const ROLES = {
 export const PERMISSIONS = {
   // Gestión de Escuelas
   escuelas: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     crear: [ROLES.ADMIN],
     editar: [ROLES.ADMIN, ROLES.DIRECTOR],
     eliminar: [ROLES.ADMIN],
@@ -30,25 +30,25 @@ export const PERMISSIONS = {
 
   // Gestión de Materias
   materias: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
-    crear: [ROLES.ADMIN, ROLES.DIRECTOR],
-    editar: [ROLES.ADMIN, ROLES.DIRECTOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
   },
 
   // Gestión de Grados
   grados: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
-    crear: [ROLES.ADMIN, ROLES.DIRECTOR],
-    editar: [ROLES.ADMIN, ROLES.DIRECTOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
   },
 
   // Gestión de Secciones
   secciones: {
     ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
-    crear: [ROLES.ADMIN, ROLES.DIRECTOR],
-    editar: [ROLES.ADMIN, ROLES.DIRECTOR],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
   },
 
@@ -64,21 +64,39 @@ export const PERMISSIONS = {
 
   // Gestión de Profesores
   profesores: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR],
-    crear: [ROLES.ADMIN, ROLES.DIRECTOR],
-    editar: [ROLES.ADMIN, ROLES.DIRECTOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     eliminar: [ROLES.ADMIN],
+  },
+
+  // Gestión de Padres de Familia
+  padres_familia: {
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    eliminar: [ROLES.ADMIN],
+  },
+
+  // Gestión de Usuarios
+  usuarios: {
+    ver: [ROLES.ADMIN],
+    crear: [ROLES.ADMIN],
+    editar: [ROLES.ADMIN],
+    eliminar: [ROLES.ADMIN],
+    cambiarEstado: [ROLES.ADMIN],
+    cambiarPassword: [ROLES.ADMIN],
   },
 
   // Calificaciones
   calificaciones: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
     verPropias: [ROLES.ALUMNO], // Ver solo sus propias calificaciones
     verHijos: [ROLES.PADRE], // Ver calificaciones de sus hijos
     crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
     editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
-    exportar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
+    exportar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
   },
 
   // Asistencia
@@ -93,15 +111,15 @@ export const PERMISSIONS = {
 
   // Horarios
   horarios: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE],
-    crear: [ROLES.ADMIN, ROLES.DIRECTOR],
-    editar: [ROLES.ADMIN, ROLES.DIRECTOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE, ROLES.SECRETARIADO],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
   },
 
   // Tareas
   tareas: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE, ROLES.SECRETARIADO],
     crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
     editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
@@ -110,7 +128,7 @@ export const PERMISSIONS = {
 
   // Exámenes
   examenes: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.SECRETARIADO],
     crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
     editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
@@ -119,9 +137,9 @@ export const PERMISSIONS = {
 
   // Eventos
   eventos: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE],
-    crear: [ROLES.ADMIN, ROLES.DIRECTOR],
-    editar: [ROLES.ADMIN, ROLES.DIRECTOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE, ROLES.SECRETARIADO],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
   },
 
@@ -136,24 +154,24 @@ export const PERMISSIONS = {
 
   // Reportes
   reportes: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
-    exportar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
-    academicos: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
-    financieros: [ROLES.ADMIN, ROLES.DIRECTOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
+    exportar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
+    academicos: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
+    financieros: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     personalizados: [ROLES.ADMIN, ROLES.DIRECTOR],
   },
 
   // Comunicación
   mensajes: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE],
-    enviar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.PADRE],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE, ROLES.SECRETARIADO],
+    enviar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.PADRE, ROLES.SECRETARIADO],
     eliminar: [ROLES.ADMIN],
   },
 
   // Notificaciones
   notificaciones: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE],
-    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE, ROLES.SECRETARIADO],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
   },
 
   // Configuración
@@ -223,7 +241,9 @@ export const canAccessRoute = (userRole, path) => {
     '/alumnos/registro': 'alumnos',
     '/alumnos/detalle': 'alumnos',
     '/profesores': 'profesores',
+    '/usuarios': 'usuarios',
     '/padres': 'alumnos', // Los padres usan el mismo módulo
+    '/padres-familia': 'padres_familia',
     '/asistencia': 'asistencia',
     '/horario-clases': 'horarios',
     '/horario': 'horarios',

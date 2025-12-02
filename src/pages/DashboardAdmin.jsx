@@ -34,12 +34,27 @@ function DashboardAdmin({user}) {
   });
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [escuela, setEscuela] = useState(null);
   const token = localStorage.getItem("token");
 
   useEffect(() => {
     cargarEstadisticas();
+    cargarEscuela();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const cargarEscuela = async () => {
+    try {
+      if (user?.id_escuela) {
+        const res = await api.get(`/api/escuelas/${user.id_escuela}`, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setEscuela(res.data);
+      }
+    } catch (error) {
+      console.error("Error al cargar escuela:", error);
+    }
+  };
 
   const cargarEstadisticas = async () => {
     try {
@@ -96,7 +111,7 @@ function DashboardAdmin({user}) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-gray-950 to-slate-950 flex items-center justify-center">
         <div className="text-white text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-cyan-500 mx-auto mb-4"></div>
           <p className="text-lg">Cargando dashboard...</p>
@@ -106,35 +121,70 @@ function DashboardAdmin({user}) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-gray-950 to-slate-950 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-gradient-to-r from-cyan-600 to-blue-600 rounded-2xl p-6 shadow-xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">
-                Bienvenido, {user?.nombre} 👋
-              </h1>
-              <p className="text-cyan-100">
-                Panel de Control -{" "}
-                {user?.rol === "admin" ? "Administrador" : "Director"}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-cyan-100 text-sm">
-                {new Date().toLocaleDateString("es-ES", {
-                  weekday: "long",
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                })}
-              </p>
-              <p className="text-white font-semibold text-lg">
-                {new Date().toLocaleTimeString("es-ES", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
+        <div className="relative bg-gradient-to-r from-cyan-600 to-blue-600 rounded-2xl p-8 overflow-hidden shadow-2xl">
+          <div className="absolute inset-0 bg-black/20"></div>
+          <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-300/10 rounded-full blur-2xl animate-pulse delay-700"></div>
+          <div className="absolute top-1/2 left-1/2 w-48 h-48 bg-blue-300/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+
+          <div className="relative z-10">
+            {/* Fila superior: Logo y nombre de escuela */}
+            {(escuela?.logo || escuela?.nombre) && (
+              <div className="flex items-center justify-end gap-4 mb-6 pb-4 border-b border-white/20">
+                {escuela?.nombre && (
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-white">
+                      {escuela.nombre}
+                    </p>
+                    <p className="text-sm text-cyan-100">
+                      Sistema de Gestión Educativa
+                    </p>
+                  </div>
+                )}
+                {escuela?.logo && (
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-white/20 rounded-xl blur-xl"></div>
+                    <img
+                      src={`http://localhost:4000${escuela.logo}`}
+                      alt={escuela.nombre}
+                      className="relative w-16 h-16 lg:w-20 lg:h-20 rounded-xl object-cover border-4 border-white/40 shadow-2xl"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">
+                  Bienvenido, {user?.nombre} 👋
+                </h1>
+                <p className="text-cyan-100 text-lg">
+                  Panel de Control -{" "}
+                  {user?.rol === "admin" ? "Administrador" : "Director"}
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                  <p className="text-cyan-100 text-sm">
+                    {new Date().toLocaleDateString("es-ES", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })}
+                  </p>
+                  <p className="text-white font-semibold text-lg">
+                    {new Date().toLocaleTimeString("es-ES", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -143,11 +193,11 @@ function DashboardAdmin({user}) {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Total Alumnos */}
           <div
-            className="bg-gradient-to-br from-blue-500/10 to-blue-600/10 border border-blue-500/20 rounded-xl p-6 hover:scale-105 transition-transform cursor-pointer"
+            className="bg-gradient-to-br from-blue-950/50 to-blue-900/50 border border-blue-800/30 rounded-xl p-6 hover:scale-105 transition-transform cursor-pointer"
             onClick={() => navigate("/alumnos")}
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-blue-500/20 rounded-lg">
+              <div className="p-3 bg-blue-900/40 rounded-lg">
                 <AcademicCapIcon className="w-8 h-8 text-blue-400" />
               </div>
               <ArrowTrendingUpIcon className="w-6 h-6 text-green-400" />
@@ -163,11 +213,11 @@ function DashboardAdmin({user}) {
 
           {/* Total Profesores */}
           <div
-            className="bg-gradient-to-br from-purple-500/10 to-purple-600/10 border border-purple-500/20 rounded-xl p-6 hover:scale-105 transition-transform cursor-pointer"
+            className="bg-gradient-to-br from-purple-950/50 to-purple-900/50 border border-purple-800/30 rounded-xl p-6 hover:scale-105 transition-transform cursor-pointer"
             onClick={() => navigate("/profesores")}
           >
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-purple-500/20 rounded-lg">
+              <div className="p-3 bg-purple-900/40 rounded-lg">
                 <UserGroupIcon className="w-8 h-8 text-purple-400" />
               </div>
               <ArrowTrendingUpIcon className="w-6 h-6 text-green-400" />
@@ -182,9 +232,9 @@ function DashboardAdmin({user}) {
           </div>
 
           {/* Promedio General */}
-          <div className="bg-gradient-to-br from-green-500/10 to-green-600/10 border border-green-500/20 rounded-xl p-6 hover:scale-105 transition-transform cursor-pointer">
+          <div className="bg-gradient-to-br from-green-950/50 to-green-900/50 border border-green-800/30 rounded-xl p-6 hover:scale-105 transition-transform cursor-pointer">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-green-500/20 rounded-lg">
+              <div className="p-3 bg-green-900/40 rounded-lg">
                 <ChartBarIcon className="w-8 h-8 text-green-400" />
               </div>
               <ArrowTrendingUpIcon className="w-6 h-6 text-green-400" />
@@ -199,9 +249,9 @@ function DashboardAdmin({user}) {
           </div>
 
           {/* Asistencia */}
-          <div className="bg-gradient-to-br from-yellow-500/10 to-yellow-600/10 border border-yellow-500/20 rounded-xl p-6 hover:scale-105 transition-transform cursor-pointer">
+          <div className="bg-gradient-to-br from-yellow-950/50 to-yellow-900/50 border border-yellow-800/30 rounded-xl p-6 hover:scale-105 transition-transform cursor-pointer">
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-yellow-500/20 rounded-lg">
+              <div className="p-3 bg-yellow-900/40 rounded-lg">
                 <ClockIcon className="w-8 h-8 text-yellow-400" />
               </div>
               <ArrowTrendingDownIcon className="w-6 h-6 text-red-400" />
@@ -218,7 +268,7 @@ function DashboardAdmin({user}) {
 
         {/* Estadísticas Secundarias */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+          <div className="bg-slate-900 border border-gray-800 rounded-xl p-6">
             <div className="flex items-center gap-3 mb-3">
               <BuildingLibraryIcon className="w-6 h-6 text-cyan-400" />
               <h3 className="text-white font-semibold">Grados</h3>
@@ -226,7 +276,7 @@ function DashboardAdmin({user}) {
             <p className="text-3xl font-bold text-white">{stats.totalGrados}</p>
           </div>
 
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+          <div className="bg-slate-900 border border-gray-800 rounded-xl p-6">
             <div className="flex items-center gap-3 mb-3">
               <UserGroupIcon className="w-6 h-6 text-purple-400" />
               <h3 className="text-white font-semibold">Secciones</h3>
@@ -236,7 +286,7 @@ function DashboardAdmin({user}) {
             </p>
           </div>
 
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+          <div className="bg-slate-900 border border-gray-800 rounded-xl p-6">
             <div className="flex items-center gap-3 mb-3">
               <BookOpenIcon className="w-6 h-6 text-green-400" />
               <h3 className="text-white font-semibold">Materias</h3>
@@ -250,7 +300,7 @@ function DashboardAdmin({user}) {
         {/* Sección de Accesos Rápidos y Actividad Reciente */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Accesos Rápidos */}
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+          <div className="bg-slate-900 border border-gray-800 rounded-xl p-6">
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <TrophyIcon className="w-6 h-6 text-yellow-400" />
               Accesos Rápidos
@@ -258,7 +308,7 @@ function DashboardAdmin({user}) {
             <div className="space-y-3">
               <button
                 onClick={() => navigate("/calificaciones")}
-                className="w-full p-4 bg-gradient-to-r from-purple-600/20 to-blue-600/20 border border-purple-500/30 rounded-lg hover:scale-105 transition-transform text-left"
+                className="w-full p-4 bg-gradient-to-r from-purple-900/40 to-blue-900/40 border border-purple-700/40 rounded-lg hover:scale-105 transition-transform text-left"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -273,7 +323,7 @@ function DashboardAdmin({user}) {
 
               <button
                 onClick={() => navigate("/alumnos/registro")}
-                className="w-full p-4 bg-gradient-to-r from-green-600/20 to-emerald-600/20 border border-green-500/30 rounded-lg hover:scale-105 transition-transform text-left"
+                className="w-full p-4 bg-gradient-to-r from-green-900/40 to-emerald-900/40 border border-green-700/40 rounded-lg hover:scale-105 transition-transform text-left"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -288,7 +338,7 @@ function DashboardAdmin({user}) {
 
               <button
                 onClick={() => navigate("/horario-clases")}
-                className="w-full p-4 bg-gradient-to-r from-blue-600/20 to-cyan-600/20 border border-blue-500/30 rounded-lg hover:scale-105 transition-transform text-left"
+                className="w-full p-4 bg-gradient-to-r from-blue-900/40 to-cyan-900/40 border border-blue-700/40 rounded-lg hover:scale-105 transition-transform text-left"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -301,7 +351,7 @@ function DashboardAdmin({user}) {
 
               <button
                 onClick={() => navigate("/asistencia")}
-                className="w-full p-4 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 border border-yellow-500/30 rounded-lg hover:scale-105 transition-transform text-left"
+                className="w-full p-4 bg-gradient-to-r from-yellow-900/40 to-orange-900/40 border border-yellow-700/40 rounded-lg hover:scale-105 transition-transform text-left"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -317,7 +367,7 @@ function DashboardAdmin({user}) {
           </div>
 
           {/* Actividad Reciente */}
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+          <div className="bg-slate-900 border border-gray-800 rounded-xl p-6">
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <BellIcon className="w-6 h-6 text-cyan-400" />
               Actividad Reciente
@@ -326,7 +376,7 @@ function DashboardAdmin({user}) {
               {recentActivity.map((activity, idx) => (
                 <div
                   key={idx}
-                  className="p-4 bg-gray-700/50 rounded-lg border border-gray-600 hover:bg-gray-700 transition-colors"
+                  className="p-4 bg-slate-900/70 rounded-lg border border-gray-800 hover:bg-slate-900 transition-colors"
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex items-start gap-3">

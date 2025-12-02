@@ -10,13 +10,14 @@ import {
   ChartBarIcon,
   ClockIcon,
 } from "@heroicons/react/24/solid";
+import PageHeader from "../components/PageHeader";
 
 function MateriasPage() {
   const [materias, setMaterias] = useState([]);
   const [grados, setGrados] = useState([]);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [idGrado, setIdGrado] = useState("");
+  const [gradosSeleccionados, setGradosSeleccionados] = useState([]);
   const [creditos, setCreditos] = useState("");
   const [horasSemanales, setHorasSemanales] = useState("");
   const [categoria, setCategoria] = useState("");
@@ -28,6 +29,7 @@ function MateriasPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [user, setUser] = useState(null);
+  const [escuela, setEscuela] = useState(null);
 
   // Nuevos estados para funcionalidades adicionales
   const [searchTerm, setSearchTerm] = useState("");
@@ -52,11 +54,17 @@ function MateriasPage() {
     ].includes(user.rol?.toLowerCase());
 
   useEffect(() => {
-    fetchMaterias();
     fetchGrados();
     fetchUser();
     // eslint-disable-next-line
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchMaterias();
+    }
+    // eslint-disable-next-line
+  }, [user]);
 
   const fetchUser = async () => {
     try {
@@ -65,7 +73,17 @@ function MateriasPage() {
       });
       setUser({
         rol: res.data.usuario?.rol || res.data.rol,
+        id_profesor: res.data.usuario?.id_profesor || res.data.id_profesor,
       });
+
+      // Cargar datos de la escuela
+      const id_escuela = res.data.usuario?.id_escuela;
+      if (id_escuela) {
+        const escuelaRes = await api.get(`/api/escuelas/${id_escuela}`, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setEscuela(escuelaRes.data);
+      }
     } catch (error) {
       console.error("Error al cargar usuario:", error);
     }
@@ -94,8 +112,60 @@ function MateriasPage() {
     try {
       const res = await api.get(services.materias, {
         headers: {Authorization: `Bearer ${token}`},
+        params: {_t: new Date().getTime()},
       });
-      setMaterias(res.data);
+
+      let todasMaterias = res.data;
+
+      // Si es profesor, filtrar solo las materias de sus grados asignados
+      if (user?.rol?.toLowerCase() === "profesor" && user?.id_profesor) {
+        try {
+          // Obtener los grados asignados al profesor
+          const asignacionesRes = await api.get(
+            `/api/profesores/${user.id_profesor}/asignaciones`,
+            {headers: {Authorization: `Bearer ${token}`}}
+          );
+
+          const asignacionesData = asignacionesRes.data.asignaciones;
+          const gradosProfesor = asignacionesData.map((a) => a.id_grado);
+
+          // Crear un mapa de id_grado -> nombre_grado para el profesor
+          const gradosProfesorMap = {};
+          asignacionesData.forEach((a) => {
+            gradosProfesorMap[a.id_grado] = a.nombre_grado;
+          });
+
+          // Filtrar materias y sus grados
+          todasMaterias = todasMaterias
+            .filter((materia) =>
+              materia.grados_ids?.some((gradoId) =>
+                gradosProfesor.includes(gradoId)
+              )
+            )
+            .map((materia) => {
+              // Filtrar solo los grados del profesor en grados_ids y grados_nombres
+              const gradosIdsFiltrados = materia.grados_ids?.filter((id) =>
+                gradosProfesor.includes(id)
+              );
+              const gradosNombresFiltrados = gradosIdsFiltrados?.map(
+                (id) => gradosProfesorMap[id]
+              );
+
+              return {
+                ...materia,
+                grados_ids: gradosIdsFiltrados,
+                grados_nombres: gradosNombresFiltrados,
+              };
+            });
+
+          console.log("📚 Materias filtradas para profesor:", todasMaterias);
+          console.log("🎓 Grados del profesor:", gradosProfesor);
+        } catch (error) {
+          console.error("Error al filtrar materias del profesor:", error);
+        }
+      }
+
+      setMaterias(todasMaterias);
     } catch (error) {
       setMensaje("Error al cargar materias");
     } finally {
@@ -106,8 +176,8 @@ function MateriasPage() {
   const handleCrear = async (e) => {
     e.preventDefault();
 
-    if (!idGrado) {
-      setMensaje("Debe seleccionar un grado para la materia");
+    if (!gradosSeleccionados || gradosSeleccionados.length === 0) {
+      setMensaje("Debe seleccionar al menos un grado para la materia");
       return;
     }
 
@@ -118,7 +188,7 @@ function MateriasPage() {
         {
           nombre,
           descripcion,
-          id_grado: idGrado,
+          grados: gradosSeleccionados,
           creditos: creditos || null,
           horas_semanales: horasSemanales || null,
           categoria,
@@ -143,8 +213,8 @@ function MateriasPage() {
   };
 
   const handleActualizar = async (id) => {
-    if (!idGrado) {
-      setMensaje("Debe seleccionar un grado para la materia");
+    if (!gradosSeleccionados || gradosSeleccionados.length === 0) {
+      setMensaje("Debe seleccionar al menos un grado para la materia");
       return;
     }
 
@@ -155,7 +225,7 @@ function MateriasPage() {
         {
           nombre,
           descripcion,
-          id_grado: idGrado,
+          grados: gradosSeleccionados,
           creditos: creditos || null,
           horas_semanales: horasSemanales || null,
           categoria,
@@ -197,7 +267,7 @@ function MateriasPage() {
   const limpiarFormulario = () => {
     setNombre("");
     setDescripcion("");
-    setIdGrado("");
+    setGradosSeleccionados([]);
     setCreditos("");
     setHorasSemanales("");
     setCategoria("");
@@ -206,16 +276,36 @@ function MateriasPage() {
     setEditId(null);
   };
 
-  const handleEditarMateria = (materia) => {
+  const handleEditarMateria = async (materia) => {
     setEditId(materia.id_materia);
     setNombre(materia.nombre);
     setDescripcion(materia.descripcion || "");
-    setIdGrado(materia.id_grado || "");
     setCreditos(materia.creditos || "");
     setHorasSemanales(materia.horas_semanales || "");
     setCategoria(materia.categoria || "");
     setNivel(materia.nivel || "");
     setPrerequisitos(materia.prerequisitos || "");
+
+    // Usar los grados que ya vienen en el objeto materia desde obtenerMaterias
+    if (materia.grados_ids && Array.isArray(materia.grados_ids)) {
+      setGradosSeleccionados(materia.grados_ids);
+    } else {
+      // Si por alguna razón no vienen, cargarlos del endpoint
+      try {
+        const res = await api.get(
+          `/api/materias/${materia.id_materia}/grados`,
+          {
+            headers: {Authorization: `Bearer ${token}`},
+          }
+        );
+        const gradosIds = res.data.map((g) => g.id_grado);
+        setGradosSeleccionados(gradosIds);
+      } catch (error) {
+        console.error("Error al cargar grados de la materia:", error);
+        setGradosSeleccionados([]);
+      }
+    }
+
     setShowModal(true);
   };
 
@@ -258,94 +348,49 @@ function MateriasPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      {/* Header Hero Section */}
-      <div className="relative bg-gradient-to-r from-purple-600 via-blue-600 to-indigo-600 overflow-hidden">
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="absolute inset-0">
-          <div className="absolute top-10 left-10 w-40 h-40 bg-purple-400/20 rounded-full blur-2xl animate-pulse"></div>
-          <div className="absolute bottom-10 right-10 w-60 h-60 bg-blue-400/20 rounded-full blur-2xl animate-pulse delay-1000"></div>
-        </div>
-
-        <div className="relative max-w-7xl mx-auto px-6 py-16">
-          <div className="flex flex-col lg:flex-row items-center justify-between">
-            <div className="flex-1">
-              <div className="inline-flex items-center px-4 py-2 bg-white/10 rounded-full text-sm text-white mb-4 backdrop-blur-sm">
-                <BookOpenIcon className="w-4 h-4 mr-2" />
-                Gestión Académica
-              </div>
-              <h1 className="text-4xl lg:text-6xl font-bold text-white mb-4">
-                Catálogo de
-                <span className="block bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
-                  Materias
-                </span>
-              </h1>
-              <p className="text-xl text-purple-100 mb-8 max-w-2xl">
-                Administra el catálogo completo de materias, asignaturas y
-                cursos del sistema educativo.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                {canEdit && (
-                  <button
-                    onClick={() => setShowModal(true)}
-                    className="px-8 py-4 bg-white text-indigo-600 rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center"
-                  >
-                    <PlusIcon className="w-5 h-5 mr-2" />
-                    Crear Nueva Materia
-                  </button>
-                )}
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
+      <div className="max-w-7xl mx-auto px-6">
+        {/* Header Moderno y Compacto */}
+        <PageHeader
+          title="Catálogo de Materias"
+          subtitle="Administra el catálogo completo de materias, asignaturas y cursos del sistema educativo"
+          icon={BookOpenIcon}
+          gradientFrom="purple-600"
+          gradientTo="indigo-600"
+          badge="Gestión Académica"
+          schoolLogo={
+            escuela?.logo ? `http://localhost:4000${escuela.logo}` : null
+          }
+          schoolName={escuela?.nombre}
+          stats={{
+            "Total de Materias": estadisticas.total,
+            Categorías: estadisticas.categorias,
+            Niveles: estadisticas.niveles,
+            "Con Prerequisitos": estadisticas.conPrerequisitos,
+          }}
+          actions={
+            <>
+              {canEdit && (
                 <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="px-8 py-4 bg-white/10 text-white rounded-2xl font-semibold backdrop-blur-sm hover:bg-white/20 transform transition-all duration-300 flex items-center justify-center"
+                  onClick={() => setShowModal(true)}
+                  className="px-4 py-2 bg-white text-purple-600 rounded-xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-200 flex items-center space-x-2"
                 >
-                  <FunnelIcon className="w-5 h-5 mr-2" />
-                  {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
+                  <PlusIcon className="w-5 h-5" />
+                  <span>Nueva Materia</span>
                 </button>
-              </div>
-            </div>
-
-            <div className="flex-1 mt-12 lg:mt-0 flex justify-center">
-              <div className="relative">
-                <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-6 border border-white/20 w-80">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-white">
-                      Estadísticas del Catálogo
-                    </h3>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-white">
-                      <span>Total de Materias</span>
-                      <span className="font-bold text-yellow-400">
-                        {estadisticas.total}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Categorías</span>
-                      <span className="font-bold text-purple-400">
-                        {estadisticas.categorias}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Niveles</span>
-                      <span className="font-bold text-blue-400">
-                        {estadisticas.niveles}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Con Prerequisitos</span>
-                      <span className="font-bold text-green-400">
-                        {estadisticas.conPrerequisitos}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
+              )}
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="px-4 py-2 bg-white/20 text-white rounded-xl font-semibold backdrop-blur-sm hover:bg-white/30 transition-all duration-200 flex items-center space-x-2"
+              >
+                <FunnelIcon className="w-5 h-5" />
+                <span>
+                  {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
+                </span>
+              </button>
+            </>
+          }
+        />
         {mensaje && (
           <div
             className={`mb-6 p-4 rounded-2xl text-center backdrop-blur-sm border ${
@@ -359,7 +404,7 @@ function MateriasPage() {
         )}
 
         {/* Barra de búsqueda y controles */}
-        <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700 -mt-16 relative z-10">
+        <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
           <div className="flex flex-col lg:flex-row gap-4 items-center">
             <div className="flex-1 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -545,6 +590,19 @@ function MateriasPage() {
                   <h3 className="text-xl font-bold text-white mt-3 line-clamp-2">
                     {materia.nombre}
                   </h3>
+                  {materia.grados_nombres &&
+                    materia.grados_nombres.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {materia.grados_nombres.map((grado, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-1 bg-white/10 rounded-full text-xs text-white"
+                          >
+                            {grado}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                 </div>
 
                 {/* Contenido de la tarjeta */}
@@ -886,22 +944,47 @@ function MateriasPage() {
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Grado *
+                      <label className="block text-sm font-medium text-gray-300 mb-3">
+                        Grados donde se imparte *
                       </label>
-                      <select
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
-                        value={idGrado}
-                        onChange={(e) => setIdGrado(e.target.value)}
-                        required
-                      >
-                        <option value="">Seleccionar grado</option>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         {grados.map((grado) => (
-                          <option key={grado.id_grado} value={grado.id_grado}>
-                            {grado.nombre}
-                          </option>
+                          <label
+                            key={grado.id_grado}
+                            className="flex items-center space-x-3 p-3 bg-gray-800 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition-colors duration-200"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={gradosSeleccionados.includes(
+                                grado.id_grado
+                              )}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setGradosSeleccionados([
+                                    ...gradosSeleccionados,
+                                    grado.id_grado,
+                                  ]);
+                                } else {
+                                  setGradosSeleccionados(
+                                    gradosSeleccionados.filter(
+                                      (id) => id !== grado.id_grado
+                                    )
+                                  );
+                                }
+                              }}
+                              className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500 focus:ring-2"
+                            />
+                            <span className="text-white text-sm">
+                              {grado.nombre}
+                            </span>
+                          </label>
                         ))}
-                      </select>
+                      </div>
+                      {gradosSeleccionados.length > 0 && (
+                        <p className="text-sm text-purple-400 mt-2">
+                          {gradosSeleccionados.length} grado(s) seleccionado(s)
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">

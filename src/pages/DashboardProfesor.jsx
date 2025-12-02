@@ -104,8 +104,10 @@ function DashboardProfesor({user}) {
           console.log("📚 Todas las materias:", materiasRes.data);
 
           // Filtrar materias que pertenecen a los grados asignados
-          const materiasAsignadas = materiasRes.data.filter((materia) =>
-            gradosIds.includes(materia.id_grado)
+          const materiasAsignadas = materiasRes.data.filter(
+            (materia) =>
+              materia.grados_ids &&
+              materia.grados_ids.some((gradoId) => gradosIds.includes(gradoId))
           );
           console.log("📚 Materias cargadas:", materiasAsignadas);
           console.log("📊 Cantidad de materias:", materiasAsignadas.length);
@@ -187,40 +189,61 @@ function DashboardProfesor({user}) {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-6 shadow-xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">
-                Bienvenido, Profesor {user?.nombre} 👋
-              </h1>
-              <p className="text-purple-100">
-                Panel del Docente - Gestiona tus clases y estudiantes
-              </p>
-              {escuela && (
-                <div className="mt-3 flex items-center gap-2">
-                  {escuela.logo && (
+        <div className="relative bg-gradient-to-r from-purple-600 to-pink-600 rounded-2xl p-8 overflow-hidden shadow-2xl">
+          <div className="absolute inset-0 bg-black/20"></div>
+          <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-300/10 rounded-full blur-2xl animate-pulse delay-700"></div>
+          <div className="absolute top-1/2 left-1/2 w-48 h-48 bg-pink-300/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
+
+          <div className="relative z-10">
+            {/* Fila superior: Logo y nombre de escuela */}
+            {(escuela?.logo || escuela?.nombre) && (
+              <div className="flex items-center justify-end gap-4 mb-6 pb-4 border-b border-white/20">
+                {escuela?.nombre && (
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-white">
+                      {escuela.nombre}
+                    </p>
+                    <p className="text-sm text-purple-100">
+                      Sistema de Gestión Educativa
+                    </p>
+                  </div>
+                )}
+                {escuela?.logo && (
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-white/20 rounded-xl blur-xl"></div>
                     <img
                       src={`http://localhost:4000${escuela.logo}`}
                       alt={escuela.nombre}
-                      className="w-8 h-8 rounded-full object-cover border-2 border-white"
+                      className="relative w-16 h-16 lg:w-20 lg:h-20 rounded-xl object-cover border-4 border-white/40 shadow-2xl"
                     />
-                  )}
-                  <p className="text-purple-200 text-sm font-medium">
-                    {escuela.nombre}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">
+                  Bienvenido, Profesor {user?.nombre} 👋
+                </h1>
+                <p className="text-purple-100 text-lg">
+                  Panel del Docente - Gestiona tus clases y estudiantes
+                </p>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="text-right bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                  <p className="text-purple-100 text-sm">
+                    {new Date().toLocaleDateString("es-ES", {weekday: "long"})}
+                  </p>
+                  <p className="text-white font-semibold text-lg">
+                    {new Date().toLocaleTimeString("es-ES", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </p>
                 </div>
-              )}
-            </div>
-            <div className="text-right">
-              <p className="text-purple-100 text-sm">
-                {new Date().toLocaleDateString("es-ES", {weekday: "long"})}
-              </p>
-              <p className="text-white font-semibold text-lg">
-                {new Date().toLocaleTimeString("es-ES", {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
+              </div>
             </div>
           </div>
         </div>
@@ -295,7 +318,7 @@ function DashboardProfesor({user}) {
               <div
                 key={grado.id_grado || idx}
                 className="p-6 bg-gradient-to-br from-cyan-600/10 to-blue-600/10 border border-cyan-500/20 rounded-xl hover:scale-105 transition-transform cursor-pointer"
-                onClick={() => navigate("/alumnos")}
+                onClick={() => navigate(`/alumnos?grado=${grado.id_grado}`)}
               >
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-cyan-500/20 rounded-lg">

@@ -38,6 +38,8 @@ import {
 function DashboardEstudiante({user}) {
   const [loading, setLoading] = useState(true);
   const [promedio, setPromedio] = useState(0);
+  const [escuela, setEscuela] = useState(null);
+  const token = localStorage.getItem("token");
   const asistencia = 92;
   const tareasCompletadas = 15;
   const tareasPendientes = 3;
@@ -140,7 +142,26 @@ function DashboardEstudiante({user}) {
       setPromedio(87.3);
       setLoading(false);
     }, 500);
+    cargarEscuela();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const cargarEscuela = async () => {
+    try {
+      if (user?.id_escuela) {
+        const res = await fetch(
+          `http://localhost:4000/api/escuelas/${user.id_escuela}`,
+          {
+            headers: {Authorization: `Bearer ${token}`},
+          }
+        );
+        const data = await res.json();
+        setEscuela(data);
+      }
+    } catch (error) {
+      console.error("Error al cargar escuela:", error);
+    }
+  };
 
   if (loading) {
     return (
@@ -186,6 +207,13 @@ function DashboardEstudiante({user}) {
                   </div>
                   <div className="text-cyan-100 text-sm">Asistencia</div>
                 </div>
+                {escuela?.logo && (
+                  <img
+                    src={`http://localhost:4000${escuela.logo}`}
+                    alt={escuela.nombre}
+                    className="w-20 h-20 rounded-lg object-cover border-4 border-white shadow-lg"
+                  />
+                )}
               </div>
             </div>
           </div>

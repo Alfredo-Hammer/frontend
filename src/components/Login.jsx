@@ -1,7 +1,9 @@
 import {useState} from "react";
+import {useNavigate} from "react-router-dom";
 import api from "../api/axiosConfig";
 import services from "../api/services";
 import Loader from "./Loader";
+import {setTokenWithExpiration} from "../utils/tokenUtils";
 import {
   EyeIcon,
   EyeSlashIcon,
@@ -21,6 +23,7 @@ function Login({setToken}) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const navigate = useNavigate();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -31,23 +34,31 @@ function Login({setToken}) {
 
     try {
       const response = await api.post(services.login, {email, password});
+      setTokenWithExpiration(response.data.token);
       setToken(response.data.token);
-      localStorage.setItem("token", response.data.token);
+
+      // Guardar tiempo de expiración del token (1 hora)
+      const expiryTime = Date.now() + 60 * 60 * 1000;
+      localStorage.setItem("tokenExpiry", expiryTime.toString());
+
+      // Redirigir al dashboard principal después del login exitoso
+      setTimeout(() => {
+        navigate("/");
+      }, 100);
     } catch (err) {
-      setError(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          "Error al iniciar sesión"
-      );
-    } finally {
-      // Asegura que el loader se muestre al menos 1 segundo
-      const elapsed = Date.now() - start;
-      const minTime = 1000;
-      if (elapsed < minTime) {
-        setTimeout(() => setLoading(false), minTime - elapsed);
+      // Manejar errores específicos
+      if (err.response?.data?.error === "CUENTA_INACTIVA") {
+        setError(
+          "⚠️ Tu cuenta ha sido desactivada. Contacta al administrador del sistema."
+        );
       } else {
-        setLoading(false);
+        setError(
+          err.response?.data?.message ||
+            err.response?.data?.error ||
+            "Error al iniciar sesión"
+        );
       }
+      setLoading(false);
     }
   };
 

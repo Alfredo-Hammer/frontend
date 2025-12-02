@@ -9,6 +9,7 @@ import {
   AcademicCapIcon,
   Squares2X2Icon,
 } from "@heroicons/react/24/solid";
+import PageHeader from "../components/PageHeader";
 
 function SeccionesPage() {
   const [secciones, setSecciones] = useState([]);
@@ -27,6 +28,7 @@ function SeccionesPage() {
   const [filterGrado, setFilterGrado] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState("groups"); // "groups" o "cards"
+  const [escuela, setEscuela] = useState(null);
 
   const token = localStorage.getItem("token");
   let id_profesor = null;
@@ -39,6 +41,7 @@ function SeccionesPage() {
 
   useEffect(() => {
     fetchSecciones();
+    fetchUser();
     // eslint-disable-next-line
   }, []);
 
@@ -59,6 +62,23 @@ function SeccionesPage() {
       if (res.data.length > 0) setIdGrado(res.data[0].id_grado);
     } catch {
       setMensaje("Error al cargar grados");
+    }
+  };
+
+  const fetchUser = async () => {
+    try {
+      const res = await api.get("/api/usuarios/perfil", {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const id_escuela = res.data.usuario?.id_escuela;
+      if (id_escuela) {
+        const escuelaRes = await api.get(`/api/escuelas/${id_escuela}`, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setEscuela(escuelaRes.data);
+      }
+    } catch (error) {
+      console.error("Error al cargar datos de escuela:", error);
     }
   };
 
@@ -140,7 +160,10 @@ function SeccionesPage() {
   // Filtros y búsqueda
   const seccionesFiltradas = secciones.filter((seccion) => {
     const matchesSearch =
-      seccion.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (seccion.nombre_seccion &&
+        seccion.nombre_seccion
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())) ||
       (seccion.nombre_grado &&
         seccion.nombre_grado
           .toLowerCase()
@@ -178,86 +201,45 @@ function SeccionesPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      {/* Header Hero Section */}
-      <div className="relative bg-gradient-to-r from-cyan-600 via-teal-600 to-emerald-600 overflow-hidden">
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="absolute inset-0">
-          <div className="absolute top-10 left-10 w-40 h-40 bg-cyan-400/20 rounded-full blur-2xl animate-pulse"></div>
-          <div className="absolute bottom-10 right-10 w-60 h-60 bg-teal-400/20 rounded-full blur-2xl animate-pulse delay-1000"></div>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
+      {/* Header Moderno y Compacto */}
+      <PageHeader
+        title="Gestión de Secciones"
+        subtitle="Organiza y administra las secciones académicas por grado y escuela"
+        icon={UserGroupIcon}
+        gradientFrom="cyan-600"
+        gradientTo="teal-600"
+        badge="Organización Estudiantil"
+        schoolLogo={
+          escuela?.logo ? `http://localhost:4000${escuela.logo}` : null
+        }
+        schoolName={escuela?.nombre}
+        stats={{
+          "Total Secciones": estadisticas.total,
+          Grados: estadisticas.grados,
+          Grupos: estadisticas.grupos,
+        }}
+        actions={
+          <>
+            <button
+              onClick={() => setShowModal(true)}
+              className="px-4 py-2 bg-white text-cyan-600 rounded-xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-200 flex items-center space-x-2"
+            >
+              <PlusIcon className="w-5 h-5" />
+              <span>Nueva Sección</span>
+            </button>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="px-4 py-2 bg-white/10 text-white rounded-xl font-semibold backdrop-blur-sm hover:bg-white/20 transition-all duration-200 flex items-center space-x-2"
+            >
+              <Squares2X2Icon className="w-5 h-5" />
+              <span>{showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}</span>
+            </button>
+          </>
+        }
+      />
 
-        <div className="relative max-w-7xl mx-auto px-6 py-16">
-          <div className="flex flex-col lg:flex-row items-center justify-between">
-            <div className="flex-1">
-              <div className="inline-flex items-center px-4 py-2 bg-white/10 rounded-full text-sm text-white mb-4 backdrop-blur-sm">
-                <UserGroupIcon className="w-4 h-4 mr-2" />
-                Organización Estudiantil
-              </div>
-              <h1 className="text-4xl lg:text-6xl font-bold text-white mb-4">
-                Gestión de
-                <span className="block bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent">
-                  Secciones
-                </span>
-              </h1>
-              <p className="text-xl text-cyan-100 mb-8 max-w-2xl">
-                Organiza y administra las secciones académicas por grado y
-                escuela. Estructura tu sistema educativo.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={() => setShowModal(true)}
-                  className="px-8 py-4 bg-white text-teal-600 rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center"
-                >
-                  <PlusIcon className="w-5 h-5 mr-2" />
-                  Crear Nueva Sección
-                </button>
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="px-8 py-4 bg-white/10 text-white rounded-2xl font-semibold backdrop-blur-sm hover:bg-white/20 transform transition-all duration-300 flex items-center justify-center"
-                >
-                  <Squares2X2Icon className="w-5 h-5 mr-2" />
-                  {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 mt-12 lg:mt-0 flex justify-center">
-              <div className="relative">
-                <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-6 border border-white/20 w-80">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-white">
-                      Estadísticas del Sistema
-                    </h3>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-white">
-                      <span>Total de Secciones</span>
-                      <span className="font-bold text-yellow-400">
-                        {estadisticas.total}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Grados</span>
-                      <span className="font-bold text-teal-400">
-                        {estadisticas.grados}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Grupos</span>
-                      <span className="font-bold text-emerald-400">
-                        {estadisticas.grupos}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-6">
         {mensaje && (
           <div
             className={`mb-6 p-4 rounded-2xl text-center backdrop-blur-sm border ${
@@ -271,7 +253,7 @@ function SeccionesPage() {
         )}
 
         {/* Barra de búsqueda y controles */}
-        <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700 -mt-16 relative z-10">
+        <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
           <div className="flex flex-col lg:flex-row gap-4 items-center">
             <div className="flex-1 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -443,12 +425,12 @@ function SeccionesPage() {
                             <div className="flex items-center space-x-3">
                               <div className="w-8 h-8 bg-teal-500/20 rounded-full flex items-center justify-center">
                                 <span className="text-teal-400 font-bold text-sm">
-                                  {seccion.nombre}
+                                  {seccion.nombre_seccion}
                                 </span>
                               </div>
                               <div>
                                 <p className="text-white font-medium">
-                                  Sección {seccion.nombre}
+                                  Sección {seccion.nombre_seccion}
                                 </p>
                                 <p className="text-gray-400 text-xs">
                                   ID: {seccion.id_seccion}
@@ -459,7 +441,7 @@ function SeccionesPage() {
                               <button
                                 onClick={() => {
                                   setEditId(seccion.id_seccion);
-                                  setEditNombre(seccion.nombre);
+                                  setEditNombre(seccion.nombre_seccion);
                                   setShowModal(true);
                                 }}
                                 className="p-2 bg-yellow-500/20 text-yellow-300 rounded-lg hover:bg-yellow-500/30 transition-colors duration-200"
@@ -539,9 +521,9 @@ function SeccionesPage() {
                       <div className="flex items-center justify-between">
                         <UserGroupIcon className="w-6 h-6 text-white" />
                       </div>
-                      <h4 className="text-lg font-bold text-white mt-2">
-                        Sección {seccion.nombre}
-                      </h4>
+                      <h3 className="text-2xl font-bold text-white mb-2">
+                        Sección {seccion.nombre_seccion}
+                      </h3>
                     </div>
 
                     {/* Contenido de la tarjeta */}
@@ -576,7 +558,7 @@ function SeccionesPage() {
                       <button
                         onClick={() => {
                           setEditId(seccion.id_seccion);
-                          setEditNombre(seccion.nombre);
+                          setEditNombre(seccion.nombre_seccion);
                           setShowModal(true);
                         }}
                         className="flex items-center space-x-2 px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium shadow-sm transform hover:scale-105 transition-all duration-200"
