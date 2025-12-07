@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from "react";
 import api from "../api/axiosConfig";
 import services from "../api/services";
+import Toast from "../components/Toast";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -18,8 +19,18 @@ function SeccionesPage() {
   const [nombre, setNombre] = useState("");
   const [editId, setEditId] = useState(null);
   const [editNombre, setEditNombre] = useState("");
-  const [mensaje, setMensaje] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [seccionesDelGrado, setSeccionesDelGrado] = useState([]);
+  const [sugerenciasNombres, setSugerenciasNombres] = useState([]);
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message, type = "success") => {
+    setToast({show: true, message, type});
+  };
 
   // Nuevos estados para funcionalidades adicionales
   const [isLoading, setIsLoading] = useState(true);
@@ -53,6 +64,14 @@ function SeccionesPage() {
     // eslint-disable-next-line
   }, [showModal]);
 
+  // Cargar secciones existentes cuando se selecciona un grado
+  useEffect(() => {
+    if (id_grado && showModal && !editId) {
+      fetchSeccionesDelGrado(id_grado);
+    }
+    // eslint-disable-next-line
+  }, [id_grado, showModal, editId]);
+
   const fetchGrados = async () => {
     try {
       const res = await api.get(services.grados, {
@@ -61,7 +80,30 @@ function SeccionesPage() {
       setGrados(res.data);
       if (res.data.length > 0) setIdGrado(res.data[0].id_grado);
     } catch {
-      setMensaje("Error al cargar grados");
+      showToast("Error al cargar grados", "error");
+    }
+  };
+
+  const fetchSeccionesDelGrado = async (gradoId) => {
+    try {
+      const res = await api.get(`${services.secciones}?id_grado=${gradoId}`, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      setSeccionesDelGrado(res.data);
+
+      // Generar sugerencias de nombres
+      const nombresUsados = res.data.map((s) =>
+        s.nombre_seccion?.toUpperCase().trim()
+      );
+      const letras = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+      const sugerencias = letras.filter(
+        (letra) => !nombresUsados.includes(letra)
+      );
+      setSugerenciasNombres(sugerencias);
+    } catch (error) {
+      console.error("Error al cargar secciones del grado:", error);
+      setSeccionesDelGrado([]);
+      setSugerenciasNombres(["A", "B", "C", "D", "E"]);
     }
   };
 
@@ -90,7 +132,7 @@ function SeccionesPage() {
       });
       setSecciones(res.data);
     } catch (err) {
-      setMensaje("Error al cargar secciones");
+      showToast("Error al cargar secciones", "error");
     } finally {
       setIsLoading(false);
     }
@@ -104,15 +146,19 @@ function SeccionesPage() {
     try {
       await api.post(
         services.secciones,
-        {nombre, id_profesor, id_grado},
+        {nombre: nombre.trim(), id_profesor, id_grado},
         {headers: {Authorization: `Bearer ${token}`}}
       );
       limpiarFormulario();
-      setMensaje("Sección creada correctamente");
+      showToast("✅ Sección creada correctamente", "success");
       setShowModal(false);
       fetchSecciones();
     } catch (err) {
-      setMensaje(err.response?.data?.message || "Error al crear sección");
+      const errorMsg =
+        err.response?.data?.mensaje ||
+        err.response?.data?.error ||
+        "Error al crear sección";
+      showToast(errorMsg, "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -128,11 +174,11 @@ function SeccionesPage() {
       );
       setEditId(null);
       setEditNombre("");
-      setMensaje("Sección editada correctamente");
+      showToast("✅ Sección editada correctamente", "success");
       setShowModal(false);
       fetchSecciones();
     } catch (err) {
-      setMensaje("Error al editar sección");
+      showToast("Error al editar sección", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -142,6 +188,8 @@ function SeccionesPage() {
     setNombre("");
     setEditId(null);
     setEditNombre("");
+    setSeccionesDelGrado([]);
+    setSugerenciasNombres([]);
   };
 
   const handleEliminar = async (id) => {
@@ -150,10 +198,10 @@ function SeccionesPage() {
       await api.delete(services.secciones + `/${id}`, {
         headers: {Authorization: `Bearer ${token}`},
       });
-      setMensaje("Sección eliminada correctamente");
+      showToast("✅ Sección eliminada correctamente", "success");
       fetchSecciones();
     } catch (err) {
-      setMensaje("Error al eliminar sección");
+      showToast("Error al eliminar sección", "error");
     }
   };
 
@@ -240,18 +288,6 @@ function SeccionesPage() {
       />
 
       <div className="max-w-7xl mx-auto px-6">
-        {mensaje && (
-          <div
-            className={`mb-6 p-4 rounded-2xl text-center backdrop-blur-sm border ${
-              mensaje.includes("correctamente")
-                ? "bg-green-500/10 border-green-500/20 text-green-300"
-                : "bg-red-500/10 border-red-500/20 text-red-300"
-            }`}
-          >
-            {mensaje}
-          </div>
-        )}
-
         {/* Barra de búsqueda y controles */}
         <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
           <div className="flex flex-col lg:flex-row gap-4 items-center">
@@ -703,6 +739,39 @@ function SeccionesPage() {
                       }
                       required
                     />
+
+                    {/* Sugerencias de nombres disponibles */}
+                    {!editId && sugerenciasNombres.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-xs text-gray-400 mb-2">
+                          Nombres disponibles (clic para usar):
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {sugerenciasNombres.slice(0, 5).map((letra) => (
+                            <button
+                              key={letra}
+                              type="button"
+                              onClick={() => setNombre(letra)}
+                              className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/40 text-teal-300 rounded-lg text-sm font-medium transition-all duration-200 border border-teal-500/30"
+                            >
+                              {letra}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Advertencia si no hay sugerencias */}
+                    {!editId &&
+                      sugerenciasNombres.length === 0 &&
+                      seccionesDelGrado.length > 0 && (
+                        <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                          <p className="text-xs text-yellow-300">
+                            ⚠️ Ya se usaron las letras A-J. Considera usar
+                            números (1, 2, 3) o combinaciones (A1, B1).
+                          </p>
+                        </div>
+                      )}
                   </div>
                 </section>
 
@@ -736,6 +805,28 @@ function SeccionesPage() {
                           ))}
                         </select>
                       </div>
+
+                      {/* Mostrar secciones existentes del grado */}
+                      {seccionesDelGrado.length > 0 && (
+                        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                          <p className="text-sm font-semibold text-blue-300 mb-2">
+                            📋 Secciones ya registradas en este grado:
+                          </p>
+                          <div className="flex flex-wrap gap-2">
+                            {seccionesDelGrado.map((seccion) => (
+                              <span
+                                key={seccion.id_seccion}
+                                className="px-3 py-1.5 bg-blue-500/20 text-blue-200 rounded-lg text-sm font-medium border border-blue-500/40"
+                              >
+                                {seccion.nombre_seccion}
+                              </span>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-400 mt-2">
+                            Asegúrate de no duplicar nombres de secciones
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </section>
                 )}
@@ -793,6 +884,17 @@ function SeccionesPage() {
               </form>
             </div>
           </div>
+        )}
+
+        {/* Toast de notificaciones */}
+        {toast.show && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() =>
+              setToast({show: false, message: "", type: "success"})
+            }
+          />
         )}
       </div>
     </div>

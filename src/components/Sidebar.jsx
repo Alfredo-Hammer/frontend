@@ -53,14 +53,6 @@ const menuSections = [
         path: "/mis-calificaciones",
         color: "text-emerald-400",
       },
-      {
-        key: "notifications",
-        label: "Notificaciones",
-        icon: <BellIcon className="h-5 w-5" />,
-        path: "/notificaciones",
-        color: "text-red-400",
-        badge: "3",
-      },
     ],
   },
   {

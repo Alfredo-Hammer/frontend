@@ -30,6 +30,7 @@ import {
   ClipboardDocumentListIcon,
   ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
+import Toast from "../components/Toast";
 
 // Estados de asistencia
 const ESTADOS_ASISTENCIA = {
@@ -214,6 +215,15 @@ function Asistencia() {
     totalJustificados: 0,
     porcentajeAsistencia: 0,
   });
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message, type = "success") => {
+    setToast({show: true, message, type});
+  };
 
   // Cargar asistencias del día
   const cargarAsistencias = async () => {
@@ -309,10 +319,11 @@ function Asistencia() {
     } catch (error) {
       console.error("❌ Error al registrar asistencia:", error);
       console.error("Detalles:", error.response?.data);
-      alert(
+      showToast(
         `Error al registrar asistencia: ${
           error.response?.data?.error || error.message
-        }`
+        }`,
+        "error"
       );
     }
   };
@@ -320,8 +331,9 @@ function Asistencia() {
   // Abrir modal para editar asistencia
   const abrirModalEditar = (asistencia) => {
     if (!esAsistenciaEditable(asistencia.fecha)) {
-      alert(
-        "Esta asistencia ya no puede ser editada. Han pasado más de 24 horas desde su registro."
+      showToast(
+        "Esta asistencia ya no puede ser editada. Han pasado más de 24 horas desde su registro.",
+        "warning"
       );
       return;
     }
@@ -358,10 +370,11 @@ function Asistencia() {
       }
     } catch (error) {
       console.error("❌ Error al actualizar asistencia:", error);
-      alert(
+      showToast(
         `Error al actualizar asistencia: ${
           error.response?.data?.error || error.message
-        }`
+        }`,
+        "error"
       );
     }
   };
@@ -369,8 +382,9 @@ function Asistencia() {
   // Eliminar asistencia
   const eliminarAsistencia = async (id_asistencia, fecha) => {
     if (!esAsistenciaEditable(fecha)) {
-      alert(
-        "Esta asistencia ya no puede ser eliminada. Han pasado más de 24 horas desde su registro."
+      showToast(
+        "Esta asistencia ya no puede ser eliminada. Han pasado más de 24 horas desde su registro.",
+        "warning"
       );
       return;
     }
@@ -395,10 +409,11 @@ function Asistencia() {
       }
     } catch (error) {
       console.error("❌ Error al eliminar asistencia:", error);
-      alert(
+      showToast(
         `Error al eliminar asistencia: ${
           error.response?.data?.error || error.message
-        }`
+        }`,
+        "error"
       );
     }
   };
@@ -2154,6 +2169,15 @@ function Asistencia() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Toast Notifications */}
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({show: false, message: "", type: "success"})}
+        />
       )}
     </div>
   );

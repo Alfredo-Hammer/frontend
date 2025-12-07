@@ -16,6 +16,13 @@ function RegistroAlumno() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Estados para datos de Nicaragua
+  const [departamentos, setDepartamentos] = useState([]);
+  const [municipiosPorDepartamento, setMunicipiosPorDepartamento] = useState(
+    {}
+  );
+  const [municipiosFiltrados, setMunicipiosFiltrados] = useState([]);
+
   // Estados del formulario
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
@@ -67,6 +74,44 @@ function RegistroAlumno() {
     }
   }, [fecha_nacimiento]);
 
+  // Cargar datos de Nicaragua desde backend
+  useEffect(() => {
+    const fetchDatosNicaragua = async () => {
+      try {
+        console.log("🔄 REGISTRO: Iniciando carga de datos de Nicaragua...");
+        const response = await api.get(services.nicaraguaTodos, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        console.log("📦 REGISTRO: Respuesta del backend:", response.data);
+
+        const {departamentos: deps, municipiosPorDepartamento: muns} =
+          response.data;
+        console.log("🏛️ REGISTRO: Departamentos recibidos:", deps);
+        console.log("🏙️ REGISTRO: Municipios por departamento:", muns);
+
+        setDepartamentos(deps || []);
+        setMunicipiosPorDepartamento(muns || {});
+        console.log("✅ REGISTRO: Datos de Nicaragua cargados correctamente");
+      } catch (error) {
+        console.error(
+          "❌ REGISTRO: Error al cargar datos de Nicaragua:",
+          error
+        );
+      }
+    };
+    fetchDatosNicaragua();
+  }, [token]);
+
+  // Filtrar municipios cuando cambia el departamento
+  useEffect(() => {
+    if (departamento && municipiosPorDepartamento[departamento]) {
+      console.log(`🔍 REGISTRO: Filtrando municipios para ${departamento}`);
+      setMunicipiosFiltrados(municipiosPorDepartamento[departamento]);
+    } else {
+      setMunicipiosFiltrados([]);
+    }
+  }, [departamento, municipiosPorDepartamento]);
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -100,8 +145,10 @@ function RegistroAlumno() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!nombre || !apellido || !email || !gradoId || !seccionId) {
-      setMensaje("Complete todos los campos obligatorios.");
+    if (!nombre || !apellido || !gradoId || !seccionId) {
+      setMensaje(
+        "Complete todos los campos obligatorios (Nombre, Apellido, Grado y Sección)."
+      );
       return;
     }
 
@@ -209,6 +256,16 @@ function RegistroAlumno() {
     (s) => String(s.id_grado) === String(gradoId)
   );
 
+  // Debug: Ver qué secciones hay disponibles
+  console.log("📊 Debug Secciones:");
+  console.log("- Grado seleccionado:", gradoId);
+  console.log("- Total secciones:", secciones.length);
+  console.log("- Secciones filtradas:", seccionesFiltradas.length);
+  if (secciones.length > 0) {
+    console.log("- Estructura de una sección:", Object.keys(secciones[0]));
+    console.log("- Primera sección:", secciones[0]);
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
       {/* Header Hero Section */}
@@ -280,13 +337,7 @@ function RegistroAlumno() {
                     </div>
                     <div className="flex justify-between text-white">
                       <span>Información de Contacto</span>
-                      <span
-                        className={`font-bold ${
-                          email ? "text-green-400" : "text-gray-400"
-                        }`}
-                      >
-                        {email ? "✓" : "○"}
-                      </span>
+                      <span className="text-gray-400">○</span>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2 mt-4">
                       <div
@@ -294,9 +345,8 @@ function RegistroAlumno() {
                         style={{
                           width: `${
                             (((nombre && apellido ? 1 : 0) +
-                              (gradoId && seccionId ? 1 : 0) +
-                              (email ? 1 : 0)) /
-                              3) *
+                              (gradoId && seccionId ? 1 : 0)) /
+                              2) *
                             100
                           }%`,
                         }}
@@ -381,16 +431,18 @@ function RegistroAlumno() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Email *
+                    Email (Opcional para menores)
                   </label>
                   <input
                     type="email"
-                    placeholder="correo@ejemplo.com"
+                    placeholder="correo@ejemplo.com (opcional)"
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    required
                   />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Si no se proporciona, se generará uno automáticamente
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -548,14 +600,30 @@ function RegistroAlumno() {
                   </label>
                   <select
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
+                    style={{color: "white"}}
                     value={gradoId}
                     onChange={(e) => setGradoId(e.target.value)}
                     required
                     disabled={!gradosFiltrados.length}
                   >
-                    <option value="">Seleccionar grado</option>
+                    <option
+                      value=""
+                      style={{
+                        color: "#111827 !important",
+                        backgroundColor: "white !important",
+                      }}
+                    >
+                      Seleccionar grado
+                    </option>
                     {gradosFiltrados.map((g) => (
-                      <option key={g.id_grado} value={g.id_grado}>
+                      <option
+                        key={g.id_grado}
+                        value={g.id_grado}
+                        style={{
+                          color: "#111827 !important",
+                          backgroundColor: "white !important",
+                        }}
+                      >
                         {g.nombre}
                       </option>
                     ))}
@@ -567,15 +635,33 @@ function RegistroAlumno() {
                   </label>
                   <select
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
+                    style={{color: "white"}}
                     value={seccionId}
                     onChange={(e) => setSeccionId(e.target.value)}
                     required
                     disabled={!seccionesFiltradas.length}
                   >
-                    <option value="">Seleccionar sección</option>
+                    <option
+                      value=""
+                      style={{
+                        color: "#111827 !important",
+                        backgroundColor: "white !important",
+                      }}
+                    >
+                      {gradoId
+                        ? "Seleccionar sección"
+                        : "Primero selecciona un grado"}
+                    </option>
                     {seccionesFiltradas.map((s) => (
-                      <option key={s.id_seccion} value={s.id_seccion}>
-                        {s.nombre}
+                      <option
+                        key={s.id_seccion}
+                        value={s.id_seccion}
+                        style={{
+                          color: "#111827 !important",
+                          backgroundColor: "white !important",
+                        }}
+                      >
+                        {s.nombre_seccion}
                       </option>
                     ))}
                   </select>
@@ -586,13 +672,38 @@ function RegistroAlumno() {
                   </label>
                   <select
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200"
+                    style={{color: "white"}}
                     value={turno}
                     onChange={(e) => setTurno(e.target.value)}
                   >
-                    <option value="">Seleccionar turno</option>
-                    <option value="Mañana">Mañana</option>
-                    <option value="Tarde">Tarde</option>
-                    <option value="Nocturno">Nocturno</option>
+                    <option
+                      value=""
+                      className="text-gray-900 bg-white"
+                      style={{color: "black", backgroundColor: "white"}}
+                    >
+                      Seleccionar turno
+                    </option>
+                    <option
+                      value="Mañana"
+                      className="text-gray-900 bg-white"
+                      style={{color: "black", backgroundColor: "white"}}
+                    >
+                      Mañana
+                    </option>
+                    <option
+                      value="Tarde"
+                      className="text-gray-900 bg-white"
+                      style={{color: "black", backgroundColor: "white"}}
+                    >
+                      Tarde
+                    </option>
+                    <option
+                      value="Nocturno"
+                      className="text-gray-900 bg-white"
+                      style={{color: "black", backgroundColor: "white"}}
+                    >
+                      Nocturno
+                    </option>
                   </select>
                 </div>
                 <div>
@@ -647,27 +758,65 @@ function RegistroAlumno() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Municipio
+                    Departamento
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Municipio de residencia"
-                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
-                    value={municipio}
-                    onChange={(e) => setMunicipio(e.target.value)}
-                  />
+                  <select
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                    value={departamento}
+                    onChange={(e) => {
+                      const nuevoDept = e.target.value;
+                      console.log(
+                        `📍 REGISTRO: Departamento seleccionado: ${nuevoDept}`
+                      );
+                      setDepartamento(nuevoDept);
+                      setMunicipio(""); // Resetear municipio al cambiar departamento
+                    }}
+                  >
+                    <option value="">Seleccione un departamento</option>
+                    {departamentos.map((dept) => {
+                      console.log(
+                        `🏛️ REGISTRO: Renderizando departamento: ${dept.label}`
+                      );
+                      return (
+                        <option key={dept.value} value={dept.value}>
+                          {dept.label}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Departamento
+                    Municipio
                   </label>
-                  <input
-                    type="text"
-                    placeholder="Departamento"
-                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
-                    value={departamento}
-                    onChange={(e) => setDepartamento(e.target.value)}
-                  />
+                  <select
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                    value={municipio}
+                    onChange={(e) => {
+                      const nuevoMun = e.target.value;
+                      console.log(
+                        `🏙️ REGISTRO: Municipio seleccionado: ${nuevoMun}`
+                      );
+                      setMunicipio(nuevoMun);
+                    }}
+                    disabled={!departamento}
+                  >
+                    <option value="">
+                      {departamento
+                        ? "Seleccione un municipio"
+                        : "Primero seleccione un departamento"}
+                    </option>
+                    {municipiosFiltrados.map((mun) => {
+                      console.log(
+                        `🏙️ REGISTRO: Renderizando municipio: ${mun}`
+                      );
+                      return (
+                        <option key={mun} value={mun}>
+                          {mun}
+                        </option>
+                      );
+                    })}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">

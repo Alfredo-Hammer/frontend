@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from "react";
 import api from "../api/axiosConfig";
 import services from "../api/services";
+import Toast from "../components/Toast";
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -32,7 +33,6 @@ function GradosPage() {
   const [editId, setEditId] = useState(null);
   const [editNombre, setEditNombre] = useState("");
   const [editMaterias, setEditMaterias] = useState([]);
-  const [mensaje, setMensaje] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
@@ -43,6 +43,15 @@ function GradosPage() {
   const [isDragging, setIsDragging] = useState(false);
   const [user, setUser] = useState(null);
   const [escuela, setEscuela] = useState(null);
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message, type = "success") => {
+    setToast({show: true, message, type});
+  };
 
   const token = localStorage.getItem("token");
   const canEdit =
@@ -112,7 +121,7 @@ function GradosPage() {
       });
       setMaterias(res.data);
     } catch (err) {
-      setMensaje("Error al cargar materias");
+      showToast("Error al cargar materias", "error");
     }
   };
 
@@ -205,7 +214,7 @@ function GradosPage() {
       }
     } catch (err) {
       console.error("Error al cargar grados:", err);
-      setMensaje("Error al cargar grados");
+      showToast("Error al cargar grados", "error");
     } finally {
       setIsLoading(false);
     }
@@ -224,11 +233,11 @@ function GradosPage() {
         {headers: {Authorization: `Bearer ${token}`}}
       );
       limpiarFormulario();
-      setMensaje("Grado creado correctamente");
+      showToast("✅ Grado creado correctamente", "success");
       setShowModal(false);
       fetchGrados();
     } catch (err) {
-      setMensaje("Error al crear grado");
+      showToast("Error al crear grado", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -249,11 +258,11 @@ function GradosPage() {
       setEditId(null);
       setEditNombre("");
       setEditMaterias([]);
-      setMensaje("Grado editado correctamente");
+      showToast("✅ Grado editado correctamente", "success");
       setShowEditModal(false);
       fetchGrados();
     } catch (err) {
-      setMensaje("Error al editar grado");
+      showToast("Error al editar grado", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -275,10 +284,10 @@ function GradosPage() {
       await api.delete(services.grados + `/${id}`, {
         headers: {Authorization: `Bearer ${token}`},
       });
-      setMensaje("Grado eliminado correctamente");
+      showToast("✅ Grado eliminado correctamente", "success");
       fetchGrados();
     } catch (err) {
-      setMensaje("Error al eliminar grado");
+      showToast("Error al eliminar grado", "error");
     }
   };
 
@@ -483,9 +492,9 @@ function GradosPage() {
         {orden: nuevoOrden},
         {headers: {Authorization: `Bearer ${token}`}}
       );
-      setMensaje("¡Orden guardado!");
+      showToast("✅ ¡Orden guardado!", "success");
     } catch (err) {
-      setMensaje("Error al guardar el orden");
+      showToast("Error al guardar el orden", "error");
       console.error("Error al guardar el orden:", err);
     }
   };
@@ -539,17 +548,6 @@ function GradosPage() {
             </>
           }
         />
-        {mensaje && (
-          <div
-            className={`mb-6 p-4 rounded-2xl text-center backdrop-blur-sm border ${
-              mensaje.includes("correctamente") || mensaje.includes("guardado")
-                ? "bg-green-500/10 border-green-500/20 text-green-300"
-                : "bg-red-500/10 border-red-500/20 text-red-300"
-            }`}
-          >
-            {mensaje}
-          </div>
-        )}
 
         {/* Barra de búsqueda y controles */}
         <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
@@ -1025,6 +1023,15 @@ function GradosPage() {
           </div>
         )}
       </div>
+
+      {/* Toast Notifications */}
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({show: false, message: "", type: "success"})}
+        />
+      )}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import api from "../api/axiosConfig";
 import PageHeader from "../components/PageHeader";
 import {jsPDF} from "jspdf";
 import autoTable from "jspdf-autotable";
+import Toast from "../components/Toast";
 import {
   DocumentChartBarIcon,
   FunnelIcon,
@@ -28,6 +29,15 @@ function ReportesPage() {
   const [profesor, setProfesor] = useState(null);
   const [mostrarVistaPrevia, setMostrarVistaPrevia] = useState(false);
   const [estudiantePreview, setEstudiantePreview] = useState(null);
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message, type = "success") => {
+    setToast({show: true, message, type});
+  };
 
   const token = localStorage.getItem("token");
 
@@ -376,7 +386,7 @@ function ReportesPage() {
 
   const generarCertificadoPDF = (estudiante) => {
     if (!reporteData || !estudiante) {
-      alert("No hay datos para generar el certificado");
+      showToast("No hay datos para generar el certificado", "warning");
       return;
     }
 
@@ -616,7 +626,7 @@ function ReportesPage() {
 
   const exportarPDF = () => {
     if (!reporteData || !reporteData.estudiantes.length) {
-      alert("No hay datos para exportar");
+      showToast("No hay datos para exportar", "warning");
       return;
     }
 
@@ -2522,6 +2532,15 @@ function ReportesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Toast Notifications */}
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({show: false, message: "", type: "success"})}
+        />
       )}
     </div>
   );

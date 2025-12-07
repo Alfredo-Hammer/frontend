@@ -4,6 +4,7 @@ import CrearEscuelaModal from "./CrearEscuelaModal";
 import EditarEscuelaModal from "./EditarEscuelaModal";
 import ConfirmModal from "./ConfirmModal";
 import {useNavigate} from "react-router-dom";
+import Toast from "./Toast";
 
 function EscuelasList({setToken}) {
   const [escuelas, setEscuelas] = useState([]);
@@ -17,9 +18,18 @@ function EscuelasList({setToken}) {
   const [viewMode, setViewMode] = useState("grid");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
 
   const navigate = useNavigate();
   const token = localStorage.getItem("token");
+
+  const showToast = (message, type = "success") => {
+    setToast({show: true, message, type});
+  };
 
   // Verificar permisos de admin
   let esAdmin = false;
@@ -113,9 +123,9 @@ function EscuelasList({setToken}) {
     } catch (err) {
       console.error("Error al eliminar escuela:", err);
       if (err.response && err.response.status === 403) {
-        alert("No tienes permisos para eliminar esta escuela.");
+        showToast("No tienes permisos para eliminar esta escuela.", "error");
       } else {
-        alert("Error al eliminar la escuela");
+        showToast("Error al eliminar la escuela", "error");
       }
     }
   };
@@ -747,6 +757,15 @@ function EscuelasList({setToken}) {
         onCancel={() => setConfirmOpen(false)}
         onConfirm={handleEliminar}
       />
+
+      {/* Toast Notifications */}
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({show: false, message: "", type: "success"})}
+        />
+      )}
     </div>
   );
 }

@@ -16,6 +16,7 @@ import {ChatBubbleLeftRightIcon} from "@heroicons/react/24/solid";
 import Loader from "../components/Loader";
 import PageHeader from "../components/PageHeader";
 import {useMensajes} from "../context/MensajesContext";
+import Toast from "../components/Toast";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:4000/api";
 
@@ -38,6 +39,15 @@ const Mensajes = () => {
   const [mostrarInfo, setMostrarInfo] = useState(false);
   const [escuelaInfo, setEscuelaInfo] = useState(null);
   const [usuarioActual, setUsuarioActual] = useState(null);
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message, type = "success") => {
+    setToast({show: true, message, type});
+  };
 
   const mensajesEndRef = useRef(null);
   const token = localStorage.getItem("token");
@@ -221,7 +231,7 @@ const Mensajes = () => {
 
   const crearNuevaConversacion = async () => {
     if (!usuarioSeleccionado || !mensajeInicial.trim()) {
-      alert("Selecciona un usuario y escribe un mensaje");
+      showToast("Selecciona un usuario y escribe un mensaje", "warning");
       return;
     }
 
@@ -619,7 +629,10 @@ const Mensajes = () => {
                           }
                         } catch (error) {
                           console.error("Error al crear conversación:", error);
-                          alert("Error al iniciar la conversación");
+                          showToast(
+                            "Error al iniciar la conversación",
+                            "error"
+                          );
                         }
                       }
                     }}
@@ -1072,6 +1085,15 @@ const Mensajes = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Toast Notifications */}
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({show: false, message: "", type: "success"})}
+        />
       )}
     </div>
   );

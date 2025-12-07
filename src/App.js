@@ -1,9 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import './App.css';
 import Sidebar from "./components/Sidebar";
 import Login from "./components/Login";
 import SetupInicial from "./pages/SetupInicial";
+import VerificarEmail from "./pages/VerificarEmail";
+import EmailNoVerificado from "./pages/EmailNoVerificado";
+import RestablecerPassword from "./pages/RestablecerPassword";
 import Alumnos from "./pages/Alumnos";
 import DetalleAlumno from "./components/DetalleAlumno";
 import HomePage from "./pages/HomePage";
@@ -33,24 +36,23 @@ import api from "./api/axiosConfig";
 import { setTokenWithExpiration, getTokenIfValid, clearToken } from "./utils/tokenUtils";
 import { MensajesProvider } from "./context/MensajesContext";
 
-function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSetup, setNecesitaSetup }) {
-  // Hook de gestión de sesión
-  const { showWarning, countdown, handleContinue, handleLogout } = useSessionTimeout();
+function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSetup, setNecesitaSetup, setLoading }) {
+  // Hook de gestión de sesión con callback para limpiar estado
+  const handleSessionExpired = useCallback(() => {
+    setLoading(true);
+    setToken(null);
+  }, [setToken, setLoading]);
+  
+  const { showWarning, countdown, handleContinue, handleLogout } = useSessionTimeout(handleSessionExpired);
 
-  if (necesitaSetup) {
-    return (
-      <Routes>
-        <Route path="/setup" element={<SetupInicial setToken={setToken} setNecesitaSetup={setNecesitaSetup} />} />
-        <Route path="*" element={<Navigate to="/setup" />} />
-      </Routes>
-    );
-  }
-
+  // Si no hay token, mostrar login o setup según la ruta
   if (!token) {
     return (
       <Routes>
         <Route path="/login" element={<Login setToken={setToken} />} />
-        <Route path="*" element={<Navigate to="/login" />} />
+        <Route path="/setup" element={<SetupInicial setToken={setToken} setNecesitaSetup={setNecesitaSetup} />} />
+        {/* Redirigir a setup solo si necesita setup, sino a login */}
+        <Route path="*" element={<Navigate to={necesitaSetup ? "/setup" : "/login"} />} />
       </Routes>
     );
   }
@@ -317,16 +319,26 @@ function App() {
   return (
     <Router>
       {loading && <Loader />}
-      <AuthWrapper
-        token={token}
-        setToken={setToken}
-        selected={selected}
-        setSelected={setSelected}
-        setLoading={setLoading}
-        user={user}
-        necesitaSetup={necesitaSetup}
-        setNecesitaSetup={setNecesitaSetup}
-      />
+      <Routes>
+        {/* Rutas públicas que siempre deben estar disponibles */}
+        <Route path="/verificar-email/:token" element={<VerificarEmail />} />
+        <Route path="/email-no-verificado" element={<EmailNoVerificado />} />
+        <Route path="/restablecer-password/:token" element={<RestablecerPassword />} />
+
+        {/* Resto de rutas manejadas por AuthWrapper */}
+        <Route path="/*" element={
+          <AuthWrapper
+            token={token}
+            setToken={setToken}
+            selected={selected}
+            setSelected={setSelected}
+            setLoading={setLoading}
+            user={user}
+            necesitaSetup={necesitaSetup}
+            setNecesitaSetup={setNecesitaSetup}
+          />
+        } />
+      </Routes>
     </Router>
   );
 }

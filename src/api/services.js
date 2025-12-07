@@ -23,6 +23,14 @@ const services = {
   calificacionesMateriasAlumno: `${API_BASE}/calificaciones/materias-alumno`,
   reportes: `${API_BASE}/reportes`,
   reportesConsolidado: `${API_BASE}/reportes/consolidado`,
+  // Datos de Nicaragua
+  nicaraguaDepartamentos: `${API_BASE}/nicaragua/departamentos`,
+  nicaraguaMunicipios: (departamento) => `${API_BASE}/nicaragua/municipios/${departamento}`,
+  nicaraguaTodos: `${API_BASE}/nicaragua/todos`,
+  // Recuperación de contraseña
+  solicitarRecuperacion: `${API_BASE}/auth/solicitar-recuperacion`,
+  validarTokenRecuperacion: (token) => `${API_BASE}/auth/validar-token-recuperacion/${token}`,
+  restablecerPassword: `${API_BASE}/auth/restablecer-password`,
 };
 
 export default services;

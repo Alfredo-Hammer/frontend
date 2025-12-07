@@ -26,6 +26,7 @@ import {
   CalendarIcon,
   ClipboardDocumentListIcon,
 } from "@heroicons/react/24/outline";
+import Toast from "../components/Toast";
 
 // Constantes
 const API_BASE_URL = "http://localhost:4000";
@@ -165,12 +166,22 @@ function HorarioClases() {
     aula: "",
   });
   const [seccionesFiltradas, setSeccionesFiltradas] = useState([]);
+  const [materiasFiltradas, setMateriasFiltradas] = useState([]);
   const [estadisticas, setEstadisticas] = useState({
     total_clases: 0,
     profesores_activos: 0,
     materias_activas: 0,
     grados_con_horario: 0,
   });
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message, type = "success") => {
+    setToast({show: true, message, type});
+  };
 
   // Función para verificar si el usuario tiene permisos de edición
   const puedeEditar = () => {
@@ -252,7 +263,7 @@ function HorarioClases() {
       setHorarios(response.data);
     } catch (error) {
       console.error("Error al cargar horarios:", error);
-      alert("Error al cargar horarios");
+      showToast("Error al cargar horarios", "error");
     } finally {
       setLoading(false);
     }
@@ -322,12 +333,15 @@ function HorarioClases() {
       await axios.delete(`${API_BASE_URL}/api/horarios/${id}`, {
         headers: {Authorization: `Bearer ${token}`},
       });
-      alert("Horario eliminado exitosamente");
+      showToast("✅ Horario eliminado exitosamente", "success");
       cargarHorarios();
       cargarEstadisticas();
     } catch (error) {
       console.error("Error al eliminar horario:", error);
-      alert(error.response?.data?.error || "Error al eliminar horario");
+      showToast(
+        error.response?.data?.error || "Error al eliminar horario",
+        "error"
+      );
     }
   };
 
@@ -353,15 +367,44 @@ function HorarioClases() {
     }
   };
 
+  // Cargar materias cuando se selecciona un grado
+  const cargarMateriasPorGrado = async (idGrado) => {
+    console.log("📚 Cargando materias para grado:", idGrado);
+    if (!idGrado) {
+      setMateriasFiltradas([]);
+      return;
+    }
+    try {
+      const token = localStorage.getItem("token");
+      const response = await axios.get(
+        `${API_BASE_URL}/api/materias?id_grado=${idGrado}`,
+        {
+          headers: {Authorization: `Bearer ${token}`},
+        }
+      );
+      console.log("✅ Materias cargadas para grado:", response.data);
+      setMateriasFiltradas(response.data);
+    } catch (error) {
+      console.error("❌ Error al cargar materias:", error);
+      setMateriasFiltradas([]);
+    }
+  };
+
   // Manejar cambios en el formulario
   const handleFormChange = (e) => {
     const {name, value} = e.target;
     console.log(`📝 Campo ${name} cambiado a:`, value);
 
-    // Si cambia el grado, cargar secciones correspondientes
+    // Si cambia el grado, cargar secciones y materias correspondientes
     if (name === "id_grado") {
       cargarSecciones(value);
-      setFormHorario({...formHorario, id_grado: value, id_seccion: ""});
+      cargarMateriasPorGrado(value);
+      setFormHorario({
+        ...formHorario,
+        id_grado: value,
+        id_seccion: "",
+        id_materia: "",
+      });
     } else {
       setFormHorario({...formHorario, [name]: value});
     }
@@ -380,6 +423,7 @@ function HorarioClases() {
       aula: "",
     });
     setSeccionesFiltradas([]);
+    setMateriasFiltradas([]);
     setModalCrear(true);
   };
 
@@ -396,6 +440,7 @@ function HorarioClases() {
       aula: horario.aula || "",
     });
     cargarSecciones(horario.id_grado);
+    cargarMateriasPorGrado(horario.id_grado);
     setHorarioSeleccionado(horario);
     setModalEditar(true);
   };
@@ -419,7 +464,7 @@ function HorarioClases() {
       );
 
       console.log("✅ Horario creado exitosamente:", response.data);
-      alert("Horario creado exitosamente");
+      showToast("✅ Horario creado exitosamente", "success");
       setModalCrear(false);
       cargarHorarios();
       cargarEstadisticas();
@@ -428,10 +473,11 @@ function HorarioClases() {
       console.error("   Response data:", error.response?.data);
       console.error("   Response status:", error.response?.status);
       console.error("   Response headers:", error.response?.headers);
-      alert(
+      showToast(
         error.response?.data?.error ||
           error.response?.data?.message ||
-          "Error al crear horario"
+          "Error al crear horario",
+        "error"
       );
     }
   };
@@ -448,13 +494,16 @@ function HorarioClases() {
           headers: {Authorization: `Bearer ${token}`},
         }
       );
-      alert("Horario actualizado exitosamente");
+      showToast("✅ Horario actualizado exitosamente", "success");
       setModalEditar(false);
       cargarHorarios();
       cargarEstadisticas();
     } catch (error) {
       console.error("Error al actualizar horario:", error);
-      alert(error.response?.data?.error || "Error al actualizar horario");
+      showToast(
+        error.response?.data?.error || "Error al actualizar horario",
+        "error"
+      );
     }
   };
 
@@ -1199,7 +1248,7 @@ function HorarioClases() {
                         key={seccion.id_seccion}
                         value={seccion.id_seccion}
                       >
-                        {seccion.nombre}
+                        {seccion.nombre_seccion}
                       </option>
                     ))}
                   </select>
@@ -1216,9 +1265,10 @@ function HorarioClases() {
                     onChange={handleFormChange}
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                    disabled={!formHorario.id_grado}
                   >
                     <option value="">Seleccione una materia</option>
-                    {materias.map((materia) => (
+                    {materiasFiltradas.map((materia) => (
                       <option
                         key={materia.id_materia}
                         value={materia.id_materia}
@@ -1409,7 +1459,7 @@ function HorarioClases() {
                         key={seccion.id_seccion}
                         value={seccion.id_seccion}
                       >
-                        {seccion.nombre}
+                        {seccion.nombre_seccion}
                       </option>
                     ))}
                   </select>
@@ -1426,9 +1476,10 @@ function HorarioClases() {
                     onChange={handleFormChange}
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    disabled={!formHorario.id_grado}
                   >
                     <option value="">Seleccione una materia</option>
-                    {materias.map((materia) => (
+                    {materiasFiltradas.map((materia) => (
                       <option
                         key={materia.id_materia}
                         value={materia.id_materia}
@@ -1548,6 +1599,15 @@ function HorarioClases() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Toast Notifications */}
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({show: false, message: "", type: "success"})}
+        />
       )}
     </div>
   );

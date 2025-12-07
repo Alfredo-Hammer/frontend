@@ -1,6 +1,7 @@
 import {useState, useEffect, useRef} from "react";
 import {useParams, useNavigate} from "react-router-dom";
 import api from "../api/axiosConfig";
+import Toast from "../components/Toast";
 import {
   ArrowLeftIcon,
   UserIcon,
@@ -32,8 +33,17 @@ function ProfesorDetalle() {
   const [escuela, setEscuela] = useState(null);
   const [showPDFPreview, setShowPDFPreview] = useState(false);
   const [generatingPDF, setGeneratingPDF] = useState(false);
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
   const contentRef = useRef(null);
   const token = localStorage.getItem("token");
+
+  const showToast = (message, type = "success") => {
+    setToast({show: true, message, type});
+  };
 
   useEffect(() => {
     fetchProfesorDetalle();
@@ -291,7 +301,10 @@ function ProfesorDetalle() {
       setShowPDFPreview(false);
     } catch (error) {
       console.error("Error al generar PDF:", error);
-      alert("Error al generar el PDF. Por favor, intente nuevamente.");
+      showToast(
+        "Error al generar el PDF. Por favor, intente nuevamente.",
+        "error"
+      );
     } finally {
       setGeneratingPDF(false);
     }
@@ -1053,6 +1066,15 @@ function ProfesorDetalle() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Toast Notifications */}
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({show: false, message: "", type: "success"})}
+        />
       )}
     </div>
   );

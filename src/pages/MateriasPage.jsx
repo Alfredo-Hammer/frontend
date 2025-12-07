@@ -14,15 +14,8 @@ import PageHeader from "../components/PageHeader";
 
 function MateriasPage() {
   const [materias, setMaterias] = useState([]);
-  const [grados, setGrados] = useState([]);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [gradosSeleccionados, setGradosSeleccionados] = useState([]);
-  const [creditos, setCreditos] = useState("");
-  const [horasSemanales, setHorasSemanales] = useState("");
-  const [categoria, setCategoria] = useState("");
-  const [nivel, setNivel] = useState("");
-  const [prerequisitos, setPrerequisitos] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -33,8 +26,6 @@ function MateriasPage() {
 
   // Nuevos estados para funcionalidades adicionales
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterCategoria, setFilterCategoria] = useState("");
-  const [filterNivel, setFilterNivel] = useState("");
   const [viewMode, setViewMode] = useState("cards"); // "cards" o "table"
   const [sortBy, setSortBy] = useState("nombre");
   const [sortOrder, setSortOrder] = useState("asc");
@@ -54,7 +45,6 @@ function MateriasPage() {
     ].includes(user.rol?.toLowerCase());
 
   useEffect(() => {
-    fetchGrados();
     fetchUser();
     // eslint-disable-next-line
   }, []);
@@ -89,17 +79,6 @@ function MateriasPage() {
     }
   };
 
-  const fetchGrados = async () => {
-    try {
-      const res = await api.get("/api/grados", {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      setGrados(res.data);
-    } catch (error) {
-      console.error("Error al cargar grados:", error);
-    }
-  };
-
   useEffect(() => {
     if (mensaje) {
       const timer = setTimeout(() => setMensaje(""), 3000);
@@ -115,57 +94,7 @@ function MateriasPage() {
         params: {_t: new Date().getTime()},
       });
 
-      let todasMaterias = res.data;
-
-      // Si es profesor, filtrar solo las materias de sus grados asignados
-      if (user?.rol?.toLowerCase() === "profesor" && user?.id_profesor) {
-        try {
-          // Obtener los grados asignados al profesor
-          const asignacionesRes = await api.get(
-            `/api/profesores/${user.id_profesor}/asignaciones`,
-            {headers: {Authorization: `Bearer ${token}`}}
-          );
-
-          const asignacionesData = asignacionesRes.data.asignaciones;
-          const gradosProfesor = asignacionesData.map((a) => a.id_grado);
-
-          // Crear un mapa de id_grado -> nombre_grado para el profesor
-          const gradosProfesorMap = {};
-          asignacionesData.forEach((a) => {
-            gradosProfesorMap[a.id_grado] = a.nombre_grado;
-          });
-
-          // Filtrar materias y sus grados
-          todasMaterias = todasMaterias
-            .filter((materia) =>
-              materia.grados_ids?.some((gradoId) =>
-                gradosProfesor.includes(gradoId)
-              )
-            )
-            .map((materia) => {
-              // Filtrar solo los grados del profesor en grados_ids y grados_nombres
-              const gradosIdsFiltrados = materia.grados_ids?.filter((id) =>
-                gradosProfesor.includes(id)
-              );
-              const gradosNombresFiltrados = gradosIdsFiltrados?.map(
-                (id) => gradosProfesorMap[id]
-              );
-
-              return {
-                ...materia,
-                grados_ids: gradosIdsFiltrados,
-                grados_nombres: gradosNombresFiltrados,
-              };
-            });
-
-          console.log("📚 Materias filtradas para profesor:", todasMaterias);
-          console.log("🎓 Grados del profesor:", gradosProfesor);
-        } catch (error) {
-          console.error("Error al filtrar materias del profesor:", error);
-        }
-      }
-
-      setMaterias(todasMaterias);
+      setMaterias(res.data);
     } catch (error) {
       setMensaje("Error al cargar materias");
     } finally {
@@ -176,11 +105,6 @@ function MateriasPage() {
   const handleCrear = async (e) => {
     e.preventDefault();
 
-    if (!gradosSeleccionados || gradosSeleccionados.length === 0) {
-      setMensaje("Debe seleccionar al menos un grado para la materia");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       await api.post(
@@ -188,12 +112,6 @@ function MateriasPage() {
         {
           nombre,
           descripcion,
-          grados: gradosSeleccionados,
-          creditos: creditos || null,
-          horas_semanales: horasSemanales || null,
-          categoria,
-          nivel,
-          prerequisitos,
         },
         {headers: {Authorization: `Bearer ${token}`}}
       );
@@ -213,11 +131,6 @@ function MateriasPage() {
   };
 
   const handleActualizar = async (id) => {
-    if (!gradosSeleccionados || gradosSeleccionados.length === 0) {
-      setMensaje("Debe seleccionar al menos un grado para la materia");
-      return;
-    }
-
     setIsSubmitting(true);
     try {
       await api.put(
@@ -225,12 +138,6 @@ function MateriasPage() {
         {
           nombre,
           descripcion,
-          grados: gradosSeleccionados,
-          creditos: creditos || null,
-          horas_semanales: horasSemanales || null,
-          categoria,
-          nivel,
-          prerequisitos,
         },
         {headers: {Authorization: `Bearer ${token}`}}
       );
@@ -267,45 +174,13 @@ function MateriasPage() {
   const limpiarFormulario = () => {
     setNombre("");
     setDescripcion("");
-    setGradosSeleccionados([]);
-    setCreditos("");
-    setHorasSemanales("");
-    setCategoria("");
-    setNivel("");
-    setPrerequisitos("");
     setEditId(null);
   };
 
-  const handleEditarMateria = async (materia) => {
+  const handleEditarMateria = (materia) => {
     setEditId(materia.id_materia);
     setNombre(materia.nombre);
     setDescripcion(materia.descripcion || "");
-    setCreditos(materia.creditos || "");
-    setHorasSemanales(materia.horas_semanales || "");
-    setCategoria(materia.categoria || "");
-    setNivel(materia.nivel || "");
-    setPrerequisitos(materia.prerequisitos || "");
-
-    // Usar los grados que ya vienen en el objeto materia desde obtenerMaterias
-    if (materia.grados_ids && Array.isArray(materia.grados_ids)) {
-      setGradosSeleccionados(materia.grados_ids);
-    } else {
-      // Si por alguna razón no vienen, cargarlos del endpoint
-      try {
-        const res = await api.get(
-          `/api/materias/${materia.id_materia}/grados`,
-          {
-            headers: {Authorization: `Bearer ${token}`},
-          }
-        );
-        const gradosIds = res.data.map((g) => g.id_grado);
-        setGradosSeleccionados(gradosIds);
-      } catch (error) {
-        console.error("Error al cargar grados de la materia:", error);
-        setGradosSeleccionados([]);
-      }
-    }
-
     setShowModal(true);
   };
 
@@ -315,10 +190,7 @@ function MateriasPage() {
       materia.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (materia.descripcion &&
         materia.descripcion.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategoria =
-      filterCategoria === "" || materia.categoria === filterCategoria;
-    const matchesNivel = filterNivel === "" || materia.nivel === filterNivel;
-    return matchesSearch && matchesCategoria && matchesNivel;
+    return matchesSearch;
   });
 
   // Ordenamiento
@@ -341,10 +213,9 @@ function MateriasPage() {
   // Estadísticas
   const estadisticas = {
     total: materias.length,
-    categorias: [...new Set(materias.map((m) => m.categoria).filter(Boolean))]
-      .length,
-    niveles: [...new Set(materias.map((m) => m.nivel).filter(Boolean))].length,
-    conPrerequisitos: materias.filter((m) => m.prerequisitos).length,
+    conGrados: materias.filter(
+      (m) => m.grados_nombres && m.grados_nombres.length > 0
+    ).length,
   };
 
   return (
@@ -364,9 +235,7 @@ function MateriasPage() {
           schoolName={escuela?.nombre}
           stats={{
             "Total de Materias": estadisticas.total,
-            Categorías: estadisticas.categorias,
-            Niveles: estadisticas.niveles,
-            "Con Prerequisitos": estadisticas.conPrerequisitos,
+            "Con Grados Asignados": estadisticas.conGrados,
           }}
           actions={
             <>
@@ -426,9 +295,6 @@ function MateriasPage() {
                 onChange={(e) => setSortBy(e.target.value)}
               >
                 <option value="nombre">Ordenar por Nombre</option>
-                <option value="categoria">Ordenar por Categoría</option>
-                <option value="nivel">Ordenar por Nivel</option>
-                <option value="creditos">Ordenar por Créditos</option>
               </select>
 
               <button
@@ -468,48 +334,7 @@ function MateriasPage() {
             </div>
           </div>
 
-          {/* Filtros avanzados */}
-          {showFilters && (
-            <div className="mt-6 pt-6 border-t border-gray-700">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Filtrar por Categoría
-                  </label>
-                  <select
-                    className="w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
-                    value={filterCategoria}
-                    onChange={(e) => setFilterCategoria(e.target.value)}
-                  >
-                    <option value="">Todas las categorías</option>
-                    <option value="Ciencias">Ciencias</option>
-                    <option value="Matemáticas">Matemáticas</option>
-                    <option value="Humanidades">Humanidades</option>
-                    <option value="Idiomas">Idiomas</option>
-                    <option value="Arte">Arte</option>
-                    <option value="Deportes">Deportes</option>
-                    <option value="Tecnología">Tecnología</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Filtrar por Nivel
-                  </label>
-                  <select
-                    className="w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
-                    value={filterNivel}
-                    onChange={(e) => setFilterNivel(e.target.value)}
-                  >
-                    <option value="">Todos los niveles</option>
-                    <option value="Primaria">Primaria</option>
-                    <option value="Secundaria">Secundaria</option>
-                    <option value="Bachillerato">Bachillerato</option>
-                    <option value="Universidad">Universidad</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Filtros avanzados - Eliminados */}
 
           {materiasOrdenadas.length !== materias.length && (
             <div className="mt-4 text-sm text-gray-400">
@@ -581,28 +406,10 @@ function MateriasPage() {
                   <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
                   <div className="flex items-center justify-between">
                     <BookOpenIcon className="w-8 h-8 text-white" />
-                    {materia.categoria && (
-                      <span className="px-2 py-1 bg-white/20 rounded-full text-xs text-white">
-                        {materia.categoria}
-                      </span>
-                    )}
                   </div>
                   <h3 className="text-xl font-bold text-white mt-3 line-clamp-2">
                     {materia.nombre}
                   </h3>
-                  {materia.grados_nombres &&
-                    materia.grados_nombres.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {materia.grados_nombres.map((grado, idx) => (
-                          <span
-                            key={idx}
-                            className="px-2 py-1 bg-white/10 rounded-full text-xs text-white"
-                          >
-                            {grado}
-                          </span>
-                        ))}
-                      </div>
-                    )}
                 </div>
 
                 {/* Contenido de la tarjeta */}
@@ -612,70 +419,6 @@ function MateriasPage() {
                       {materia.descripcion}
                     </p>
                   )}
-
-                  <div className="space-y-3">
-                    {materia.nivel && (
-                      <div className="flex items-center space-x-3">
-                        <div className="flex-shrink-0 w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
-                          <AcademicCapIcon className="w-4 h-4 text-blue-400" />
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">
-                            Nivel Educativo
-                          </p>
-                          <p className="text-white text-sm font-medium">
-                            {materia.nivel}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {materia.creditos && (
-                      <div className="flex items-center space-x-3">
-                        <div className="flex-shrink-0 w-8 h-8 bg-yellow-500/20 rounded-full flex items-center justify-center">
-                          <span className="text-yellow-400 text-sm font-bold">
-                            C
-                          </span>
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">Créditos</p>
-                          <p className="text-white text-sm font-medium">
-                            {materia.creditos}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {materia.horas_semanales && (
-                      <div className="flex items-center space-x-3">
-                        <div className="flex-shrink-0 w-8 h-8 bg-green-500/20 rounded-full flex items-center justify-center">
-                          <ClockIcon className="w-4 h-4 text-green-400" />
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">
-                            Horas Semanales
-                          </p>
-                          <p className="text-white text-sm font-medium">
-                            {materia.horas_semanales}h
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {materia.prerequisitos && (
-                      <div className="flex items-center space-x-3">
-                        <div className="flex-shrink-0 w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center">
-                          <span className="text-red-400 text-sm">⚠</span>
-                        </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">Prerequisitos</p>
-                          <p className="text-white text-sm font-medium line-clamp-1">
-                            {materia.prerequisitos}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </div>
 
                 {/* Botones de acción */}
@@ -941,136 +684,6 @@ function MateriasPage() {
                         className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200 resize-none"
                         value={descripcion}
                         onChange={(e) => setDescripcion(e.target.value)}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-300 mb-3">
-                        Grados donde se imparte *
-                      </label>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {grados.map((grado) => (
-                          <label
-                            key={grado.id_grado}
-                            className="flex items-center space-x-3 p-3 bg-gray-800 border border-gray-600 rounded-lg cursor-pointer hover:bg-gray-700 transition-colors duration-200"
-                          >
-                            <input
-                              type="checkbox"
-                              checked={gradosSeleccionados.includes(
-                                grado.id_grado
-                              )}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setGradosSeleccionados([
-                                    ...gradosSeleccionados,
-                                    grado.id_grado,
-                                  ]);
-                                } else {
-                                  setGradosSeleccionados(
-                                    gradosSeleccionados.filter(
-                                      (id) => id !== grado.id_grado
-                                    )
-                                  );
-                                }
-                              }}
-                              className="w-4 h-4 text-purple-600 bg-gray-700 border-gray-600 rounded focus:ring-purple-500 focus:ring-2"
-                            />
-                            <span className="text-white text-sm">
-                              {grado.nombre}
-                            </span>
-                          </label>
-                        ))}
-                      </div>
-                      {gradosSeleccionados.length > 0 && (
-                        <p className="text-sm text-purple-400 mt-2">
-                          {gradosSeleccionados.length} grado(s) seleccionado(s)
-                        </p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Categoría
-                      </label>
-                      <select
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
-                        value={categoria}
-                        onChange={(e) => setCategoria(e.target.value)}
-                      >
-                        <option value="">Seleccionar categoría</option>
-                        <option value="Ciencias">Ciencias</option>
-                        <option value="Matemáticas">Matemáticas</option>
-                        <option value="Humanidades">Humanidades</option>
-                        <option value="Idiomas">Idiomas</option>
-                        <option value="Arte">Arte</option>
-                        <option value="Deportes">Deportes</option>
-                        <option value="Tecnología">Tecnología</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Nivel Educativo
-                      </label>
-                      <select
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
-                        value={nivel}
-                        onChange={(e) => setNivel(e.target.value)}
-                      >
-                        <option value="">Seleccionar nivel</option>
-                        <option value="Primaria">Primaria</option>
-                        <option value="Secundaria">Secundaria</option>
-                        <option value="Bachillerato">Bachillerato</option>
-                        <option value="Universidad">Universidad</option>
-                      </select>
-                    </div>
-                  </div>
-                </section>
-
-                {/* Información Académica */}
-                <section>
-                  <div className="flex items-center mb-6">
-                    <div className="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center mr-3">
-                      <AcademicCapIcon className="w-5 h-5 text-blue-400" />
-                    </div>
-                    <h4 className="text-xl font-bold text-white">
-                      Información Académica
-                    </h4>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Créditos
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="Ej: 3"
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                        value={creditos}
-                        onChange={(e) => setCreditos(e.target.value)}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Horas Semanales
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        placeholder="Ej: 4"
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                        value={horasSemanales}
-                        onChange={(e) => setHorasSemanales(e.target.value)}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Prerequisitos
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="Ej: Álgebra Básica, Geometría"
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                        value={prerequisitos}
-                        onChange={(e) => setPrerequisitos(e.target.value)}
                       />
                     </div>
                   </div>

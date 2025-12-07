@@ -1,5 +1,6 @@
 import React, {useState} from "react";
 import {useNavigate} from "react-router-dom";
+import Toast from "../components/Toast";
 import {
   School,
   User,
@@ -14,6 +15,7 @@ import {
   ArrowRight,
   Upload,
   Image as ImageIcon,
+  LogIn,
 } from "lucide-react";
 import api from "../api/axiosConfig";
 import {setTokenWithExpiration} from "../utils/tokenUtils";
@@ -25,6 +27,15 @@ function SetupInicial({setToken, setNecesitaSetup}) {
   const [error, setError] = useState("");
   const [logoPreview, setLogoPreview] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message, type = "success") => {
+    setToast({show: true, message, type});
+  };
 
   // Datos del administrador
   const [adminData, setAdminData] = useState({
@@ -160,19 +171,18 @@ function SetupInicial({setToken, setNecesitaSetup}) {
 
       console.log("✅ Respuesta del servidor:", response.data);
 
-      // Guardar token
-      setTokenWithExpiration(response.data.token);
-      setToken(response.data.token);
+      // Mostrar mensaje de éxito
+      showToast(
+        `¡Registro exitoso! Se ha enviado un email de verificación a ${adminData.email}. Por favor revisa tu bandeja de entrada.`,
+        "success"
+      );
 
-      // Actualizar estado de setup
-      setNecesitaSetup(false);
-
-      console.log("🔑 Token guardado, redirigiendo...");
-
-      // Pequeño delay para asegurar que el token se guardó
+      // Redirigir a página de email no verificado después de un momento
       setTimeout(() => {
-        window.location.href = "/";
-      }, 500);
+        navigate("/email-no-verificado", {
+          state: {email: adminData.email},
+        });
+      }, 2000);
     } catch (err) {
       console.error("Error en setup:", err);
       console.error("Error completo:", {
@@ -610,10 +620,28 @@ function SetupInicial({setToken, setNecesitaSetup}) {
           )}
         </div>
 
-        <p className="text-center text-gray-400 mt-6 text-sm">
-          © 2025 Sistema de Gestión Escolar - Todos los derechos reservados
-        </p>
+        {/* Footer */}
+        <div className="text-center mt-6">
+          <p className="text-gray-400 text-sm mb-3">
+            © 2025 Sistema de Gestión Escolar - Todos los derechos reservados
+          </p>
+          <button
+            onClick={() => navigate("/login")}
+            className="text-blue-300 hover:text-blue-200 text-sm underline transition-colors duration-200"
+          >
+            ¿Ya tienes cuenta? Inicia sesión aquí
+          </button>
+        </div>
       </div>
+
+      {/* Toast Notifications */}
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({show: false, message: "", type: "success"})}
+        />
+      )}
     </div>
   );
 }

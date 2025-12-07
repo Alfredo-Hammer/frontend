@@ -17,6 +17,7 @@ import {
   UsersIcon,
   EnvelopeIcon,
   PhoneIcon,
+  ShieldExclamationIcon,
 } from "@heroicons/react/24/solid";
 import PageHeader from "../components/PageHeader";
 
@@ -275,7 +276,7 @@ function UsuariosPage() {
     return colores[id_rol] || "bg-gray-500/10 text-gray-400 border-gray-500/20";
   };
 
-  // Filtrar usuarios
+  // Filtrar usuarios (excluir profesores - se gestionan desde página de Profesores)
   const usuariosFiltrados = usuarios.filter((usuario) => {
     const matchSearch =
       usuario.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -292,11 +293,12 @@ function UsuariosPage() {
     return matchSearch && matchRol && matchEstado;
   });
 
-  // Estadísticas
+  // Estadísticas (incluir todos los usuarios)
   const stats = {
     total: usuarios.length,
     activos: usuarios.filter((u) => u.activo).length,
     inactivos: usuarios.filter((u) => !u.activo).length,
+    profesores: usuarios.filter((u) => u.tipo_usuario === "Profesor").length,
     porRol: roles.map((rol) => ({
       nombre: rol.nombre,
       cantidad: usuarios.filter((u) => u.id_rol === rol.id_rol).length,
@@ -320,7 +322,7 @@ function UsuariosPage() {
         {/* Header Moderno y Compacto */}
         <PageHeader
           title="Gestión de Usuarios"
-          subtitle="Administra usuarios del sistema y sus permisos"
+          subtitle="Administra todos los usuarios del sistema incluyendo profesores. Activa/desactiva cuentas y gestiona permisos de acceso."
           icon={UserGroupIcon}
           gradientFrom="indigo-600"
           gradientTo="purple-600"
@@ -332,7 +334,8 @@ function UsuariosPage() {
           stats={{
             "Total Usuarios": usuarios.length,
             Activos: usuarios.filter((u) => u.activo).length,
-            Inactivos: usuarios.filter((u) => !u.activo).length,
+            Profesores: usuarios.filter((u) => u.tipo_usuario === "Profesor")
+              .length,
           }}
           actions={
             <button
@@ -471,7 +474,10 @@ function UsuariosPage() {
                     Teléfono
                   </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
-                    Rol
+                    Tipo de Usuario
+                  </th>
+                  <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
+                    Email Verificado
                   </th>
                   <th className="px-6 py-4 text-left text-sm font-semibold text-gray-300">
                     Estado
@@ -485,7 +491,7 @@ function UsuariosPage() {
                 {usuariosFiltrados.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="6"
+                      colSpan="7"
                       className="px-6 py-8 text-center text-gray-400"
                     >
                       No se encontraron usuarios
@@ -534,11 +540,48 @@ function UsuariosPage() {
                       </td>
                       <td className="px-6 py-4">
                         <span
-                          className={`px-3 py-1 rounded-full text-sm font-medium border ${getRolColor(
-                            usuario.id_rol
-                          )}`}
+                          className={`px-3 py-1 rounded-full text-sm font-medium border ${
+                            usuario.tipo_usuario === "Profesor"
+                              ? "bg-purple-500/10 text-purple-400 border-purple-500/20"
+                              : usuario.tipo_usuario === "Administrador"
+                              ? "bg-red-500/10 text-red-400 border-red-500/20"
+                              : usuario.tipo_usuario === "Secretariado"
+                              ? "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                              : "bg-gray-500/10 text-gray-400 border-gray-500/20"
+                          }`}
                         >
-                          {getRolNombre(usuario.id_rol)}
+                          {usuario.tipo_usuario || usuario.rol}
+                        </span>
+                        {usuario.id_profesor && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            ID Profesor: {usuario.id_profesor}
+                          </p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span
+                          className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1.5 w-fit ${
+                            usuario.email_verificado
+                              ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                              : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                          }`}
+                          title={
+                            usuario.email_verificado
+                              ? "Email verificado"
+                              : "Pendiente de verificación"
+                          }
+                        >
+                          {usuario.email_verificado ? (
+                            <>
+                              <CheckCircleIcon className="w-4 h-4" />
+                              Verificado
+                            </>
+                          ) : (
+                            <>
+                              <ShieldExclamationIcon className="w-4 h-4" />
+                              Pendiente
+                            </>
+                          )}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -691,12 +734,17 @@ function UsuariosPage() {
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value="">Seleccionar rol</option>
-                    {roles.map((rol) => (
-                      <option key={rol.id_rol} value={rol.id_rol}>
-                        {rol.nombre}
-                      </option>
-                    ))}
+                    {roles
+                      .filter((rol) => rol.id_rol !== 2) // Excluir "Profesor" - se crean desde la página de Profesores
+                      .map((rol) => (
+                        <option key={rol.id_rol} value={rol.id_rol}>
+                          {rol.nombre}
+                        </option>
+                      ))}
                   </select>
+                  <p className="text-gray-500 text-xs mt-1">
+                    💡 Los profesores se crean desde la página de Profesores
+                  </p>
                 </div>
 
                 {/* Password (solo al crear) */}

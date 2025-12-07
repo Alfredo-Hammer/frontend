@@ -3,6 +3,7 @@ import {useNavigate} from "react-router-dom";
 import api from "../api/axiosConfig";
 import services from "../api/services";
 import Loader from "./Loader";
+import RecuperarPasswordModal from "./RecuperarPasswordModal";
 import {setTokenWithExpiration} from "../utils/tokenUtils";
 import {
   EyeIcon,
@@ -23,6 +24,7 @@ function Login({setToken}) {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
+  const [mostrarRecuperacion, setMostrarRecuperacion] = useState(false);
   const navigate = useNavigate();
 
   const handleLogin = async (e) => {
@@ -46,6 +48,14 @@ function Login({setToken}) {
         navigate("/");
       }, 100);
     } catch (err) {
+      // Manejar email no verificado
+      if (err.response?.data?.requiereVerificacion) {
+        navigate("/email-no-verificado", {
+          state: {email: err.response.data.email},
+        });
+        return;
+      }
+
       // Manejar errores específicos
       if (err.response?.data?.error === "CUENTA_INACTIVA") {
         setError(
@@ -53,7 +63,8 @@ function Login({setToken}) {
         );
       } else {
         setError(
-          err.response?.data?.message ||
+          err.response?.data?.mensaje ||
+            err.response?.data?.message ||
             err.response?.data?.error ||
             "Error al iniciar sesión"
         );
@@ -65,29 +76,37 @@ function Login({setToken}) {
   if (loading) return <Loader text="Iniciando sesión..." />;
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left Side - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-cyan-600 via-blue-600 to-indigo-700 relative overflow-hidden">
+    <div className="min-h-screen flex bg-gray-950">
+      {/* Left Side - Branding (Dark Theme) */}
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 relative overflow-hidden border-r border-gray-800">
         {/* Background Effects */}
         <div className="absolute inset-0">
-          <div className="absolute top-20 left-20 w-64 h-64 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-32 right-16 w-80 h-80 bg-cyan-300/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-          <div className="absolute top-1/2 left-1/3 w-48 h-48 bg-blue-300/10 rounded-full blur-2xl animate-pulse delay-500"></div>
+          <div className="absolute top-20 left-20 w-72 h-72 bg-blue-500/10 rounded-full blur-3xl animate-pulse"></div>
+          <div
+            className="absolute bottom-32 right-16 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl animate-pulse"
+            style={{animationDelay: "1s"}}
+          ></div>
+          <div
+            className="absolute top-1/2 left-1/3 w-64 h-64 bg-cyan-500/5 rounded-full blur-2xl animate-pulse"
+            style={{animationDelay: "0.5s"}}
+          ></div>
         </div>
 
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-center items-center text-white p-12 w-full">
           {/* Logo */}
-          <div className="flex items-center mb-8">
-            <div className="p-4 bg-white/10 backdrop-blur-md rounded-2xl mr-4">
+          <div className="flex items-center mb-12">
+            <div className="p-4 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl mr-4 shadow-2xl">
               <AcademicCapIcon className="h-16 w-16 text-white" />
             </div>
             <div>
               <h1 className="text-5xl font-extrabold tracking-tight">
                 <span className="text-white">Sistema</span>
-                <span className="text-cyan-200 ml-2">AOC</span>
+                <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent ml-2">
+                  AOC
+                </span>
               </h1>
-              <p className="text-xl text-cyan-100 mt-2">
+              <p className="text-xl text-gray-400 mt-2 font-medium">
                 Gestión Escolar Inteligente
               </p>
             </div>
@@ -95,39 +114,43 @@ function Login({setToken}) {
 
           {/* Features */}
           <div className="space-y-6 max-w-md">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
-                <UserIcon className="h-6 w-6 text-cyan-200" />
+            <div className="flex items-center space-x-4 bg-gray-800/50 backdrop-blur-sm p-4 rounded-2xl border border-gray-700/50 hover:border-blue-500/50 transition-all duration-300">
+              <div className="p-3 bg-gradient-to-br from-blue-600 to-blue-700 rounded-xl shadow-lg">
+                <UserIcon className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg">
+                <h3 className="font-semibold text-lg text-white">
                   Gestión de Estudiantes
                 </h3>
-                <p className="text-cyan-100 text-sm">
+                <p className="text-gray-400 text-sm">
                   Control completo de alumnos y profesores
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
-                <ShieldCheckIcon className="h-6 w-6 text-blue-200" />
+            <div className="flex items-center space-x-4 bg-gray-800/50 backdrop-blur-sm p-4 rounded-2xl border border-gray-700/50 hover:border-indigo-500/50 transition-all duration-300">
+              <div className="p-3 bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-xl shadow-lg">
+                <ShieldCheckIcon className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg">Seguridad Avanzada</h3>
-                <p className="text-blue-100 text-sm">
+                <h3 className="font-semibold text-lg text-white">
+                  Seguridad Avanzada
+                </h3>
+                <p className="text-gray-400 text-sm">
                   Protección de datos y acceso seguro
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-white/10 rounded-xl backdrop-blur-sm">
-                <StarIcon className="h-6 w-6 text-indigo-200" />
+            <div className="flex items-center space-x-4 bg-gray-800/50 backdrop-blur-sm p-4 rounded-2xl border border-gray-700/50 hover:border-cyan-500/50 transition-all duration-300">
+              <div className="p-3 bg-gradient-to-br from-cyan-600 to-cyan-700 rounded-xl shadow-lg">
+                <StarIcon className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h3 className="font-semibold text-lg">Experiencia Premium</h3>
-                <p className="text-indigo-100 text-sm">
+                <h3 className="font-semibold text-lg text-white">
+                  Experiencia Premium
+                </h3>
+                <p className="text-gray-400 text-sm">
                   Interfaz moderna y fácil de usar
                 </p>
               </div>
@@ -136,50 +159,59 @@ function Login({setToken}) {
 
           {/* Stats */}
           <div className="mt-12 grid grid-cols-3 gap-8 text-center">
-            <div>
-              <div className="text-3xl font-bold text-white">500+</div>
-              <div className="text-cyan-200 text-sm">Estudiantes</div>
+            <div className="bg-gray-800/30 backdrop-blur-sm p-4 rounded-2xl border border-gray-700/50">
+              <div className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent">
+                500+
+              </div>
+              <div className="text-gray-400 text-sm mt-1">Estudiantes</div>
             </div>
-            <div>
-              <div className="text-3xl font-bold text-white">50+</div>
-              <div className="text-blue-200 text-sm">Profesores</div>
+            <div className="bg-gray-800/30 backdrop-blur-sm p-4 rounded-2xl border border-gray-700/50">
+              <div className="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                50+
+              </div>
+              <div className="text-gray-400 text-sm mt-1">Profesores</div>
             </div>
-            <div>
-              <div className="text-3xl font-bold text-white">10+</div>
-              <div className="text-indigo-200 text-sm">Escuelas</div>
+            <div className="bg-gray-800/30 backdrop-blur-sm p-4 rounded-2xl border border-gray-700/50">
+              <div className="text-3xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+                10+
+              </div>
+              <div className="text-gray-400 text-sm mt-1">Escuelas</div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Right Side - Login Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Right Side - Login Form (Dark Theme) */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gray-950">
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <div className="lg:hidden text-center mb-8">
-            <div className="inline-flex items-center p-3 bg-gradient-to-br from-cyan-600 to-blue-600 rounded-2xl mb-4">
+            <div className="inline-flex items-center p-3 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl mb-4 shadow-2xl">
               <AcademicCapIcon className="h-12 w-12 text-white" />
             </div>
-            <h1 className="text-3xl font-extrabold text-gray-900">
-              Sistema <span className="text-cyan-600">AOC</span>
+            <h1 className="text-3xl font-extrabold text-white">
+              Sistema{" "}
+              <span className="bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
+                AOC
+              </span>
             </h1>
-            <p className="text-gray-600">Gestión Escolar</p>
+            <p className="text-gray-400">Gestión Escolar</p>
           </div>
 
           {/* Login Card */}
-          <div className="bg-white rounded-3xl shadow-2xl p-8 border border-gray-200">
+          <div className="bg-gray-900 rounded-3xl shadow-2xl p-8 border border-gray-800">
             <div className="text-center mb-8">
-              <h2 className="text-3xl font-bold text-gray-900 mb-2">
-                Bienvenido
+              <h2 className="text-3xl font-bold text-white mb-2">
+                Bienvenido de vuelta
               </h2>
-              <p className="text-gray-600">
+              <p className="text-gray-400">
                 Ingresa tus credenciales para continuar
               </p>
             </div>
 
             {error && (
-              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
-                <p className="text-red-600 text-sm font-medium flex items-center">
+              <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl backdrop-blur-sm">
+                <p className="text-red-400 text-sm font-medium flex items-center">
                   <svg
                     className="w-4 h-4 mr-2"
                     fill="currentColor"
@@ -199,12 +231,12 @@ function Login({setToken}) {
             <form onSubmit={handleLogin} className="space-y-6">
               {/* Email Field */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Correo Electrónico
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <EnvelopeIcon className="h-5 w-5 text-gray-400" />
+                    <EnvelopeIcon className="h-5 w-5 text-gray-500" />
                   </div>
                   <input
                     type="email"
@@ -212,7 +244,7 @@ function Login({setToken}) {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full pl-12 pr-4 py-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 bg-gray-50 hover:bg-white"
+                    className="w-full pl-12 pr-4 py-4 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-white placeholder-gray-500 bg-gray-800 hover:bg-gray-750"
                     disabled={loading}
                   />
                 </div>
@@ -220,12 +252,12 @@ function Login({setToken}) {
 
               {/* Password Field */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Contraseña
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <LockClosedIcon className="h-5 w-5 text-gray-400" />
+                    <LockClosedIcon className="h-5 w-5 text-gray-500" />
                   </div>
                   <input
                     type={showPassword ? "text" : "password"}
@@ -233,7 +265,7 @@ function Login({setToken}) {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="w-full pl-12 pr-12 py-4 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-500 bg-gray-50 hover:bg-white"
+                    className="w-full pl-12 pr-12 py-4 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-white placeholder-gray-500 bg-gray-800 hover:bg-gray-750"
                     disabled={loading}
                   />
                   <button
@@ -242,9 +274,9 @@ function Login({setToken}) {
                     onClick={() => setShowPassword(!showPassword)}
                   >
                     {showPassword ? (
-                      <EyeSlashIcon className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
+                      <EyeSlashIcon className="h-5 w-5 text-gray-500 hover:text-gray-300 transition-colors" />
                     ) : (
-                      <EyeIcon className="h-5 w-5 text-gray-400 hover:text-gray-600 transition-colors" />
+                      <EyeIcon className="h-5 w-5 text-gray-500 hover:text-gray-300 transition-colors" />
                     )}
                   </button>
                 </div>
@@ -252,13 +284,20 @@ function Login({setToken}) {
 
               {/* Remember & Forgot */}
               <div className="flex items-center justify-between mb-6">
-                <label className="flex items-center">
+                <label className="flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    className="h-4 w-4 text-cyan-600 focus:ring-cyan-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-600 rounded bg-gray-800"
                   />
-                  <span className="ml-2 text-sm text-gray-600">Recordarme</span>
+                  <span className="ml-2 text-sm text-gray-400">Recordarme</span>
                 </label>
+                <button
+                  type="button"
+                  onClick={() => setMostrarRecuperacion(true)}
+                  className="text-sm text-blue-400 hover:text-blue-300 transition-colors font-medium"
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
               </div>
 
               {/* Login Button */}
@@ -266,9 +305,11 @@ function Login({setToken}) {
                 type="submit"
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
-                className={`w-full bg-gradient-to-r from-cyan-600 to-blue-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-xl transform transition-all duration-300 flex items-center justify-center ${
-                  loading ? "opacity-75 cursor-not-allowed" : "hover:scale-105"
-                } ${isHovered ? "from-cyan-700 to-blue-700" : ""}`}
+                className={`w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white py-4 rounded-xl font-semibold text-lg shadow-lg hover:shadow-blue-500/25 transform transition-all duration-300 flex items-center justify-center ${
+                  loading
+                    ? "opacity-75 cursor-not-allowed"
+                    : "hover:scale-[1.02] hover:from-blue-700 hover:to-indigo-700"
+                }`}
                 disabled={loading}
               >
                 {loading ? (
@@ -306,11 +347,17 @@ function Login({setToken}) {
 
           {/* Footer */}
           <div className="mt-8 text-center text-sm text-gray-500">
-            <p>© 2024 Sistema AOC. Todos los derechos reservados.</p>
-            <p className="mt-1">Versión 2.0 - Gestión Escolar Inteligente</p>
+            <p>© 2025 Sistema AOC. Todos los derechos reservados.</p>
+            <p className="mt-1">Gestión Escolar</p>
           </div>
         </div>
       </div>
+
+      {/* Modal de Recuperación de Contraseña */}
+      <RecuperarPasswordModal
+        isOpen={mostrarRecuperacion}
+        onClose={() => setMostrarRecuperacion(false)}
+      />
     </div>
   );
 }

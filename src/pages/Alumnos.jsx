@@ -10,8 +10,10 @@ import {
   EyeIcon,
 } from "@heroicons/react/24/solid";
 import {useNavigate, useSearchParams} from "react-router-dom";
-import {departamentos, municipiosPorDepartamento} from "../data/nicaragua";
 import PageHeader from "../components/PageHeader";
+import services from "../api/services";
+import ConfirmModal from "../components/ConfirmModal";
+import Toast from "../components/Toast";
 
 const API_BASE_URL = "http://localhost:4000";
 
@@ -23,6 +25,15 @@ function Alumnos() {
   const [showModal, setShowModal] = useState(false);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
+
+  // Estados para confirmación de eliminación
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [alumnoToDelete, setAlumnoToDelete] = useState(null);
+
+  // Estados para Toast
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [toastType, setToastType] = useState("success");
 
   // Nuevos estados para funcionalidades adicionales
   const [searchTerm, setSearchTerm] = useState("");
@@ -56,6 +67,12 @@ function Alumnos() {
   const [imagenFile, setImagenFile] = useState(null);
   const [municipiosFiltrados, setMunicipiosFiltrados] = useState([]);
 
+  // Estados para datos de Nicaragua desde backend
+  const [departamentos, setDepartamentos] = useState([]);
+  const [municipiosPorDepartamento, setMunicipiosPorDepartamento] = useState(
+    {}
+  );
+
   const [showEditModal, setShowEditModal] = useState(false);
   const [alumnoEditar, setAlumnoEditar] = useState(null);
 
@@ -74,8 +91,38 @@ function Alumnos() {
   // Cargar alumnos al inicio
   useEffect(() => {
     fetchUser();
+    fetchDatosNicaragua();
     // eslint-disable-next-line
   }, []);
+
+  // Función para cargar datos de Nicaragua desde backend
+  const fetchDatosNicaragua = async () => {
+    try {
+      console.log("🔄 Cargando datos de Nicaragua...");
+      const res = await api.get(services.nicaraguaTodos);
+      console.log("📦 Respuesta del backend:", res.data);
+      console.log("🏛️ Departamentos recibidos:", res.data.departamentos);
+      console.log(
+        "🏙️ Municipios recibidos:",
+        Object.keys(res.data.municipiosPorDepartamento).length,
+        "departamentos con municipios"
+      );
+
+      setDepartamentos(res.data.departamentos);
+      setMunicipiosPorDepartamento(res.data.municipiosPorDepartamento);
+
+      console.log(
+        "✅ Estados actualizados - Departamentos:",
+        res.data.departamentos.length
+      );
+    } catch (error) {
+      console.error("❌ Error al cargar datos de Nicaragua:", error);
+      console.error(
+        "❌ Detalles del error:",
+        error.response?.data || error.message
+      );
+    }
+  };
 
   useEffect(() => {
     if (user) {
@@ -84,13 +131,38 @@ function Alumnos() {
     // eslint-disable-next-line
   }, [user]);
 
+  // Efecto para filtrar municipios cuando cambia el departamento
+  useEffect(() => {
+    if (departamento && municipiosPorDepartamento[departamento]) {
+      console.log(`🔍 Filtrando municipios para departamento: ${departamento}`);
+      const municipios = municipiosPorDepartamento[departamento];
+      console.log(`📍 Municipios encontrados:`, municipios);
+      setMunicipiosFiltrados(municipios);
+
+      // Si el municipio actual no está en la lista filtrada, limpiarlo
+      if (municipio && !municipios.includes(municipio)) {
+        console.log(
+          `⚠️ El municipio "${municipio}" no pertenece a ${departamento}, limpiando...`
+        );
+        setMunicipio("");
+      }
+    } else {
+      console.log("📍 No hay departamento seleccionado o no hay datos");
+      setMunicipiosFiltrados([]);
+    }
+  }, [departamento, municipiosPorDepartamento, municipio]);
+
   const fetchUser = async () => {
     try {
       const res = await api.get("/api/usuarios/perfil", {
         headers: {Authorization: `Bearer ${token}`},
       });
+
+      const userRole = res.data.usuario?.rol || res.data.rol;
+      console.log("🔍 Rol del usuario detectado:", userRole);
+
       setUser({
-        rol: res.data.usuario?.rol || res.data.rol,
+        rol: userRole,
         id_profesor: res.data.usuario?.id_profesor || res.data.id_profesor,
       });
 
@@ -111,6 +183,11 @@ function Alumnos() {
   useEffect(() => {
     if (showModal) {
       fetchEscuelas();
+      // Cargar datos de Nicaragua si no están cargados
+      if (departamentos.length === 0) {
+        console.log("🔄 Cargando datos de Nicaragua para nuevo alumno...");
+        fetchDatosNicaragua();
+      }
     }
     // eslint-disable-next-line
   }, [showModal]);
@@ -140,11 +217,26 @@ function Alumnos() {
   // Efecto para cargar datos al editar
   useEffect(() => {
     if (showEditModal && alumnoEditar) {
-      // Cargar escuelas si no están cargadas
-      if (escuelas.length === 0) fetchEscuelas();
-      // Cargar grados y secciones según el alumno a editar
-      if (alumnoEditar.escuelaId) fetchGrados(alumnoEditar.escuelaId);
-      if (alumnoEditar.gradoId) fetchSecciones(alumnoEditar.gradoId);
+      console.log("📝 Datos del alumno a editar:", alumnoEditar);
+
+      // Cargar datos de Nicaragua si no están cargados
+      if (departamentos.length === 0) {
+        console.log("🔄 Cargando datos de Nicaragua para edición...");
+        fetchDatosNicaragua();
+      }
+
+      // Cargar grados de la escuela del usuario
+      if (escuela?.id_escuela) {
+        console.log("🏫 Cargando grados para escuela:", escuela.id_escuela);
+        fetchGrados(escuela.id_escuela);
+      }
+
+      // Cargar secciones del grado del alumno
+      const gradoDelAlumno = alumnoEditar.gradoid || alumnoEditar.gradoId;
+      if (gradoDelAlumno) {
+        console.log("📚 Cargando secciones para grado:", gradoDelAlumno);
+        fetchSecciones(gradoDelAlumno);
+      }
     }
     // eslint-disable-next-line
   }, [showEditModal, alumnoEditar]);
@@ -344,7 +436,9 @@ function Alumnos() {
   const handleRegistrar = async (e) => {
     e.preventDefault();
     if (!nombre || !apellido || !email || !gradoId || !seccionId) {
-      setMensaje("Completa todos los campos obligatorios.");
+      setToastMessage("Completa todos los campos obligatorios.");
+      setToastType("warning");
+      setShowToast(true);
       return;
     }
     try {
@@ -357,7 +451,9 @@ function Alumnos() {
           alumno.email && alumno.email.toLowerCase() === email.toLowerCase()
       );
       if (emailExistente) {
-        setMensaje("El email ya está registrado. Por favor, usa otro.");
+        setToastMessage("El email ya está registrado. Por favor, usa otro.");
+        setToastType("warning");
+        setShowToast(true);
         return;
       }
 
@@ -390,7 +486,11 @@ function Alumnos() {
           "Content-Type": "multipart/form-data",
         },
       });
-      setMensaje("Alumno registrado correctamente");
+
+      setToastMessage("Alumno registrado correctamente");
+      setToastType("success");
+      setShowToast(true);
+
       setShowModal(false);
       setNombre("");
       setApellido("");
@@ -411,20 +511,41 @@ function Alumnos() {
       setImagenFile(null);
       fetchAlumnos();
     } catch (err) {
-      setMensaje(err.response?.data?.message || "Error al registrar alumno");
+      setToastMessage(
+        err.response?.data?.message || "Error al registrar alumno"
+      );
+      setToastType("error");
+      setShowToast(true);
     }
   };
 
-  const handleEliminar = async (id_alumno) => {
-    if (!window.confirm("¿Seguro que deseas eliminar este alumno?")) return;
+  const handleEliminar = (id_alumno) => {
+    setAlumnoToDelete(id_alumno);
+    setShowConfirmDelete(true);
+  };
+
+  const confirmarEliminarAlumno = async () => {
+    if (!alumnoToDelete) return;
+
     try {
-      await api.delete(`/api/alumnos/${id_alumno}`, {
+      await api.delete(`/api/alumnos/${alumnoToDelete}`, {
         headers: {Authorization: `Bearer ${token}`},
       });
-      setMensaje("Alumno eliminado correctamente");
+
+      setToastMessage("Alumno eliminado correctamente");
+      setToastType("success");
+      setShowToast(true);
+
       fetchAlumnos();
     } catch (err) {
-      setMensaje("Error al eliminar alumno");
+      setToastMessage(
+        err.response?.data?.message || "Error al eliminar alumno"
+      );
+      setToastType("error");
+      setShowToast(true);
+    } finally {
+      setShowConfirmDelete(false);
+      setAlumnoToDelete(null);
     }
   };
 
@@ -444,9 +565,11 @@ function Alumnos() {
           alumno.id_estudiante !== alumnoEditar.id_estudiante
       );
       if (emailExistente) {
-        setMensaje(
+        setToastMessage(
           "El email ya está registrado para otro alumno. Por favor, usa otro."
         );
+        setToastType("warning");
+        setShowToast(true);
         return;
       }
 
@@ -479,7 +602,11 @@ function Alumnos() {
           "Content-Type": "multipart/form-data",
         },
       });
-      setMensaje("Alumno actualizado correctamente");
+
+      setToastMessage("Alumno actualizado correctamente");
+      setToastType("success");
+      setShowToast(true);
+
       setShowEditModal(false);
       setAlumnoEditar(null);
       // Limpiar formulario
@@ -504,7 +631,11 @@ function Alumnos() {
       setImagenFile(null);
       fetchAlumnos();
     } catch (err) {
-      setMensaje(err.response?.data?.message || "Error al actualizar alumno");
+      setToastMessage(
+        err.response?.data?.message || "Error al actualizar alumno"
+      );
+      setToastType("error");
+      setShowToast(true);
     }
   };
 
@@ -515,7 +646,16 @@ function Alumnos() {
     setApellido(alumno.apellido || "");
     setEmail(alumno.email || "");
     setDireccionExacta(alumno.direccion_exacta || "");
-    setFechaNacimiento(alumno.fecha_nacimiento || "");
+
+    // Formatear la fecha para el input type="date" (solo YYYY-MM-DD)
+    if (alumno.fecha_nacimiento) {
+      const fecha = new Date(alumno.fecha_nacimiento);
+      const fechaFormateada = fecha.toISOString().split("T")[0];
+      setFechaNacimiento(fechaFormateada);
+    } else {
+      setFechaNacimiento("");
+    }
+
     setCodigoMined(alumno.codigo_mined || "");
     setGenero(alumno.genero || "");
     setNombrePadre(alumno.nombre_padre || "");
@@ -526,8 +666,9 @@ function Alumnos() {
     setMunicipio(alumno.municipio || "");
     setDepartamento(alumno.departamento || "");
     setNivelEducativo(alumno.nivel_educativo || "");
-    setGradoId(alumno.gradoid || "");
-    setSeccionId(alumno.seccionid || "");
+    setEscuelaId(alumno.escuelaid || alumno.escuelaId || "");
+    setGradoId(alumno.gradoid || alumno.gradoId || "");
+    setSeccionId(alumno.seccionid || alumno.seccionId || "");
     setShowEditModal(true);
   };
 
@@ -1379,7 +1520,7 @@ function Alumnos() {
                   </div>
                 </section>
 
-                {/* Información Académica */}
+                {/* Información Académica - Editable solo para admin */}
                 <section>
                   <div className="flex items-center mb-6">
                     <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center mr-3">
@@ -1387,71 +1528,197 @@ function Alumnos() {
                     </div>
                     <h2 className="text-xl font-bold text-white">
                       Información Académica
+                      {(() => {
+                        const rolLower = user?.rol?.toLowerCase();
+                        const isAdmin =
+                          rolLower === "admin" || rolLower === "administrador";
+                        return (
+                          !isAdmin &&
+                          showEditModal && (
+                            <span className="text-sm text-gray-400 ml-2">
+                              (Solo admin puede editar)
+                            </span>
+                          )
+                        );
+                      })()}
                     </h2>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Escuela - Siempre solo lectura (mono-escuela) */}
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Escuela *
+                        Escuela
                       </label>
-                      <select
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                        value={escuelaId}
-                        onChange={(e) => setEscuelaId(e.target.value)}
-                        required
-                      >
-                        <option value="">Seleccionar escuela</option>
-                        {escuelas.map((esc) => (
-                          <option key={esc.id_escuela} value={esc.id_escuela}>
-                            {esc.nombre}
-                          </option>
-                        ))}
-                      </select>
+                      <input
+                        type="text"
+                        className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-gray-300 cursor-not-allowed"
+                        value={escuela?.nombre || alumnoEditar?.escuela || ""}
+                        disabled
+                        readOnly
+                      />
+                      <p className="text-xs text-gray-500 mt-1">
+                        ℹ️ Sistema mono-escuela
+                      </p>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Grado *
-                      </label>
-                      <select
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                        value={gradoId}
-                        onChange={(e) => setGradoId(e.target.value)}
-                        required
-                        disabled={!grados.length}
-                      >
-                        <option value="">Seleccionar grado</option>
-                        {grados.map((g) => (
-                          <option key={g.id_grado} value={g.id_grado}>
-                            {g.nombre}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Sección *
-                      </label>
-                      <select
-                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
-                        value={seccionId}
-                        onChange={(e) => setSeccionId(e.target.value)}
-                        required
-                        disabled={!secciones.length}
-                      >
-                        <option value="" className="text-white">
-                          Seleccionar sección
-                        </option>
-                        {secciones.map((s) => (
-                          <option
-                            key={s.id_seccion}
-                            value={s.id_seccion}
-                            className="text-white"
+
+                    {/* Grado - Solo admin puede editar en modo edición */}
+                    {showEditModal && alumnoEditar ? (
+                      user?.rol?.toLowerCase() === "admin" ||
+                      user?.rol?.toLowerCase() === "administrador" ? (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Grado *
+                          </label>
+                          <select
+                            className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                            value={gradoId}
+                            onChange={(e) => {
+                              console.log(
+                                "📌 Cambiando grado a:",
+                                e.target.value
+                              );
+                              setGradoId(e.target.value);
+                            }}
+                            required
+                            disabled={!grados.length}
                           >
-                            {s.nombre}
+                            <option value="">Seleccionar grado</option>
+                            {(() => {
+                              console.log("📚 Estado actual gradoId:", gradoId);
+                              console.log(
+                                "📚 Grados disponibles:",
+                                grados.length
+                              );
+                              return grados.map((g) => (
+                                <option key={g.id_grado} value={g.id_grado}>
+                                  {g.nombre}
+                                </option>
+                              ));
+                            })()}
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Grado
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-gray-400 cursor-not-allowed"
+                            value={alumnoEditar.grado || ""}
+                            disabled
+                            readOnly
+                          />
+                        </div>
+                      )
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Grado *
+                        </label>
+                        <select
+                          className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                          value={gradoId}
+                          onChange={(e) => setGradoId(e.target.value)}
+                          required
+                          disabled={!grados.length}
+                        >
+                          <option value="">Seleccionar grado</option>
+                          {grados.map((g) => (
+                            <option key={g.id_grado} value={g.id_grado}>
+                              {g.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {/* Sección - Solo admin puede editar en modo edición */}
+                    {showEditModal && alumnoEditar ? (
+                      user?.rol?.toLowerCase() === "admin" ||
+                      user?.rol?.toLowerCase() === "administrador" ? (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Sección *
+                          </label>
+                          <select
+                            className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                            value={seccionId}
+                            onChange={(e) => {
+                              console.log(
+                                "📌 Cambiando sección a:",
+                                e.target.value
+                              );
+                              setSeccionId(e.target.value);
+                            }}
+                            required
+                            disabled={!secciones.length}
+                          >
+                            <option value="" className="text-white">
+                              Seleccionar sección
+                            </option>
+                            {(() => {
+                              console.log(
+                                "📝 Estado actual seccionId:",
+                                seccionId
+                              );
+                              console.log(
+                                "📝 Secciones disponibles:",
+                                secciones.length
+                              );
+                              return secciones.map((s) => (
+                                <option
+                                  key={s.id_seccion}
+                                  value={s.id_seccion}
+                                  className="text-white"
+                                >
+                                  {s.nombre_seccion || s.nombre}
+                                </option>
+                              ));
+                            })()}
+                          </select>
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-300 mb-2">
+                            Sección
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-gray-400 cursor-not-allowed"
+                            value={alumnoEditar.seccion || ""}
+                            disabled
+                            readOnly
+                          />
+                        </div>
+                      )
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-300 mb-2">
+                          Sección *
+                        </label>
+                        <select
+                          className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
+                          value={seccionId}
+                          onChange={(e) => setSeccionId(e.target.value)}
+                          required
+                          disabled={!secciones.length}
+                        >
+                          <option value="" className="text-white">
+                            Seleccionar sección
                           </option>
-                        ))}
-                      </select>
-                    </div>
+                          {secciones.map((s) => (
+                            <option
+                              key={s.id_seccion}
+                              value={s.id_seccion}
+                              className="text-white"
+                            >
+                              {s.nombre}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </section>
 
@@ -1499,26 +1766,34 @@ function Alumnos() {
                         value={departamento}
                         onChange={(e) => {
                           const dept = e.target.value;
+                          console.log("🔹 Departamento seleccionado:", dept);
                           setDepartamento(dept);
-                          setMunicipiosFiltrados(
-                            dept ? municipiosPorDepartamento[dept] || [] : []
-                          );
-                          setMunicipio("");
+                          // El useEffect se encargará de filtrar los municipios
                         }}
                       >
-                        <option value="" className="text-white">
-                          Seleccionar departamento
-                        </option>
-                        {departamentos.map((d) => (
-                          <option
-                            key={d.value}
-                            value={d.value}
-                            className="text-white"
-                          >
-                            {d.label}
-                          </option>
-                        ))}
+                        <option value="">Seleccionar departamento</option>
+                        {(() => {
+                          console.log(
+                            "🔍 Renderizando departamentos. Total:",
+                            departamentos?.length || 0
+                          );
+                          console.log("🔍 Array departamentos:", departamentos);
+                          return (
+                            departamentos &&
+                            departamentos.map((d) => (
+                              <option key={d.value} value={d.value}>
+                                {d.label}
+                              </option>
+                            ))
+                          );
+                        })()}
                       </select>
+                      {(!departamentos || departamentos.length === 0) && (
+                        <p className="text-xs text-red-400 mt-1">
+                          ⚠️ Error: No se cargaron los departamentos desde el
+                          backend
+                        </p>
+                      )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1527,20 +1802,42 @@ function Alumnos() {
                       <select
                         className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200"
                         value={municipio}
-                        onChange={(e) => setMunicipio(e.target.value)}
+                        onChange={(e) => {
+                          console.log(
+                            "🔹 Municipio seleccionado:",
+                            e.target.value
+                          );
+                          setMunicipio(e.target.value);
+                        }}
                         disabled={!departamento}
                       >
-                        <option value="" className="text-white">
+                        <option value="">
                           {departamento
                             ? "Seleccionar municipio"
                             : "Primero seleccione departamento"}
                         </option>
-                        {municipiosFiltrados.map((m) => (
-                          <option key={m} value={m} className="text-white">
-                            {m}
-                          </option>
-                        ))}
+                        {(() => {
+                          console.log(
+                            "🔍 municipiosFiltrados:",
+                            municipiosFiltrados
+                          );
+                          return (
+                            municipiosFiltrados &&
+                            municipiosFiltrados.map((m) => (
+                              <option key={m} value={m}>
+                                {m}
+                              </option>
+                            ))
+                          );
+                        })()}
                       </select>
+                      {departamento &&
+                        (!municipiosFiltrados ||
+                          municipiosFiltrados.length === 0) && (
+                          <p className="text-xs text-red-400 mt-1">
+                            ⚠️ No hay municipios para este departamento
+                          </p>
+                        )}
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -1639,53 +1936,8 @@ function Alumnos() {
                   </div>
                 </section>
 
-                {/* Información Académica (Solo visualización) */}
-                <section>
-                  <div className="flex items-center mb-6">
-                    <div className="w-10 h-10 bg-indigo-500/20 rounded-full flex items-center justify-center mr-3">
-                      <AcademicCapIcon className="w-5 h-5 text-indigo-400" />
-                    </div>
-                    <h2 className="text-xl font-bold text-white">
-                      Información Académica
-                      <span className="text-sm text-gray-400 ml-2">
-                        (Solo consulta - Contacta administrador para cambios)
-                      </span>
-                    </h2>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Escuela Actual
-                      </label>
-                      <div className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-gray-300 cursor-not-allowed">
-                        {alumnoEditar.escuela || "No asignada"}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Grado Actual
-                      </label>
-                      <div className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-gray-300 cursor-not-allowed">
-                        {alumnoEditar.grado || "No asignado"}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-300 mb-2">
-                        Sección Actual
-                      </label>
-                      <div className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-gray-300 cursor-not-allowed">
-                        {alumnoEditar.seccion || "No asignada"}
-                      </div>
-                    </div>
-                  </div>
-                </section>
-
                 {/* Botones */}
-                <div className="flex justify-between items-center pt-6 border-t border-gray-700">
-                  <div className="text-sm text-gray-400">
-                    <span className="font-medium">Nota:</span> Los cambios
-                    académicos requieren autorización del administrador
-                  </div>
+                <div className="flex justify-end items-center pt-6 border-t border-gray-700">
                   <div className="flex space-x-4">
                     <button
                       type="button"
@@ -2004,6 +2256,30 @@ function Alumnos() {
               }
             `}</style>
           </div>
+        )}
+
+        {/* Modal de Confirmación para Eliminar */}
+        <ConfirmModal
+          open={showConfirmDelete}
+          onCancel={() => {
+            setShowConfirmDelete(false);
+            setAlumnoToDelete(null);
+          }}
+          onConfirm={confirmarEliminarAlumno}
+          title="Eliminar Alumno"
+          message="¿Estás seguro de que deseas eliminar este alumno? Esta acción no se puede deshacer."
+          confirmText="Eliminar"
+          cancelText="Cancelar"
+          type="danger"
+        />
+
+        {/* Toast de Notificación */}
+        {showToast && (
+          <Toast
+            message={toastMessage}
+            type={toastType}
+            onClose={() => setShowToast(false)}
+          />
         )}
       </div>
     </div>

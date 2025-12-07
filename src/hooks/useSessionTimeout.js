@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axiosConfig';
 
-const useSessionTimeout = () => {
+const useSessionTimeout = (onSessionExpired) => {
   const [showWarning, setShowWarning] = useState(false);
   const [countdown, setCountdown] = useState(30);
   const navigate = useNavigate();
@@ -12,7 +12,7 @@ const useSessionTimeout = () => {
   const activityTimerRef = useRef(null);
 
   // Tiempo en milisegundos
-  const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hora (igual al token)
+  const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hora
   const WARNING_TIME = 30 * 1000; // 30 segundos antes de expirar
 
   const clearAllTimers = useCallback(() => {
@@ -27,8 +27,14 @@ const useSessionTimeout = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('tokenExpiry');
     setShowWarning(false);
+    
+    // Notificar a App.js que la sesión expiró
+    if (onSessionExpired) {
+      onSessionExpired();
+    }
+    
     navigate('/login');
-  }, [clearAllTimers, navigate]);
+  }, [clearAllTimers, navigate, onSessionExpired]);
 
   const refreshSession = useCallback(async () => {
     try {

@@ -20,14 +20,10 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      console.log("🔒 Token inválido o expirado, redirigiendo al login...");
+      console.log("🔒 Token inválido o expirado");
       clearToken();
-      
-      // Solo redirigir si no estamos ya en login o setup
-      if (!window.location.pathname.includes("/login") && 
-          !window.location.pathname.includes("/setup")) {
-        window.location.href = "/login";
-      }
+      // No redirigir aquí, dejar que React Router lo maneje
+      // cuando detecte que no hay token en App.js
     }
     return Promise.reject(error);
   }
