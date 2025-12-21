@@ -31,6 +31,17 @@ const services = {
   solicitarRecuperacion: `${API_BASE}/auth/solicitar-recuperacion`,
   validarTokenRecuperacion: (token) => `${API_BASE}/auth/validar-token-recuperacion/${token}`,
   restablecerPassword: `${API_BASE}/auth/restablecer-password`,
+
+  // Finanzas
+  finanzasConceptos: `${API_BASE}/finanzas/conceptos`,
+  finanzasConcepto: (id) => `${API_BASE}/finanzas/conceptos/${id}`,
+  finanzasPagos: `${API_BASE}/finanzas/pagos`,
+  finanzasPagoAnular: (id) => `${API_BASE}/finanzas/pagos/${id}/anular`,
+  finanzasEstadoCuenta: (idEstudiante) => `${API_BASE}/finanzas/estado-cuenta/${idEstudiante}`,
+  finanzasBecas: `${API_BASE}/finanzas/becas`,
+  finanzasBeca: (id) => `${API_BASE}/finanzas/becas/${id}`,
+  finanzasEstadisticas: `${API_BASE}/finanzas/estadisticas`,
+  finanzasMorosidad: `${API_BASE}/finanzas/morosidad`,
 };
 
 export default services;

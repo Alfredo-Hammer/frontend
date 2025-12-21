@@ -496,6 +496,7 @@ function HorarioClases() {
       );
       showToast("✅ Horario actualizado exitosamente", "success");
       setModalEditar(false);
+      setHorarioSeleccionado(null);
       cargarHorarios();
       cargarEstadisticas();
     } catch (error) {
@@ -505,6 +506,28 @@ function HorarioClases() {
         "error"
       );
     }
+  };
+
+  // Abrir modal de edición con datos del horario
+  const abrirModalEdicion = (horario) => {
+    console.log("📝 Abriendo modal de edición con horario:", horario);
+    setHorarioSeleccionado(horario);
+    setFormHorario({
+      id_grado: horario.id_grado || "",
+      id_seccion: horario.id_seccion || "",
+      id_materia: horario.id_materia || "",
+      id_profesor: horario.id_profesor || "",
+      dia_semana: horario.dia_semana || "",
+      hora_inicio: horario.hora_inicio || "",
+      hora_fin: horario.hora_fin || "",
+      aula: horario.aula || "",
+    });
+    // Cargar secciones y materias para el grado seleccionado
+    if (horario.id_grado) {
+      cargarSecciones(horario.id_grado);
+      cargarMateriasPorGrado(horario.id_grado);
+    }
+    setModalEditar(true);
   };
 
   // Filtrar horarios
@@ -1094,10 +1117,12 @@ function HorarioClases() {
               <div className="flex items-start justify-between">
                 <div>
                   <h3 className="text-2xl font-bold mb-1">
-                    {horarioSeleccionado.materia}
+                    {horarioSeleccionado.nombre_materia ||
+                      horarioSeleccionado.materia}
                   </h3>
                   <p className="text-white/90">
-                    {horarioSeleccionado.profesor}
+                    {horarioSeleccionado.nombre_profesor ||
+                      horarioSeleccionado.profesor}
                   </p>
                 </div>
                 <button
@@ -1130,8 +1155,11 @@ function HorarioClases() {
                   </div>
                   <p className="font-semibold">
                     {
-                      DIAS_SEMANA.find((d) => d.key === horarioSeleccionado.dia)
-                        ?.label
+                      DIAS_SEMANA.find(
+                        (d) =>
+                          d.key === horarioSeleccionado.dia_semana ||
+                          d.key === horarioSeleccionado.dia
+                      )?.label
                     }
                   </p>
                 </div>
@@ -1142,8 +1170,11 @@ function HorarioClases() {
                     <span className="text-sm font-medium">Horario</span>
                   </div>
                   <p className="font-semibold">
-                    {horarioSeleccionado.horaInicio} -{" "}
-                    {horarioSeleccionado.horaFin}
+                    {horarioSeleccionado.hora_inicio ||
+                      horarioSeleccionado.horaInicio}{" "}
+                    -{" "}
+                    {horarioSeleccionado.hora_fin ||
+                      horarioSeleccionado.horaFin}
                   </p>
                 </div>
 
@@ -1160,20 +1191,30 @@ function HorarioClases() {
                     <UserGroupIcon className="h-4 w-4 mr-2" />
                     <span className="text-sm font-medium">Grado</span>
                   </div>
-                  <p className="font-semibold">{horarioSeleccionado.grado}</p>
+                  <p className="font-semibold">
+                    {horarioSeleccionado.nombre_grado ||
+                      horarioSeleccionado.grado}
+                    {horarioSeleccionado.nombre_seccion &&
+                      ` - ${horarioSeleccionado.nombre_seccion}`}
+                  </p>
                 </div>
               </div>
 
-              <div className="flex space-x-3 pt-4">
-                <button className="flex-1 bg-cyan-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-cyan-700 transition-colors flex items-center justify-center space-x-2">
-                  <PencilIcon className="h-4 w-4" />
-                  <span>Editar</span>
-                </button>
-                <button className="flex-1 bg-red-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-red-700 transition-colors flex items-center justify-center space-x-2">
-                  <TrashIcon className="h-4 w-4" />
-                  <span>Eliminar</span>
-                </button>
-              </div>
+              {puedeEditar() && (
+                <div className="flex space-x-3 pt-4">
+                  <button
+                    onClick={() => abrirModalEdicion(horarioSeleccionado)}
+                    className="flex-1 bg-cyan-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-cyan-700 transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <PencilIcon className="h-4 w-4" />
+                    <span>Editar</span>
+                  </button>
+                  <button className="flex-1 bg-red-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-red-700 transition-colors flex items-center justify-center space-x-2">
+                    <TrashIcon className="h-4 w-4" />
+                    <span>Eliminar</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

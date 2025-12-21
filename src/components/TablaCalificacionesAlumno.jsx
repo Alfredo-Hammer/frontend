@@ -137,6 +137,13 @@ function TablaCalificacionesAlumno({alumnoId, nombreAlumno, onVolver, token}) {
           escuelaRes.data && escuelaRes.data.length > 0
             ? escuelaRes.data[0]
             : null;
+
+        // Si hay logo, agregar la URL completa
+        if (escuelaData && escuelaData.logo) {
+          escuelaData.logo = escuelaData.logo.startsWith("http")
+            ? escuelaData.logo
+            : `http://localhost:4000${escuelaData.logo}`;
+        }
       } catch (error) {
         console.log("Error getting school data:", error);
       }
@@ -147,6 +154,7 @@ function TablaCalificacionesAlumno({alumnoId, nombreAlumno, onVolver, token}) {
           direccion: "Dirección no disponible",
           telefono: "Teléfono no disponible",
           codigo_escuela: "N/A",
+          logo: null,
         };
       }
 
@@ -185,6 +193,7 @@ function TablaCalificacionesAlumno({alumnoId, nombreAlumno, onVolver, token}) {
           nombre: "Institución Educativa",
           direccion: "Dirección no disponible",
           telefono: "Teléfono no disponible",
+          logo: null,
         },
         profesor: null,
         codigoMined: "N/A",
@@ -720,9 +729,22 @@ function TablaCalificacionesAlumno({alumnoId, nombreAlumno, onVolver, token}) {
         <div className="flex items-start justify-between mb-6 border-b-2 border-gray-300 pb-4">
           <div className="flex items-center space-x-6">
             <div className="flex-shrink-0">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                <BuildingLibraryIcon className="w-12 h-12 text-white" />
-              </div>
+              {datosCompletos.escuela?.logo ? (
+                <img
+                  src={datosCompletos.escuela.logo}
+                  alt="Logo"
+                  className="w-20 h-20 object-contain rounded-lg"
+                  onError={(e) => {
+                    e.target.onerror = null;
+                    e.target.src = "";
+                    e.target.style.display = "none";
+                  }}
+                />
+              ) : (
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <BuildingLibraryIcon className="w-12 h-12 text-white" />
+                </div>
+              )}
             </div>
             <div className="flex-1">
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
@@ -1046,17 +1068,6 @@ function TablaCalificacionesAlumno({alumnoId, nombreAlumno, onVolver, token}) {
                 >
                   <DocumentTextIcon className="w-5 h-5 mr-2" />
                   Exportar PDF
-                </button>
-
-                <button
-                  onClick={exportarCSV}
-                  disabled={
-                    !calificacionesAlumno || calificacionesAlumno.length === 0
-                  }
-                  className="px-6 py-3 bg-emerald-500 text-white rounded-xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <DocumentArrowDownIcon className="w-5 h-5 mr-2" />
-                  Exportar CSV
                 </button>
               </div>
             </div>

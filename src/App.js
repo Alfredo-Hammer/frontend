@@ -28,6 +28,8 @@ import MisCalificaciones from "./pages/MisCalificaciones";
 import UsuariosPage from "./pages/UsuariosPage";
 import ExamenesPage from "./pages/ExamenesPage";
 import ReportesPage from "./pages/ReportesPage";
+import FinanzasPage from "./pages/FinanzasPage";
+import InitFinanzas from "./pages/InitFinanzas";
 import PadresFamilia from "./pages/PadresFamilia";
 import Mensajes from "./pages/Mensajes";
 import SessionWarningDialog from "./components/SessionWarningDialog";
@@ -42,7 +44,7 @@ function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSet
     setLoading(true);
     setToken(null);
   }, [setToken, setLoading]);
-  
+
   const { showWarning, countdown, handleContinue, handleLogout } = useSessionTimeout(handleSessionExpired);
 
   // Si no hay token, mostrar login o setup según la ruta
@@ -51,6 +53,7 @@ function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSet
       <Routes>
         <Route path="/login" element={<Login setToken={setToken} />} />
         <Route path="/setup" element={<SetupInicial setToken={setToken} setNecesitaSetup={setNecesitaSetup} />} />
+        <Route path="/init-finanzas" element={<InitFinanzas />} />
         {/* Redirigir a setup solo si necesita setup, sino a login */}
         <Route path="*" element={<Navigate to={necesitaSetup ? "/setup" : "/login"} />} />
       </Routes>
@@ -139,6 +142,12 @@ function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSet
               <Route path="/reportes" element={
                 <ProtectedRoute user={user}>
                   <ReportesPage />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/finanzas" element={
+                <ProtectedRoute user={user} requiredRoles={['admin', 'director', 'secretariado']}>
+                  <FinanzasPage />
                 </ProtectedRoute>
               } />
 

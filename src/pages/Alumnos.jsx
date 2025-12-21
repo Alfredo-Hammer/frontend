@@ -14,6 +14,7 @@ import PageHeader from "../components/PageHeader";
 import services from "../api/services";
 import ConfirmModal from "../components/ConfirmModal";
 import Toast from "../components/Toast";
+import {hasPermission} from "../config/roles";
 
 const API_BASE_URL = "http://localhost:4000";
 
@@ -829,13 +830,15 @@ function Alumnos() {
           }}
           actions={
             <>
-              <button
-                onClick={() => navigate("/alumnos/registro")}
-                className="px-4 py-2 bg-white text-blue-600 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
-              >
-                <PlusIcon className="w-5 h-5" />
-                <span>Nuevo Alumno</span>
-              </button>
+              {user && hasPermission(user.rol, "alumnos", "crear") && (
+                <button
+                  onClick={() => navigate("/alumnos/registro")}
+                  className="px-4 py-2 bg-white text-blue-600 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
+                >
+                  <PlusIcon className="w-5 h-5" />
+                  <span>Nuevo Alumno</span>
+                </button>
+              )}
               <button
                 onClick={generarReporte}
                 className="px-4 py-2 bg-white/20 text-white rounded-xl font-semibold backdrop-blur-sm hover:bg-white/30 transition-all duration-200 flex items-center space-x-2"
@@ -954,13 +957,15 @@ function Alumnos() {
                 Comienza registrando el primer alumno para comenzar con la
                 gestión estudiantil.
               </p>
-              <button
-                onClick={() => navigate("/alumnos/registro")}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg transform hover:scale-105 transition-all duration-200"
-              >
-                <PlusIcon className="w-5 h-5 mr-2 inline" />
-                Registrar Primer Alumno
-              </button>
+              {user && hasPermission(user.rol, "alumnos", "crear") && (
+                <button
+                  onClick={() => navigate("/alumnos/registro")}
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg transform hover:scale-105 transition-all duration-200"
+                >
+                  <PlusIcon className="w-5 h-5 mr-2 inline" />
+                  Registrar Primer Alumno
+                </button>
+              )}
             </div>
           )}
 

@@ -17,6 +17,7 @@ import {
 function MisCalificaciones() {
   const [calificaciones, setCalificaciones] = useState([]);
   const [alumnoInfo, setAlumnoInfo] = useState(null);
+  const [alumnoCtx, setAlumnoCtx] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const token = localStorage.getItem("token");
@@ -35,18 +36,17 @@ function MisCalificaciones() {
       const perfilRes = await api.get("/api/usuarios/perfil", {
         headers: {Authorization: `Bearer ${token}`},
       });
-
-      const alumnoId =
-        perfilRes.data.id_alumno || perfilRes.data.usuario?.id_alumno;
+      const perfil = perfilRes.data?.usuario || perfilRes.data || {};
+      const alumnoId = perfil.id_usuario || perfilRes.data?.id_usuario;
 
       if (!alumnoId) {
-        setError("No se pudo identificar tu información como estudiante");
+        setError("No se pudo identificar tu usuario de estudiante");
         return;
       }
 
-      setAlumnoInfo(perfilRes.data);
+      setAlumnoInfo(perfil);
 
-      // Obtener calificaciones del alumno
+      // Obtener calificaciones del alumno (filtradas por su matrícula actual: grado y sección)
       const calRes = await api.get(
         `${services.calificacionesMateriasAlumno}/${alumnoId}`,
         {
@@ -54,7 +54,22 @@ function MisCalificaciones() {
         }
       );
 
-      setCalificaciones(calRes.data || []);
+      setCalificaciones(Array.isArray(calRes.data) ? calRes.data : []);
+
+      // Obtener información contextual del alumno (grado, sección, año lectivo, profesor guía)
+      try {
+        const infoRes = await api.get(
+          `${services.calificacionesAlumnoInfo}/${alumnoId}`,
+          {headers: {Authorization: `Bearer ${token}`}}
+        );
+        setAlumnoCtx(infoRes.data || null);
+      } catch (e) {
+        console.warn(
+          "No se pudo cargar información contextual del alumno",
+          e?.message
+        );
+        setAlumnoCtx(null);
+      }
     } catch (err) {
       console.error("Error al cargar calificaciones:", err);
       setError("Error al cargar tus calificaciones. Intenta nuevamente.");
@@ -142,6 +157,23 @@ function MisCalificaciones() {
                 <p className="text-purple-100">
                   {alumnoInfo?.nombre} {alumnoInfo?.apellido}
                 </p>
+                <p className="text-white/80 text-sm mt-1">
+                  {alumnoCtx?.grado_nombre || ""}
+                  {alumnoCtx?.grado_nombre && alumnoCtx?.seccion_nombre
+                    ? " - "
+                    : ""}
+                  {alumnoCtx?.seccion_nombre || ""}
+                  {(alumnoCtx?.grado_nombre || alumnoCtx?.seccion_nombre) &&
+                  alumnoCtx?.anio_lectivo
+                    ? " • "
+                    : ""}
+                  {alumnoCtx?.anio_lectivo
+                    ? `Año lectivo: ${alumnoCtx.anio_lectivo}`
+                    : ""}
+                  {alumnoCtx?.profesor_guia
+                    ? ` • Profesor guía: ${alumnoCtx.profesor_guia}`
+                    : ""}
+                </p>
               </div>
             </div>
             <button
@@ -207,11 +239,11 @@ function MisCalificaciones() {
           </div>
         )}
 
-        {/* Tabla de Calificaciones */}
+        {/* Tabla de Calificaciones por Materia */}
         <div className="bg-gray-800 rounded-2xl shadow-xl border border-gray-700 overflow-hidden">
           <div className="p-6 border-b border-gray-700">
             <h2 className="text-xl font-bold text-white">
-              Detalle de Calificaciones
+              Calificaciones por Materia
             </h2>
           </div>
 

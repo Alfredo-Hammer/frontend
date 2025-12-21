@@ -161,6 +161,20 @@ export const PERMISSIONS = {
     personalizados: [ROLES.ADMIN, ROLES.DIRECTOR],
   },
 
+  // Finanzas y Pagos
+  finanzas: {
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    crearConcepto: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editarConcepto: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    eliminarConcepto: [ROLES.ADMIN, ROLES.DIRECTOR],
+    registrarPago: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    anularPago: [ROLES.ADMIN, ROLES.DIRECTOR],
+    verEstadoCuenta: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO, ROLES.PROFESOR],
+    gestionarBecas: [ROLES.ADMIN, ROLES.DIRECTOR],
+    verReportes: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    exportarReportes: [ROLES.ADMIN, ROLES.DIRECTOR],
+  },
+
   // Comunicación
   mensajes: {
     ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE, ROLES.SECRETARIADO],
@@ -251,8 +265,9 @@ export const canAccessRoute = (userRole, path) => {
     '/examenes': 'examenes',
     '/eventos': 'eventos',
     '/calendario': 'eventos',
-    '/pagos': 'pagos',
-    '/becas': 'pagos',
+    '/finanzas': 'finanzas',
+    '/pagos': 'finanzas',
+    '/becas': 'finanzas',
     '/reportes': 'reportes',
     '/mensajes': 'mensajes',
     '/notificaciones': 'notificaciones',
