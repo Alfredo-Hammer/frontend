@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/axiosConfig';
+import { setTokenWithExpiration } from '../utils/tokenUtils';
 
 const useSessionTimeout = (onSessionExpired) => {
   const [showWarning, setShowWarning] = useState(false);
@@ -12,8 +13,8 @@ const useSessionTimeout = (onSessionExpired) => {
   const activityTimerRef = useRef(null);
 
   // Tiempo en milisegundos
-  const SESSION_TIMEOUT = 60 * 60 * 1000; // 1 hora
-  const WARNING_TIME = 30 * 1000; // 30 segundos antes de expirar
+  // Nota: el backend expira el JWT; acá solo mostramos advertencia basada en tokenExpiry.
+  const WARNING_TIME = 5 * 60 * 1000; // 5 minutos antes de expirar
 
   const clearAllTimers = useCallback(() => {
     if (warningTimerRef.current) clearTimeout(warningTimerRef.current);
@@ -27,45 +28,17 @@ const useSessionTimeout = (onSessionExpired) => {
     localStorage.removeItem('token');
     localStorage.removeItem('tokenExpiry');
     setShowWarning(false);
-    
+
     // Notificar a App.js que la sesión expiró
     if (onSessionExpired) {
       onSessionExpired();
     }
-    
+
     navigate('/login');
   }, [clearAllTimers, navigate, onSessionExpired]);
 
-  const refreshSession = useCallback(async () => {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      // Intentar renovar el token haciendo una petición al perfil
-      await api.get('/api/usuarios/perfil', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      // Si la petición es exitosa, actualizar el tiempo de expiración
-      const newExpiry = Date.now() + SESSION_TIMEOUT;
-      localStorage.setItem('tokenExpiry', newExpiry.toString());
-
-      setShowWarning(false);
-      setCountdown(30);
-      clearAllTimers();
-      startTimers();
-    } catch (error) {
-      console.error('Error al renovar sesión:', error);
-      logout();
-    }
-  }, [SESSION_TIMEOUT, clearAllTimers, logout]);
-
-  const handleContinue = useCallback(() => {
-    refreshSession();
-  }, [refreshSession]);
-
   const startCountdown = useCallback(() => {
-    setCountdown(30);
+    // countdown ya viene seteado según el tiempo restante
     countdownIntervalRef.current = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
@@ -77,33 +50,82 @@ const useSessionTimeout = (onSessionExpired) => {
     }, 1000);
   }, []);
 
+  const getExpiryMs = useCallback(() => {
+    const raw = localStorage.getItem('tokenExpiry');
+    const expiryMs = raw ? parseInt(raw, 10) : NaN;
+    return Number.isFinite(expiryMs) ? expiryMs : null;
+  }, []);
+
   const startTimers = useCallback(() => {
     clearAllTimers();
 
-    // Timer para mostrar advertencia 30 segundos antes
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    const expiryMs = getExpiryMs();
+    if (!expiryMs) return;
+
+    const timeRemaining = expiryMs - Date.now();
+
+    if (timeRemaining <= 0) {
+      logout();
+      return;
+    }
+
+    const warningDelay = Math.max(timeRemaining - WARNING_TIME, 0);
+
+    // Timer para mostrar advertencia antes de expirar
     warningTimerRef.current = setTimeout(() => {
       setShowWarning(true);
+      setCountdown(Math.max(0, Math.ceil(Math.min(WARNING_TIME, expiryMs - Date.now()) / 1000)));
       startCountdown();
-    }, SESSION_TIMEOUT - WARNING_TIME);
+    }, warningDelay);
 
     // Timer para cerrar sesión automáticamente
     logoutTimerRef.current = setTimeout(() => {
       logout();
-    }, SESSION_TIMEOUT);
-  }, [SESSION_TIMEOUT, WARNING_TIME, clearAllTimers, logout, startCountdown]);
+    }, timeRemaining);
+  }, [WARNING_TIME, clearAllTimers, getExpiryMs, logout, startCountdown]);
+
+  const refreshSession = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      // Cerrar el modal inmediatamente para que el usuario vea respuesta al click.
+      setShowWarning(false);
+      clearAllTimers();
+
+      // Renovar el JWT en backend y actualizar tokenExpiry en frontend.
+      const res = await api.post('/api/auth/refresh');
+      const nuevoToken = res?.data?.token;
+      if (!nuevoToken) {
+        throw new Error('No se recibió token al renovar la sesión');
+      }
+      setTokenWithExpiration(nuevoToken);
+
+      // Reiniciar timers con el nuevo expiry
+      setCountdown(Math.ceil(WARNING_TIME / 1000));
+      startTimers();
+    } catch (error) {
+      console.error('Error al renovar sesión:', error);
+      logout();
+    }
+  }, [WARNING_TIME, clearAllTimers, logout, startTimers]);
+
+  const handleContinue = useCallback(() => {
+    refreshSession();
+  }, [refreshSession]);
 
   const resetTimer = useCallback(() => {
     if (showWarning) return; // No resetear si ya está mostrando advertencia
 
     const token = localStorage.getItem('token');
     if (!token) return;
-
-    // Actualizar tiempo de expiración
-    const newExpiry = Date.now() + SESSION_TIMEOUT;
-    localStorage.setItem('tokenExpiry', newExpiry.toString());
-
+    // No extendemos tokenExpiry solo por actividad (el JWT expira en backend).
+    // Solo reprogramamos timers en caso de que tokenExpiry haya cambiado por login/refresh real.
     startTimers();
-  }, [SESSION_TIMEOUT, showWarning, startTimers]);
+  }, [showWarning, startTimers]);
 
   // Detectar actividad del usuario
   useEffect(() => {
@@ -134,14 +156,14 @@ const useSessionTimeout = (onSessionExpired) => {
     const token = localStorage.getItem('token');
     if (!token) return;
 
-    // Si no hay tokenExpiry guardado, crearlo
-    let expiry = localStorage.getItem('tokenExpiry');
-    if (!expiry) {
-      expiry = Date.now() + SESSION_TIMEOUT;
-      localStorage.setItem('tokenExpiry', expiry.toString());
+    const expiryMs = getExpiryMs();
+    if (!expiryMs) {
+      // Si no existe tokenExpiry, no podemos calcular warning con precisión.
+      // Fallback: no iniciar timers aquí.
+      return;
     }
 
-    const timeRemaining = parseInt(expiry) - Date.now();
+    const timeRemaining = expiryMs - Date.now();
 
     if (timeRemaining <= 0) {
       logout();
@@ -165,11 +187,12 @@ const useSessionTimeout = (onSessionExpired) => {
     return () => {
       clearAllTimers();
     };
-  }, [SESSION_TIMEOUT, WARNING_TIME, clearAllTimers, logout, startTimers, startCountdown]);
+  }, [WARNING_TIME, clearAllTimers, getExpiryMs, logout, startTimers, startCountdown]);
 
   return {
     showWarning,
     countdown,
+    maxCountdown: Math.ceil(WARNING_TIME / 1000),
     handleContinue,
     handleLogout: logout,
   };

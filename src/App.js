@@ -7,6 +7,7 @@ import SetupInicial from "./pages/SetupInicial";
 import VerificarEmail from "./pages/VerificarEmail";
 import EmailNoVerificado from "./pages/EmailNoVerificado";
 import RestablecerPassword from "./pages/RestablecerPassword";
+import Estudiantes from "./pages/Estudiantes";
 import Alumnos from "./pages/Alumnos";
 import DetalleAlumno from "./components/DetalleAlumno";
 import HomePage from "./pages/HomePage";
@@ -17,10 +18,10 @@ import Header from "./components/Header";
 import GradosPage from "./pages/GradosPage";
 import SeccionesPage from "./pages/SeccionesPage";
 import MateriasPage from "./pages/MateriasPage";
+import CargaAcademica from "./pages/CargaAcademica";
 import CalificacionesPage from "./pages/CalificacionesPage";
 import HorarioPage from "./pages/HorarioPage";
 import HorarioClases from "./pages/HorarioClases";
-import RegistroAlumno from "./pages/RegistroAlumno";
 import Asistencia from "./pages/Asistencia";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PerfilUsuario from "./pages/PerfilUsuario";
@@ -30,22 +31,25 @@ import ExamenesPage from "./pages/ExamenesPage";
 import ReportesPage from "./pages/ReportesPage";
 import FinanzasPage from "./pages/FinanzasPage";
 import InitFinanzas from "./pages/InitFinanzas";
+import Configuracion from "./pages/Configuracion";
+import CiclosEscolares from "./pages/CiclosEscolares";
 import PadresFamilia from "./pages/PadresFamilia";
 import Mensajes from "./pages/Mensajes";
+import Soporte from "./pages/Soporte";
 import SessionWarningDialog from "./components/SessionWarningDialog";
 import useSessionTimeout from "./hooks/useSessionTimeout";
 import api from "./api/axiosConfig";
-import { setTokenWithExpiration, getTokenIfValid, clearToken } from "./utils/tokenUtils";
+import { getTokenIfValid, clearToken } from "./utils/tokenUtils";
 import { MensajesProvider } from "./context/MensajesContext";
 
 function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSetup, setNecesitaSetup, setLoading }) {
   // Hook de gestión de sesión con callback para limpiar estado
   const handleSessionExpired = useCallback(() => {
-    setLoading(true);
+    setLoading(false);
     setToken(null);
   }, [setToken, setLoading]);
 
-  const { showWarning, countdown, handleContinue, handleLogout } = useSessionTimeout(handleSessionExpired);
+  const { showWarning, countdown, maxCountdown, handleContinue, handleLogout } = useSessionTimeout(handleSessionExpired);
 
   // Si no hay token, mostrar login o setup según la ruta
   if (!token) {
@@ -67,6 +71,7 @@ function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSet
         <SessionWarningDialog
           isOpen={showWarning}
           countdown={countdown}
+          maxCountdown={maxCountdown}
           onContinue={handleContinue}
           onLogout={handleLogout}
         />
@@ -91,6 +96,12 @@ function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSet
                 </ProtectedRoute>
               } />
 
+              <Route path="/estudiantes" element={
+                <ProtectedRoute user={user}>
+                  <Estudiantes />
+                </ProtectedRoute>
+              } />
+
               <Route path="/alumnos" element={
                 <ProtectedRoute user={user}>
                   <Alumnos />
@@ -103,11 +114,7 @@ function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSet
                 </ProtectedRoute>
               } />
 
-              <Route path="/alumnos/registro" element={
-                <ProtectedRoute user={user}>
-                  <RegistroAlumno />
-                </ProtectedRoute>
-              } />
+              {/* Ruta antigua de registro de alumnos eliminada; ahora se usa el módulo de Estudiantes */}
 
               <Route path="/profesores" element={
                 <ProtectedRoute user={user}>
@@ -151,6 +158,19 @@ function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSet
                 </ProtectedRoute>
               } />
 
+
+              <Route path="/configuracion" element={
+                <ProtectedRoute user={user} requiredRoles={['admin', 'director']}>
+                  <Configuracion />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/ciclosescolares" element={
+                <ProtectedRoute user={user} requiredRoles={['admin', 'director']}>
+                  <CiclosEscolares />
+                </ProtectedRoute>
+              } />
+
               <Route path="/grados" element={
                 <ProtectedRoute user={user}>
                   <GradosPage />
@@ -160,6 +180,12 @@ function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSet
               <Route path="/secciones" element={
                 <ProtectedRoute user={user}>
                   <SeccionesPage />
+                </ProtectedRoute>
+              } />
+
+              <Route path="/carga-academica" element={
+                <ProtectedRoute user={user} requiredRoles={['admin', 'director', 'secretariado']}>
+                  <CargaAcademica />
                 </ProtectedRoute>
               } />
 
@@ -211,6 +237,12 @@ function AuthWrapper({ token, setToken, selected, setSelected, user, necesitaSet
                 </ProtectedRoute>
               } />
 
+              <Route path="/soporte" element={
+                <ProtectedRoute user={user}>
+                  <Soporte />
+                </ProtectedRoute>
+              } />
+
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </main>
@@ -257,6 +289,18 @@ function App() {
 
     return () => clearInterval(interval);
   }, [token]);
+
+  // Sincronizar logout inmediato cuando Axios detecta 401 y limpia localStorage
+  useEffect(() => {
+    const handler = () => {
+      setToken(null);
+      setUser(null);
+      setLoading(false);
+    };
+
+    window.addEventListener('auth:logout', handler);
+    return () => window.removeEventListener('auth:logout', handler);
+  }, []);
 
   // Verificar si el sistema necesita configuración inicial
   useEffect(() => {

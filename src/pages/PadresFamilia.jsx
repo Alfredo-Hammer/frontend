@@ -1,817 +1,618 @@
 import React, {useState, useEffect} from "react";
-import axios from "axios";
+import api from "../api/axiosConfig"; // Usamos la instancia configurada
+import PageHeader from "../components/PageHeader";
+import Toast from "../components/Toast";
+import {hasPermission} from "../config/roles";
 import {
-  UsersIcon,
   UserGroupIcon,
   PhoneIcon,
   EnvelopeIcon,
   MagnifyingGlassIcon,
   EyeIcon,
-  ChartBarIcon,
-  AcademicCapIcon,
   BellAlertIcon,
   FunnelIcon,
   XMarkIcon,
   CheckIcon,
   Squares2X2Icon,
   TableCellsIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
+  UsersIcon,
+  AcademicCapIcon,
+  PaperAirplaneIcon,
 } from "@heroicons/react/24/outline";
-import ConfirmModal from "../components/ConfirmModal";
 
-const API_URL = "http://localhost:4000/api";
+// --- COMPONENTES AUXILIARES ---
+
+const StatCard = ({title, value, icon: Icon, colorClass}) => (
+  <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 shadow-lg flex items-center justify-between">
+    <div>
+      <p className="text-gray-400 text-sm font-medium mb-1">{title}</p>
+      <p className="text-3xl font-bold text-white">{value}</p>
+    </div>
+    <div
+      className={`p-3 rounded-lg bg-opacity-10 ${colorClass.replace(
+        "text-",
+        "bg-"
+      )}`}
+    >
+      <Icon className={`w-8 h-8 ${colorClass}`} />
+    </div>
+  </div>
+);
 
 export default function PadresFamilia() {
+  // ========== ESTADOS ==========
   const [padres, setPadres] = useState([]);
-  const [padresFiltrados, setPadresFiltrados] = useState([]);
-  const [estadisticas, setEstadisticas] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedPadre, setSelectedPadre] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [showNotificationModal, setShowNotificationModal] = useState(false);
-  const [selectedPadresNotif, setSelectedPadresNotif] = useState([]);
-  const [notification, setNotification] = useState({asunto: "", mensaje: ""});
-  const [viewMode, setViewMode] = useState("table");
-  const [filtroHijos, setFiltroHijos] = useState("");
-  const [filtroGrado, setFiltroGrado] = useState("");
-  const [filtroSeccion, setFiltroSeccion] = useState("");
-  const [filtroGenero, setFiltroGenero] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(12);
-  const [showFilters, setShowFilters] = useState(false);
-  const [grados, setGrados] = useState([]);
-  const [secciones, setSecciones] = useState([]);
-  const [confirmModal, setConfirmModal] = useState({
-    open: false,
-    title: "",
-    message: "",
-    type: "info",
-    onConfirm: () => {},
-  });
+  const [viewMode, setViewMode] = useState("table"); // 'table' | 'cards'
 
+  // Filtros y Búsqueda
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [filtroGrado, setFiltroGrado] = useState("");
+
+  // Selección y Notificaciones
+  const [selectedPadres, setSelectedPadres] = useState([]);
+  const [showNotifModal, setShowNotifModal] = useState(false);
+  const [notificacion, setNotificacion] = useState({asunto: "", mensaje: ""});
+
+  // Detalle
+  const [showDetalleModal, setShowDetalleModal] = useState(false);
+  const [selectedPadre, setSelectedPadre] = useState(null);
+  // Vinculación Padre-Estudiante
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [selectedEstudianteId, setSelectedEstudianteId] = useState("");
+  const [tipoParentesco, setTipoParentesco] = useState("Tutor");
+  // Usuario actual (para permisos)
+  const [user, setUser] = useState(null);
+
+  // UI Feedback
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+  const [estadisticas, setEstadisticas] = useState({total: 0, estudiantes: 0});
+
+  // ========== EFECTOS ==========
   useEffect(() => {
-    cargarDatos();
-    cargarGrados();
-    cargarSecciones();
+    fetchPadres();
+    // Cargar usuario para evaluar permisos
+    const token = localStorage.getItem("token");
+    const cargarUsuario = async () => {
+      try {
+        const res = await api.get("/api/usuarios/perfil", {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setUser({
+          id_usuario: res.data.usuario?.id_usuario,
+          nombre: res.data.usuario?.nombre || res.data.nombre,
+          apellido: res.data.usuario?.apellido || res.data.apellido,
+          rol: (res.data.usuario?.rol || res.data.rol)?.toLowerCase(),
+          id_escuela: res.data.usuario?.id_escuela,
+          id_profesor: res.data.usuario?.id_profesor,
+        });
+      } catch (err) {
+        console.error("Error al cargar usuario:", err);
+      }
+    };
+    if (token) cargarUsuario();
   }, []);
 
+  // Cargar estudiantes cuando se abre detalle
   useEffect(() => {
-    cargarDatos();
-  }, [filtroGrado, filtroSeccion, filtroGenero]);
-
-  useEffect(() => {
-    aplicarFiltros();
-  }, [padres, searchTerm, filtroHijos]);
-
-  const cargarGrados = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/grados`, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      setGrados(response.data);
-    } catch (error) {
-      console.error("Error al cargar grados:", error);
+    if (showDetalleModal) {
+      fetchEstudiantes();
     }
-  };
+  }, [showDetalleModal]);
 
-  const cargarSecciones = async () => {
+  // ========== API CALLS ==========
+  const fetchPadres = async () => {
+    setLoading(true);
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/secciones`, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      setSecciones(response.data);
+      // Asumimos que el endpoint trae usuarios con rol 'Familiar' y sus hijos vinculados
+      const res = await api.get("/api/padres");
+      setPadres(res.data.data || []);
+      setEstadisticas(res.data.estadisticas || {total: 0, estudiantes: 0});
     } catch (error) {
-      console.error("Error al cargar secciones:", error);
-    }
-  };
-
-  const cargarDatos = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      const headers = {Authorization: `Bearer ${token}`};
-
-      // Construir parámetros de filtro
-      let params = {};
-      if (filtroGrado) params.grado = filtroGrado;
-      if (filtroSeccion) params.seccion = filtroSeccion;
-      if (filtroGenero) params.genero = filtroGenero;
-
-      const [padresRes, statsRes] = await Promise.all([
-        axios.get(`${API_URL}/padres`, {headers, params}),
-        axios.get(`${API_URL}/padres/estadisticas`, {headers}),
-      ]);
-
-      setPadres(padresRes.data.data);
-      setEstadisticas(statsRes.data.data);
-    } catch (error) {
-      console.error("Error al cargar datos:", error);
+      console.error(error);
+      showToast("Error al cargar la lista de padres", "error");
     } finally {
       setLoading(false);
     }
   };
 
-  const aplicarFiltros = () => {
-    let resultado = [...padres];
+  const enviarNotificacionMasiva = async () => {
+    if (!notificacion.asunto || !notificacion.mensaje) {
+      return showToast("Complete el asunto y el mensaje", "warning");
+    }
 
-    // Filtro por búsqueda (solo en el cliente)
-    if (searchTerm.trim()) {
-      const term = searchTerm.toLowerCase();
-      resultado = resultado.filter(
-        (padre) =>
-          padre.nombre_padre?.toLowerCase().includes(term) ||
-          padre.correo_padre?.toLowerCase().includes(term) ||
-          padre.telefono_padre?.toLowerCase().includes(term) ||
-          padre.nombres_hijos?.toLowerCase().includes(term)
+    try {
+      await api.post("/api/comunicaciones/email-masivo", {
+        destinatarios: selectedPadres, // Array de IDs o Emails
+        asunto: notificacion.asunto,
+        mensaje: notificacion.mensaje,
+        rol_objetivo: "Familiar",
+      });
+
+      showToast(
+        `Notificación enviada a ${selectedPadres.length} padres`,
+        "success"
+      );
+      setShowNotifModal(false);
+      setSelectedPadres([]);
+      setNotificacion({asunto: "", mensaje: ""});
+    } catch (error) {
+      showToast("Error al enviar notificaciones", "error");
+    }
+  };
+
+  const fetchEstudiantes = async () => {
+    try {
+      const res = await api.get("/api/alumnos");
+      // API devuelve objetos con id_usuario, nombre, apellido; usar id_usuario para vinculación
+      const lista = (res.data?.data || res.data || []).map((e) => ({
+        id_usuario: e.id_usuario ?? e.id, // fallback
+        nombre: e.nombre,
+        apellido: e.apellido,
+        email: e.email,
+      }));
+      setEstudiantes(lista);
+    } catch (error) {
+      console.error("Error al cargar estudiantes:", error);
+    }
+  };
+
+  const vincularPadreConEstudiante = async () => {
+    const puedeVincular =
+      user &&
+      (hasPermission(user.rol, "padres_familia", "crear") ||
+        hasPermission(user.rol, "padres_familia", "editar"));
+    if (!puedeVincular) {
+      return showToast(
+        "No tienes permisos para vincular familiares con estudiantes",
+        "error"
       );
     }
-
-    // Filtro por número de hijos (solo en el cliente)
-    if (filtroHijos) {
-      if (filtroHijos === "1") {
-        resultado = resultado.filter((p) => p.total_hijos === 1);
-      } else if (filtroHijos === "2+") {
-        resultado = resultado.filter((p) => p.total_hijos >= 2);
-      }
+    if (!selectedPadre?.id_usuario || !selectedEstudianteId) {
+      return showToast("Selecciona un estudiante para vincular", "warning");
     }
-
-    setPadresFiltrados(resultado);
-    setCurrentPage(1);
-  };
-
-  const verDetalle = async (correo) => {
     try {
-      const token = localStorage.getItem("token");
-      const response = await axios.get(`${API_URL}/padres/${correo}`, {
-        headers: {Authorization: `Bearer ${token}`},
+      const res = await api.post("/api/padres/vincular", {
+        id_familiar: selectedPadre.id_usuario,
+        id_estudiante: Number(selectedEstudianteId),
+        tipo_parentesco: tipoParentesco,
       });
-      setSelectedPadre(response.data.data);
-      setShowModal(true);
+      showToast("Vínculo creado/actualizado correctamente", "success");
+      // Refrescar datos del padre para mostrar hijos
+      await fetchPadres();
+      // Actualizar modal seleccionado
+      const actualizado = (padres || []).find(
+        (p) => p.id_usuario === selectedPadre.id_usuario
+      );
+      if (actualizado) setSelectedPadre(actualizado);
+      setSelectedEstudianteId("");
     } catch (error) {
-      console.error("Error al cargar detalle:", error);
+      console.error("Error al vincular:", error);
+      const msg =
+        error.response?.data?.message ||
+        "Error al vincular padre con estudiante";
+      showToast(msg, "error");
     }
   };
 
-  const toggleSeleccionPadre = (correo) => {
-    setSelectedPadresNotif((prev) =>
-      prev.includes(correo)
-        ? prev.filter((c) => c !== correo)
-        : [...prev, correo]
+  // ========== HANDLERS ==========
+  const showToast = (msg, type) => {
+    setToast({show: true, message: msg, type});
+    setTimeout(() => setToast({...toast, show: false}), 3000);
+  };
+
+  const toggleSeleccion = (email) => {
+    setSelectedPadres((prev) =>
+      prev.includes(email) ? prev.filter((e) => e !== email) : [...prev, email]
     );
   };
 
   const seleccionarTodos = () => {
-    if (selectedPadresNotif.length === currentItems.length) {
-      setSelectedPadresNotif([]);
+    if (selectedPadres.length === padresFiltrados.length) {
+      setSelectedPadres([]);
     } else {
-      setSelectedPadresNotif(currentItems.map((p) => p.correo_padre));
+      setSelectedPadres(padresFiltrados.map((p) => p.email));
     }
   };
 
-  const enviarNotificacion = async () => {
-    if (!notification.asunto || !notification.mensaje) {
-      setConfirmModal({
-        open: true,
-        title: "Campos incompletos",
-        message: "Por favor complete el asunto y mensaje de la notificación.",
-        type: "warning",
-        confirmText: "Entendido",
-        onConfirm: () => setConfirmModal({...confirmModal, open: false}),
-        onCancel: () => setConfirmModal({...confirmModal, open: false}),
-      });
-      return;
-    }
+  // ========== FILTROS LÓGICOS ==========
+  const padresFiltrados = padres.filter((padre) => {
+    const matchSearch = (padre.nombre + padre.email + padre.telefono)
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    // Lógica para filtrar por grado de los hijos (si el backend devuelve esa info anidada)
+    const matchGrado = filtroGrado
+      ? padre.hijos?.some((h) => h.grado === filtroGrado)
+      : true;
 
-    if (selectedPadresNotif.length === 0) {
-      setConfirmModal({
-        open: true,
-        title: "Sin selección",
-        message:
-          "Debe seleccionar al menos un padre para enviar la notificación.",
-        type: "warning",
-        confirmText: "Entendido",
-        onConfirm: () => setConfirmModal({...confirmModal, open: false}),
-        onCancel: () => setConfirmModal({...confirmModal, open: false}),
-      });
-      return;
-    }
+    return matchSearch && matchGrado;
+  });
 
-    try {
-      const token = localStorage.getItem("token");
-      const response = await axios.post(
-        `${API_URL}/padres/notificaciones`,
-        {
-          correos: selectedPadresNotif,
-          asunto: notification.asunto,
-          mensaje: notification.mensaje,
-        },
-        {
-          headers: {Authorization: `Bearer ${token}`},
-        }
-      );
-
-      setShowNotificationModal(false);
-      setSelectedPadresNotif([]);
-      setNotification({asunto: "", mensaje: ""});
-
-      setConfirmModal({
-        open: true,
-        title: "Notificación enviada",
-        message: `Se ha enviado la notificación a ${response.data.data.exitosos} de ${response.data.data.total} padre(s) exitosamente.`,
-        type: "success",
-        confirmText: "Aceptar",
-        onConfirm: () => setConfirmModal({...confirmModal, open: false}),
-        onCancel: () => setConfirmModal({...confirmModal, open: false}),
-      });
-    } catch (error) {
-      console.error("Error:", error);
-      setConfirmModal({
-        open: true,
-        title: "Error al enviar",
-        message:
-          error.response?.data?.message ||
-          "No se pudo enviar la notificación. Por favor intente nuevamente.",
-        type: "danger",
-        confirmText: "Entendido",
-        onConfirm: () => setConfirmModal({...confirmModal, open: false}),
-        onCancel: () => setConfirmModal({...confirmModal, open: false}),
-      });
-    }
-  };
-
-  // Paginación
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = padresFiltrados.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(padresFiltrados.length / itemsPerPage);
-
+  // ========== RENDER ==========
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <div className="text-white text-xl">Cargando...</div>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
-      {/* Hero Section */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-cyan-950/50 via-slate-900 to-blue-950/50 border-b border-gray-800">
-        <div className="absolute inset-0">
-          <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 blur-3xl"></div>
+    <div className="min-h-screen bg-gray-900 text-gray-100 p-6 md:p-10">
+      <PageHeader
+        title="Padres de Familia"
+        subtitle="Gestión de tutores, comunicación y vinculación con estudiantes."
+        icon={UserGroupIcon}
+        stats={{
+          "Total Padres": estadisticas.total,
+          "Estudiantes Vinculados": estadisticas.estudiantes,
+        }}
+        actions={
+          <button
+            onClick={() => setShowNotifModal(true)}
+            disabled={selectedPadres.length === 0}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-medium rounded-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <PaperAirplaneIcon className="w-5 h-5" />
+            <span>Notificar ({selectedPadres.length})</span>
+          </button>
+        }
+      />
+
+      {/* --- ESTADÍSTICAS RÁPIDAS --- */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <StatCard
+          title="Padres Registrados"
+          value={padres.length}
+          icon={UsersIcon}
+          colorClass="text-cyan-400"
+        />
+        <StatCard
+          title="Con Email Verificado"
+          value={padres.filter((p) => p.email_verificado).length}
+          icon={CheckIcon}
+          colorClass="text-green-400"
+        />
+        <StatCard
+          title="Hijos Promedio"
+          value={estadisticas.promedio || "1.2"}
+          icon={AcademicCapIcon}
+          colorClass="text-purple-400"
+        />
+      </div>
+
+      {/* --- TOOLBAR --- */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 mb-6 shadow-lg flex flex-col md:flex-row gap-4 justify-between items-center">
+        {/* Buscador */}
+        <div className="relative w-full md:w-96">
+          <MagnifyingGlassIcon className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Buscar padre, email o teléfono..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2.5 bg-gray-900 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 placeholder-gray-500"
+          />
         </div>
-        <div className="relative px-8 py-12">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="p-4 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 rounded-2xl backdrop-blur-sm border border-cyan-500/30">
-                <UserGroupIcon className="w-10 h-10 text-cyan-400" />
-              </div>
-              <div>
-                <h1 className="text-4xl font-bold text-white mb-2">
-                  Padres de Familia
-                </h1>
-                <p className="text-cyan-300/80 text-lg">
-                  Gestión y comunicación con padres
-                </p>
-              </div>
-            </div>
+
+        {/* Controles Derecha */}
+        <div className="flex gap-3 w-full md:w-auto">
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`px-4 py-2.5 rounded-lg border flex items-center gap-2 transition-colors ${
+              showFilters
+                ? "bg-cyan-900/50 border-cyan-500 text-cyan-400"
+                : "bg-gray-700 border-gray-600 text-gray-300"
+            }`}
+          >
+            <FunnelIcon className="w-5 h-5" />
+            <span className="hidden md:inline">Filtros</span>
+          </button>
+
+          <div className="flex bg-gray-700 rounded-lg p-1 border border-gray-600">
             <button
-              onClick={() => setShowNotificationModal(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-medium rounded-xl transition-all shadow-lg"
+              onClick={() => setViewMode("table")}
+              className={`p-2 rounded transition-all ${
+                viewMode === "table"
+                  ? "bg-gray-600 text-white shadow"
+                  : "text-gray-400 hover:text-white"
+              }`}
             >
-              <BellAlertIcon className="w-5 h-5" />
-              Enviar Notificación
+              <TableCellsIcon className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setViewMode("cards")}
+              className={`p-2 rounded transition-all ${
+                viewMode === "cards"
+                  ? "bg-gray-600 text-white shadow"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              <Squares2X2Icon className="w-5 h-5" />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Estadísticas */}
-      {estadisticas && (
-        <div className="px-8 py-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-cyan-900/50 to-cyan-800/50 p-6 rounded-2xl border border-cyan-700/50 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-cyan-300/80 text-sm font-medium mb-1">
-                    Total Padres
-                  </p>
-                  <p className="text-4xl font-bold text-white">
-                    {estadisticas.total_padres}
-                  </p>
-                </div>
-                <UsersIcon className="w-12 h-12 text-cyan-400/40" />
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-blue-900/50 to-blue-800/50 p-6 rounded-2xl border border-blue-700/50 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-blue-300/80 text-sm font-medium mb-1">
-                    Estudiantes
-                  </p>
-                  <p className="text-4xl font-bold text-white">
-                    {estadisticas.total_estudiantes_con_padre}
-                  </p>
-                </div>
-                <AcademicCapIcon className="w-12 h-12 text-blue-400/40" />
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-indigo-900/50 to-indigo-800/50 p-6 rounded-2xl border border-indigo-700/50 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-indigo-300/80 text-sm font-medium mb-1">
-                    Promedio Hijos
-                  </p>
-                  <p className="text-4xl font-bold text-white">
-                    {estadisticas.promedio_hijos_por_padre}
-                  </p>
-                </div>
-                <ChartBarIcon className="w-12 h-12 text-indigo-400/40" />
-              </div>
-            </div>
-            <div className="bg-gradient-to-br from-purple-900/50 to-purple-800/50 p-6 rounded-2xl border border-purple-700/50 shadow-lg">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-purple-300/80 text-sm font-medium mb-1">
-                    Máx. Hijos
-                  </p>
-                  <p className="text-4xl font-bold text-white">
-                    {estadisticas.max_hijos}
-                  </p>
-                </div>
-                <UserGroupIcon className="w-12 h-12 text-purple-400/40" />
-              </div>
+      {/* --- PANEL FILTROS --- */}
+      {showFilters && (
+        <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-4 mb-6 animate-in fade-in slide-in-from-top-2">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="text-xs font-medium text-gray-400 mb-1 block">
+                Filtrar por Grado de Hijos
+              </label>
+              <select
+                value={filtroGrado}
+                onChange={(e) => setFiltroGrado(e.target.value)}
+                className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"
+              >
+                <option value="">Todos los grados</option>
+                <option value="1ro">Primer Grado</option>
+                <option value="2do">Segundo Grado</option>
+                {/* Mapear grados dinámicamente si los tienes */}
+              </select>
             </div>
           </div>
         </div>
       )}
 
-      {/* Controles y Filtros */}
-      <div className="px-8 py-4 space-y-4">
-        {/* Barra de búsqueda principal */}
-        <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 shadow-lg">
-          <div className="flex gap-4 items-center">
-            <div className="flex-1 relative">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar por nombre padre, correo, teléfono o nombre del hijo..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-            </div>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`px-6 py-3 ${
-                showFilters ? "bg-cyan-600" : "bg-gray-700"
-              } hover:bg-cyan-500 text-white font-medium rounded-lg transition-colors flex items-center gap-2`}
-            >
-              <FunnelIcon className="w-5 h-5" />
-              Filtros
-            </button>
-            <div className="flex gap-2 border-l border-gray-600 pl-4">
-              <button
-                onClick={() => setViewMode("cards")}
-                className={`p-3 rounded-lg transition-colors ${
-                  viewMode === "cards"
-                    ? "bg-cyan-600 text-white"
-                    : "bg-gray-700 text-gray-400 hover:bg-gray-600"
-                }`}
-                title="Vista de tarjetas"
-              >
-                <Squares2X2Icon className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => setViewMode("table")}
-                className={`p-3 rounded-lg transition-colors ${
-                  viewMode === "table"
-                    ? "bg-cyan-600 text-white"
-                    : "bg-gray-700 text-gray-400 hover:bg-gray-600"
-                }`}
-                title="Vista de tabla"
-              >
-                <TableCellsIcon className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Panel de filtros expandible */}
-        {showFilters && (
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-4 shadow-lg">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Grado
-                </label>
-                <select
-                  value={filtroGrado}
-                  onChange={(e) => setFiltroGrado(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                >
-                  <option value="">Todos los grados</option>
-                  {grados.map((grado) => (
-                    <option key={grado.id_grado} value={grado.id_grado}>
-                      {grado.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Sección
-                </label>
-                <select
-                  value={filtroSeccion}
-                  onChange={(e) => setFiltroSeccion(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                >
-                  <option value="">Todas las secciones</option>
-                  {secciones.map((seccion) => (
-                    <option key={seccion.id_seccion} value={seccion.id_seccion}>
-                      {seccion.nombre}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Género del Hijo
-                </label>
-                <select
-                  value={filtroGenero}
-                  onChange={(e) => setFiltroGenero(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                >
-                  <option value="">Todos los géneros</option>
-                  <option value="Masculino">Masculino</option>
-                  <option value="Femenino">Femenino</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Número de Hijos
-                </label>
-                <select
-                  value={filtroHijos}
-                  onChange={(e) => setFiltroHijos(e.target.value)}
-                  className="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                >
-                  <option value="">Todos</option>
-                  <option value="1">1 hijo</option>
-                  <option value="2+">2 o más hijos</option>
-                </select>
-              </div>
-
-              <div className="flex items-end">
-                <button
-                  onClick={() => {
-                    setSearchTerm("");
-                    setFiltroHijos("");
-                    setFiltroGrado("");
-                    setFiltroSeccion("");
-                    setFiltroGenero("");
-                  }}
-                  className="w-full px-6 py-2 bg-red-600 hover:bg-red-500 text-white rounded-lg transition-colors font-medium"
-                >
-                  Limpiar Filtros
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Información de resultados y selección */}
-        <div className="flex justify-between items-center text-sm text-gray-400">
-          <span>
-            Mostrando {currentItems.length} de {padresFiltrados.length} padres
-          </span>
-          {selectedPadresNotif.length > 0 && (
-            <span className="text-cyan-400 font-medium">
-              {selectedPadresNotif.length} padre(s) seleccionado(s) para
-              notificación
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Vista de Tarjetas */}
-      {viewMode === "cards" && (
-        <div className="px-8 py-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {currentItems.length === 0 ? (
-              <div className="col-span-full text-center py-12 text-gray-400">
-                No se encontraron padres
-              </div>
-            ) : (
-              currentItems.map((padre, index) => (
-                <div
-                  key={index}
-                  className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:border-cyan-500/50 transition-all group relative"
-                >
-                  {/* Checkbox para selección */}
-                  <div className="absolute top-4 right-4">
+      {/* --- VISTA: TABLA --- */}
+      {viewMode === "table" && (
+        <div className="bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-gray-900/50 border-b border-gray-700">
+                <tr>
+                  <th className="px-6 py-4 w-10">
                     <input
                       type="checkbox"
-                      checked={selectedPadresNotif.includes(padre.correo_padre)}
-                      onChange={() => toggleSeleccionPadre(padre.correo_padre)}
-                      className="w-5 h-5 rounded border-gray-600 text-cyan-600 focus:ring-cyan-500 focus:ring-offset-gray-800"
+                      onChange={seleccionarTodos}
+                      checked={
+                        padresFiltrados.length > 0 &&
+                        selectedPadres.length === padresFiltrados.length
+                      }
+                      className="rounded border-gray-600 bg-gray-700 text-cyan-500 focus:ring-cyan-500"
                     />
-                  </div>
-
-                  <div className="flex flex-col items-center text-center mb-4">
-                    <div className="w-20 h-20 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white text-2xl font-bold mb-3">
-                      {padre.nombre_padre?.charAt(0) || "P"}
-                    </div>
-                    <h3 className="text-lg font-semibold text-white mb-1">
-                      {padre.nombre_padre || "Sin nombre"}
-                    </h3>
-                    <span className="inline-flex items-center px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 text-sm font-medium mb-3">
-                      {padre.total_hijos} hijo
-                      {padre.total_hijos !== 1 ? "s" : ""}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2 mb-4">
-                    <div className="flex items-center gap-2 text-sm text-gray-300">
-                      <EnvelopeIcon className="w-4 h-4 text-cyan-400 flex-shrink-0" />
-                      <span className="truncate">{padre.correo_padre}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-300">
-                      <PhoneIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                      <span>{padre.telefono_padre || "N/A"}</span>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-700 pt-3 mb-4">
-                    <p className="text-xs text-gray-400 mb-1">Hijos:</p>
-                    <p className="text-sm text-gray-300 line-clamp-2">
-                      {padre.nombres_hijos}
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={() => verDetalle(padre.correo_padre)}
-                    className="w-full py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase">
+                    Padre / Tutor
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase">
+                    Contacto
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase">
+                    Estudiantes a Cargo
+                  </th>
+                  <th className="px-6 py-4 text-xs font-semibold text-gray-400 uppercase text-right">
+                    Acciones
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-700">
+                {padresFiltrados.map((padre) => (
+                  <tr
+                    key={padre.id_usuario}
+                    className="hover:bg-gray-700/30 transition-colors group"
                   >
-                    <EyeIcon className="w-4 h-4" />
-                    Ver Detalle
-                  </button>
-                </div>
-              ))
+                    <td className="px-6 py-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedPadres.includes(padre.email)}
+                        onChange={() => toggleSeleccion(padre.email)}
+                        className="rounded border-gray-600 bg-gray-700 text-cyan-500 focus:ring-cyan-500"
+                      />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-600 to-blue-600 flex items-center justify-center text-white font-bold text-sm">
+                          {padre.nombre.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-medium text-white">
+                            {padre.nombre} {padre.apellido}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            ID: {padre.id_usuario}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2 text-sm text-gray-300">
+                          <EnvelopeIcon className="w-4 h-4 text-gray-500" />
+                          {padre.email}
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-300">
+                          <PhoneIcon className="w-4 h-4 text-gray-500" />
+                          {padre.telefono || "No registrado"}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-wrap gap-2">
+                        {padre.hijos && padre.hijos.length > 0 ? (
+                          padre.hijos.map((hijo, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
+                            >
+                              {hijo.nombre}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-gray-500 text-xs italic">
+                            Sin estudiantes vinculados
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button
+                        onClick={() => {
+                          setSelectedPadre(padre);
+                          setShowDetalleModal(true);
+                        }}
+                        className="text-gray-400 hover:text-cyan-400 transition-colors p-2 hover:bg-gray-700 rounded-lg"
+                        title="Ver detalle"
+                      >
+                        <EyeIcon className="w-5 h-5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {padresFiltrados.length === 0 && (
+              <div className="p-8 text-center text-gray-500">
+                No se encontraron padres que coincidan con la búsqueda.
+              </div>
             )}
           </div>
         </div>
       )}
 
-      {/* Vista de Tabla */}
-      {viewMode === "table" && (
-        <div className="px-8 py-4">
-          <div className="bg-gray-800 border border-gray-700 rounded-xl shadow-lg overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-700 border-b border-gray-600">
-                  <tr>
-                    <th className="px-4 py-4 text-left">
-                      <input
-                        type="checkbox"
-                        checked={
-                          selectedPadresNotif.length === currentItems.length &&
-                          currentItems.length > 0
-                        }
-                        onChange={seleccionarTodos}
-                        className="w-5 h-5 rounded border-gray-600 text-cyan-600 focus:ring-cyan-500"
-                      />
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">
-                      Padre
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">
-                      Contacto
-                    </th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-gray-200">
-                      Hijos
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-gray-200">
-                      Nombres Hijos
-                    </th>
-                    <th className="px-6 py-4 text-center text-sm font-semibold text-gray-200">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {currentItems.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan="6"
-                        className="px-6 py-8 text-center text-gray-400"
-                      >
-                        No se encontraron padres
-                      </td>
-                    </tr>
-                  ) : (
-                    currentItems.map((padre, index) => (
-                      <tr
-                        key={index}
-                        className="hover:bg-gray-700/50 transition-colors"
-                      >
-                        <td className="px-4 py-4">
-                          <input
-                            type="checkbox"
-                            checked={selectedPadresNotif.includes(
-                              padre.correo_padre
-                            )}
-                            onChange={() =>
-                              toggleSeleccionPadre(padre.correo_padre)
-                            }
-                            className="w-5 h-5 rounded border-gray-600 text-cyan-600 focus:ring-cyan-500"
-                          />
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
-                              {padre.nombre_padre?.charAt(0) || "P"}
-                            </div>
-                            <span className="text-white font-medium">
-                              {padre.nombre_padre || "Sin nombre"}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2 text-sm text-gray-300">
-                              <EnvelopeIcon className="w-4 h-4 text-cyan-400" />
-                              {padre.correo_padre}
-                            </div>
-                            <div className="flex items-center gap-2 text-sm text-gray-300">
-                              <PhoneIcon className="w-4 h-4 text-blue-400" />
-                              {padre.telefono_padre || "N/A"}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 font-semibold">
-                            {padre.total_hijos}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-gray-300">
-                          <div
-                            className="max-w-xs truncate"
-                            title={padre.nombres_hijos}
-                          >
-                            {padre.nombres_hijos}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex justify-center gap-2">
-                            <button
-                              onClick={() => verDetalle(padre.correo_padre)}
-                              className="p-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg transition-colors"
-                              title="Ver detalle"
-                            >
-                              <EyeIcon className="w-5 h-5" />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedPadresNotif([padre.correo_padre]);
-                                setShowNotificationModal(true);
-                              }}
-                              className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
-                              title="Enviar notificación"
-                            >
-                              <BellAlertIcon className="w-5 h-5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Paginación */}
-      {totalPages > 1 && (
-        <div className="px-8 py-6 flex justify-center items-center gap-2">
-          <button
-            onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            className="p-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-          >
-            <ChevronLeftIcon className="w-5 h-5" />
-          </button>
-
-          {[...Array(totalPages)].map((_, i) => (
-            <button
-              key={i}
-              onClick={() => setCurrentPage(i + 1)}
-              className={`px-4 py-2 rounded-lg transition-colors ${
-                currentPage === i + 1
-                  ? "bg-cyan-600 text-white"
-                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-              }`}
+      {/* --- VISTA: CARDS --- */}
+      {viewMode === "cards" && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {padresFiltrados.map((padre) => (
+            <div
+              key={padre.id_usuario}
+              className={`bg-gray-800 border ${
+                selectedPadres.includes(padre.email)
+                  ? "border-cyan-500 ring-1 ring-cyan-500"
+                  : "border-gray-700"
+              } rounded-xl p-6 hover:shadow-xl transition-all relative group`}
             >
-              {i + 1}
-            </button>
-          ))}
+              <div className="absolute top-4 right-4">
+                <input
+                  type="checkbox"
+                  checked={selectedPadres.includes(padre.email)}
+                  onChange={() => toggleSeleccion(padre.email)}
+                  className="w-5 h-5 rounded border-gray-600 bg-gray-700 text-cyan-500 focus:ring-cyan-500 cursor-pointer"
+                />
+              </div>
 
-          <button
-            onClick={() =>
-              setCurrentPage((prev) => Math.min(prev + 1, totalPages))
-            }
-            disabled={currentPage === totalPages}
-            className="p-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors"
-          >
-            <ChevronRightIcon className="w-5 h-5" />
-          </button>
+              <div className="flex flex-col items-center text-center mb-4">
+                <div className="w-20 h-20 rounded-full bg-gray-700 p-1 mb-3">
+                  <div className="w-full h-full rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-2xl font-bold text-white">
+                    {padre.nombre.charAt(0)}
+                  </div>
+                </div>
+                <h3 className="text-lg font-bold text-white">
+                  {padre.nombre} {padre.apellido}
+                </h3>
+                <p className="text-sm text-gray-400">{padre.email}</p>
+              </div>
+
+              <div className="border-t border-gray-700 pt-4 mt-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
+                  Estudiantes
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {padre.hijos?.slice(0, 3).map((h, i) => (
+                    <span
+                      key={i}
+                      className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded"
+                    >
+                      {h.nombre}
+                    </span>
+                  ))}
+                  {padre.hijos?.length > 3 && (
+                    <span className="text-xs text-gray-500">
+                      +{padre.hijos.length - 3}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <button
+                onClick={() => {
+                  setSelectedPadre(padre);
+                  setShowDetalleModal(true);
+                }}
+                className="w-full mt-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Ver Perfil Completo
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* Modal de Notificación */}
-      {showNotificationModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl max-w-2xl w-full">
-            <div className="bg-gradient-to-r from-indigo-900/50 to-purple-900/50 px-8 py-6 border-b border-gray-700">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <BellAlertIcon className="w-8 h-8 text-indigo-400" />
-                  <h2 className="text-2xl font-bold text-white">
-                    Enviar Notificación
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setShowNotificationModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <XMarkIcon className="w-6 h-6" />
-                </button>
-              </div>
+      {/* --- MODAL NOTIFICACIÓN --- */}
+      {showNotifModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-700 bg-gray-900/50 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <BellAlertIcon className="w-5 h-5 text-cyan-400" />
+                Enviar Notificación
+              </h3>
+              <button
+                onClick={() => setShowNotifModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
             </div>
 
-            <div className="p-8 space-y-6">
-              <div>
-                <p className="text-gray-300 mb-4">
-                  Seleccionados:{" "}
-                  <span className="text-cyan-400 font-semibold">
-                    {selectedPadresNotif.length} padre(s)
-                  </span>
+            <div className="p-6 space-y-4">
+              <div className="bg-cyan-900/20 border border-cyan-500/20 p-3 rounded-lg">
+                <p className="text-sm text-cyan-200">
+                  Enviando a{" "}
+                  <span className="font-bold">{selectedPadres.length}</span>{" "}
+                  destinatarios seleccionados.
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="text-xs font-medium text-gray-400 mb-1 block">
                   Asunto
                 </label>
                 <input
-                  type="text"
-                  value={notification.asunto}
+                  value={notificacion.asunto}
                   onChange={(e) =>
-                    setNotification({...notification, asunto: e.target.value})
+                    setNotificacion({...notificacion, asunto: e.target.value})
                   }
-                  placeholder="Ej: Reunión de padres"
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-cyan-500 outline-none"
+                  placeholder="Ej: Reunión de Padres - Mensual"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
+                <label className="text-xs font-medium text-gray-400 mb-1 block">
                   Mensaje
                 </label>
                 <textarea
-                  value={notification.mensaje}
+                  rows="4"
+                  value={notificacion.mensaje}
                   onChange={(e) =>
-                    setNotification({...notification, mensaje: e.target.value})
+                    setNotificacion({...notificacion, mensaje: e.target.value})
                   }
-                  placeholder="Escriba su mensaje aquí..."
-                  rows="6"
-                  className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                  className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-cyan-500 outline-none resize-none"
+                  placeholder="Escriba el comunicado aquí..."
                 />
               </div>
 
-              <div className="flex gap-3 justify-end">
+              <div className="flex gap-3 justify-end pt-2">
                 <button
-                  onClick={() => setShowNotificationModal(false)}
-                  className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
+                  onClick={() => setShowNotifModal(false)}
+                  className="px-4 py-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
-                  onClick={enviarNotificacion}
-                  className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-lg transition-all flex items-center gap-2"
+                  onClick={enviarNotificacionMasiva}
+                  className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium shadow-lg shadow-cyan-900/20"
                 >
-                  <CheckIcon className="w-5 h-5" />
-                  Enviar Notificación
+                  Enviar Ahora
                 </button>
               </div>
             </div>
@@ -819,113 +620,138 @@ export default function PadresFamilia() {
         </div>
       )}
 
-      {/* Modal de Detalle (existente) */}
-      {showModal && selectedPadre && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-gray-800 border border-gray-700 rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="bg-gradient-to-r from-cyan-900/50 to-blue-900/50 px-8 py-6 border-b border-gray-700">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-cyan-500 to-blue-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                    {selectedPadre.nombre_padre?.charAt(0) || "P"}
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold text-white">
-                      {selectedPadre.nombre_padre}
-                    </h2>
-                    <p className="text-cyan-300">
-                      {selectedPadre.correo_padre}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowModal(false)}
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  <XMarkIcon className="w-6 h-6" />
-                </button>
-              </div>
+      {/* --- MODAL DETALLE --- */}
+      {showDetalleModal && selectedPadre && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-gray-800 border border-gray-700 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
+            <div className="relative h-24 bg-gradient-to-r from-cyan-600 to-blue-600">
+              <button
+                onClick={() => setShowDetalleModal(false)}
+                className="absolute top-4 right-4 text-white/80 hover:text-white bg-black/20 p-1 rounded-full"
+              >
+                <XMarkIcon className="w-5 h-5" />
+              </button>
             </div>
-
-            <div className="px-8 py-6 border-b border-gray-700">
-              <h3 className="text-lg font-semibold text-white mb-4">
-                Información de Contacto
-              </h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex items-center gap-3 text-gray-300">
-                  <PhoneIcon className="w-5 h-5 text-cyan-400" />
-                  <span>{selectedPadre.telefono_padre || "No registrado"}</span>
-                </div>
-                <div className="flex items-center gap-3 text-gray-300">
-                  <EnvelopeIcon className="w-5 h-5 text-cyan-400" />
-                  <span>{selectedPadre.correo_padre}</span>
+            <div className="px-8 pb-8">
+              <div className="relative -mt-12 mb-4 flex justify-between items-end">
+                <div className="w-24 h-24 rounded-full border-4 border-gray-800 bg-gray-700 flex items-center justify-center text-3xl font-bold text-white">
+                  {selectedPadre.nombre.charAt(0)}
                 </div>
               </div>
-            </div>
 
-            <div className="px-8 py-6">
-              <h3 className="text-lg font-semibold text-white mb-4">
-                Hijos Registrados ({selectedPadre.hijos?.length || 0})
+              <h2 className="text-2xl font-bold text-white">
+                {selectedPadre.nombre} {selectedPadre.apellido}
+              </h2>
+              <div className="flex gap-4 text-sm text-gray-400 mt-1 mb-6">
+                <span className="flex items-center gap-1">
+                  <EnvelopeIcon className="w-4 h-4" /> {selectedPadre.email}
+                </span>
+                <span className="flex items-center gap-1">
+                  <PhoneIcon className="w-4 h-4" /> {selectedPadre.telefono}
+                </span>
+              </div>
+
+              <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                <AcademicCapIcon className="w-5 h-5 text-cyan-400" />{" "}
+                Estudiantes Vinculados
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {selectedPadre.hijos?.map((hijo) => (
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {selectedPadre.hijos?.map((hijo, idx) => (
                   <div
-                    key={hijo.id_estudiante}
-                    className="bg-gray-700 p-4 rounded-xl border border-gray-600"
+                    key={idx}
+                    className="bg-gray-700/50 border border-gray-600 rounded-lg p-3 flex items-center gap-3"
                   >
-                    <div className="flex items-start gap-3">
-                      {hijo.imagen ? (
-                        <img
-                          src={`http://localhost:4000${hijo.imagen}`}
-                          alt={hijo.nombre}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold">
-                          {hijo.nombre?.charAt(0)}
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <h4 className="text-white font-semibold">
-                          {hijo.nombre} {hijo.apellido}
-                        </h4>
-                        <p className="text-sm text-gray-400">
-                          Código: {hijo.codigo_mined}
-                        </p>
-                        <p className="text-sm text-gray-400">
-                          {hijo.nombre_grado} - {hijo.nombre_seccion}
-                        </p>
-                        <p className="text-sm text-cyan-400">{hijo.email}</p>
-                      </div>
+                    <div className="w-10 h-10 rounded-full bg-indigo-600/20 text-indigo-400 flex items-center justify-center font-bold">
+                      {hijo.nombre.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="font-medium text-white text-sm">
+                        {hijo.nombre}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {hijo.grado} - Sección {hijo.seccion}
+                      </p>
                     </div>
                   </div>
                 ))}
+                {(!selectedPadre.hijos || selectedPadre.hijos.length === 0) && (
+                  <p className="text-gray-500 italic text-sm">
+                    No tiene estudiantes asignados.
+                  </p>
+                )}
               </div>
-            </div>
 
-            <div className="px-8 py-4 bg-gray-900/50 flex justify-end gap-3">
-              <button
-                onClick={() => setShowModal(false)}
-                className="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
-              >
-                Cerrar
-              </button>
+              {/* Vinculación Padre ↔ Estudiante */}
+              {user &&
+                (hasPermission(user.rol, "padres_familia", "crear") ||
+                  hasPermission(user.rol, "padres_familia", "editar")) && (
+                  <div className="mt-6 bg-gray-800/60 border border-gray-700 rounded-lg p-4">
+                    <h4 className="text-white font-semibold mb-3">
+                      Vincular con Estudiante
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1 block">
+                          Estudiante
+                        </label>
+                        <select
+                          value={selectedEstudianteId}
+                          onChange={(e) =>
+                            setSelectedEstudianteId(e.target.value)
+                          }
+                          className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"
+                        >
+                          <option value="">Selecciona estudiante...</option>
+                          {estudiantes.map((e) => (
+                            <option key={e.id_usuario} value={e.id_usuario}>
+                              {e.nombre} {e.apellido} ({e.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 mb-1 block">
+                          Parentesco
+                        </label>
+                        <select
+                          value={tipoParentesco}
+                          onChange={(e) => setTipoParentesco(e.target.value)}
+                          className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm"
+                        >
+                          <option value="Padre">Padre</option>
+                          <option value="Madre">Madre</option>
+                          <option value="Tutor">Tutor</option>
+                        </select>
+                      </div>
+                      <div className="flex items-end">
+                        <button
+                          onClick={vincularPadreConEstudiante}
+                          className="w-full md:w-auto px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg font-medium"
+                        >
+                          Vincular
+                        </button>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      Requiere permisos de administración
+                      (admin/director/secretariado).
+                    </p>
+                  </div>
+                )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal de confirmación */}
-      <ConfirmModal
-        open={confirmModal.open}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        type={confirmModal.type}
-        confirmText={confirmModal.confirmText || "Aceptar"}
-        cancelText={confirmModal.cancelText || "Cancelar"}
-        onConfirm={confirmModal.onConfirm}
-        onCancel={confirmModal.onCancel}
-      />
+      {/* Componente Toast Global */}
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast({...toast, show: false})}
+        />
+      )}
     </div>
   );
 }

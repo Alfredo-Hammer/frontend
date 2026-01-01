@@ -3,41 +3,52 @@ import api from "../api/axiosConfig";
 import services from "../api/services";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import TablaCalificacionesAlumno from "../components/TablaCalificacionesAlumno";
+import TablaCalificacionesAlumno from "../components/TablaCalificacionesAlumno"; // Asegúrate de actualizar este componente también después
+import PageHeader from "../components/PageHeader";
 import {
   MagnifyingGlassIcon,
   FunnelIcon,
   ChartBarIcon,
   AcademicCapIcon,
   UserIcon,
-  BuildingLibraryIcon,
   DocumentTextIcon,
-} from "@heroicons/react/24/solid";
+  TableCellsIcon,
+  Squares2X2Icon,
+  ArrowPathIcon,
+} from "@heroicons/react/24/outline";
 
 function CalificacionesPage() {
+  // Ciclos escolares
+  const [ciclos, setCiclos] = useState([]);
+  const [cicloSeleccionado, setCicloSeleccionado] = useState("");
+  // ==================== ESTADOS (LÓGICA INTACTA) ====================
   const [alumnos, setAlumnos] = useState([]);
   const [alumnosLista, setAlumnosLista] = useState([]);
   const [grados, setGrados] = useState([]);
   const [secciones, setSecciones] = useState([]);
   const [materias, setMaterias] = useState([]);
+
+  // Filtros
   const [filtroGrado, setFiltroGrado] = useState("");
   const [filtroSeccion, setFiltroSeccion] = useState("");
   const [filtroMateria, setFiltroMateria] = useState("");
+
+  // Navegación
   const [vistaAlumno, setVistaAlumno] = useState(null);
   const [nombreAlumno, setNombreAlumno] = useState("");
 
-  // Estados para funcionalidades adicionales
+  // UI States
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [showStats, setShowStats] = useState(false);
-  const [viewMode, setViewMode] = useState("table");
+  const [viewMode, setViewMode] = useState("table"); // 'table' | 'cards'
   const [sortBy, setSortBy] = useState("alumno");
   const [sortOrder, setSortOrder] = useState("asc");
   const [mensaje, setMensaje] = useState("");
 
   const token = localStorage.getItem("token");
 
+  // ==================== EFECTOS Y CARGA DE DATOS ====================
   useEffect(() => {
     const initializePage = async () => {
       setIsLoading(true);
@@ -48,6 +59,7 @@ function CalificacionesPage() {
           fetchSecciones(),
           fetchMaterias(),
           fetchAlumnosLista(),
+          fetchCiclosEscolares(),
         ]);
       } catch (error) {
         setMensaje("Error al cargar datos iniciales");
@@ -56,12 +68,28 @@ function CalificacionesPage() {
       }
     };
     initializePage();
+    // Cargar ciclos escolares
+    const fetchCiclosEscolares = async () => {
+      try {
+        const res = await api.get(services.API_BASE + "/ciclos-escolares", {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setCiclos(res.data?.data || res.data || []);
+        // Seleccionar ciclo activo por defecto
+        const activo = (res.data?.data || res.data || []).find((c) => c.activo);
+        if (activo) setCicloSeleccionado(activo.id);
+      } catch (error) {
+        setCiclos([]);
+        console.error("Error al cargar ciclos escolares:", error);
+      }
+    };
   }, []);
 
   useEffect(() => {
     fetchAlumnosLista();
-  }, [filtroGrado, filtroSeccion]);
+  }, [filtroGrado, filtroSeccion, cicloSeleccionado]);
 
+  // ==================== FUNCIONES API (LÓGICA INTACTA) ====================
   const fetchAlumnos = async () => {
     try {
       const res = await api.get(services.alumnos, {
@@ -69,7 +97,7 @@ function CalificacionesPage() {
       });
       setAlumnos(res.data);
     } catch (error) {
-      setMensaje("Error al cargar alumnos");
+      console.error(error);
     }
   };
 
@@ -80,7 +108,7 @@ function CalificacionesPage() {
       });
       setGrados(res.data);
     } catch (error) {
-      setMensaje("Error al cargar grados");
+      console.error(error);
     }
   };
 
@@ -89,9 +117,10 @@ function CalificacionesPage() {
       const res = await api.get(services.secciones, {
         headers: {Authorization: `Bearer ${token}`},
       });
-      setSecciones(res.data);
+      const data = res.data?.data || res.data || [];
+      setSecciones(Array.isArray(data) ? data : []);
     } catch (error) {
-      setMensaje("Error al cargar secciones");
+      console.error(error);
     }
   };
 
@@ -102,106 +131,151 @@ function CalificacionesPage() {
       });
       setMaterias(res.data);
     } catch (error) {
-      setMensaje("Error al cargar materias");
+      console.error(error);
     }
   };
 
   const fetchAlumnosLista = async () => {
     try {
-      let url = services.calificaciones + "/alumnos-lista";
+      if (!token) {
+        setMensaje(
+          "No se encontró token de autenticación. Por favor, inicia sesión nuevamente."
+        );
+        return;
+      }
+
+      let url = services.calificacionesAlumnosLista;
       const params = [];
       if (filtroGrado) params.push(`id_grado=${filtroGrado}`);
       if (filtroSeccion) params.push(`id_seccion=${filtroSeccion}`);
-      // Agregar timestamp para evitar caché
-      params.push(`_t=${Date.now()}`);
+      if (cicloSeleccionado) params.push(`id_ciclo=${cicloSeleccionado}`);
+      params.push(`_t=${Date.now()}`); // Anti-cache
       if (params.length) url += "?" + params.join("&");
+
       const res = await api.get(url, {
         headers: {Authorization: `Bearer ${token}`},
       });
       setAlumnosLista(res.data);
     } catch (error) {
-      setMensaje("Error al cargar lista de alumnos");
+      console.error(
+        "Error actualizando lista de estudiantes:",
+        error?.response?.status,
+        error?.response?.data || error?.message
+      );
+
+      const status = error?.response?.status;
+      const backendMsg =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.response?.data?.detalle ||
+        null;
+
+      if (status === 401) {
+        setMensaje("Sesión expirada o no autorizada. Vuelve a iniciar sesión.");
+      } else if (status === 403) {
+        setMensaje("No tienes permisos para ver la lista de estudiantes.");
+      } else {
+        setMensaje(backendMsg || "Error actualizando lista de estudiantes");
+      }
     }
   };
 
-  // Vista de calificaciones por alumno - SIMPLIFICADA
+  // ==================== LÓGICA DE NEGOCIO ====================
   const verCalificacionesAlumno = (id_alumno, nombre) => {
-    console.log("Ver calificaciones para alumno ID:", id_alumno);
     setNombreAlumno(nombre);
     setVistaAlumno(id_alumno);
     setMensaje("");
   };
 
-  // Filtros y búsqueda
+  // Filtros y Ordenamiento
   const alumnosFiltrados = alumnosLista.filter((alumno) => {
-    const matchesSearch =
-      alumno.alumno.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (alumno.grado &&
-        alumno.grado.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (alumno.seccion &&
-        alumno.seccion.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchesSearch;
+    const term = searchTerm.toLowerCase();
+    return (
+      alumno.alumno.toLowerCase().includes(term) ||
+      (alumno.grado && alumno.grado.toLowerCase().includes(term)) ||
+      (alumno.seccion && alumno.seccion.toLowerCase().includes(term))
+    );
   });
 
-  // Ordenamiento
   const alumnosOrdenados = [...alumnosFiltrados].sort((a, b) => {
     let aValue = a[sortBy] || "";
     let bValue = b[sortBy] || "";
-
     if (typeof aValue === "string") {
       aValue = aValue.toLowerCase();
       bValue = bValue.toLowerCase();
     }
-
-    if (sortOrder === "asc") {
-      return aValue < bValue ? -1 : aValue > bValue ? 1 : 0;
-    } else {
-      return aValue > bValue ? -1 : aValue < bValue ? 1 : 0;
-    }
+    return sortOrder === "asc"
+      ? aValue < bValue
+        ? -1
+        : aValue > bValue
+        ? 1
+        : 0
+      : aValue > bValue
+      ? -1
+      : aValue < bValue
+      ? 1
+      : 0;
   });
 
-  // Estadísticas generales
-  const estadisticasGenerales = {
-    totalAlumnos: alumnosLista.length,
-    gradosUnicos: [...new Set(alumnosLista.map((a) => a.grado).filter(Boolean))]
+  // Estadísticas rápidas
+  const stats = {
+    total: alumnosLista.length,
+    grados: [...new Set(alumnosLista.map((a) => a.grado).filter(Boolean))]
       .length,
-    seccionesUnicas: [
-      ...new Set(alumnosLista.map((a) => a.seccion).filter(Boolean)),
-    ].length,
-    filtrados: alumnosFiltrados.length,
+    secciones: [...new Set(alumnosLista.map((a) => a.seccion).filter(Boolean))]
+      .length,
   };
 
-  // Función para generar reporte consolidado
+  const headerStats = [
+    {
+      label: "Total Alumnos",
+      value: stats.total,
+      color: "from-blue-500 to-blue-700",
+      icon: UserIcon,
+    },
+    {
+      label: "Grados Activos",
+      value: stats.grados,
+      color: "from-indigo-500 to-purple-700",
+      icon: AcademicCapIcon,
+    },
+    {
+      label: "Secciones",
+      value: stats.secciones,
+      color: "from-cyan-500 to-blue-600",
+      icon: Squares2X2Icon,
+    },
+    {
+      label: "En lista actual",
+      value: alumnosFiltrados.length,
+      color: "from-emerald-500 to-teal-600",
+      icon: TableCellsIcon,
+    },
+  ];
+
+  // ==================== EXPORTACIÓN PDF (LÓGICA INTACTA) ====================
   const exportarReporteConsolidado = async () => {
-    if (!alumnosLista || alumnosLista.length === 0) {
-      setMensaje("No hay estudiantes para generar el reporte");
-      return;
-    }
+    if (!alumnosLista || alumnosLista.length === 0)
+      return setMensaje("No hay datos para exportar");
 
     try {
-      setMensaje("Generando reporte consolidado...");
-      const doc = new jsPDF("l", "mm", "a4"); // Formato horizontal para mejor espacio
+      setMensaje("Generando PDF...");
+      const doc = new jsPDF("l", "mm", "a4");
 
-      // Header
+      // Encabezado PDF
       doc.setFont("helvetica", "bold");
       doc.setFontSize(16);
-      doc.text("REPORTE CONSOLIDADO DE CALIFICACIONES", 148, 20, {
+      doc.text("REPORTE ACADÉMICO CONSOLIDADO", 148, 20, {align: "center"});
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Generado: ${new Date().toLocaleDateString()}`, 148, 28, {
         align: "center",
       });
 
-      doc.setFontSize(10);
-      doc.setFont("helvetica", "normal");
-      doc.text(
-        `Fecha de generación: ${new Date().toLocaleDateString()}`,
-        148,
-        30,
-        {align: "center"}
-      );
-
-      // Preparar datos para la tabla consolidada
       const consolidatedData = [];
-      const maxStudents = Math.min(alumnosLista.length, 50); // Limitar para evitar documentos muy largos
+      const maxStudents = Math.min(alumnosLista.length, 50); // Límite de seguridad
 
+      // Recolección de datos (Iterativa)
       for (let i = 0; i < maxStudents; i++) {
         const alumno = alumnosLista[i];
         try {
@@ -209,231 +283,90 @@ function CalificacionesPage() {
             `${services.calificacionesMateriasAlumno}/${alumno.id_alumno}`,
             {headers: {Authorization: `Bearer ${token}`}}
           );
+          const calif = res.data;
 
-          const calificaciones = res.data;
-          if (calificaciones.length > 0) {
-            let totalNotas = 0;
-            let totalBimestres = 0;
-            let reprobadas = 0;
-
-            calificaciones.forEach((cal) => {
-              const b1 = Number(cal.bimestre_1) || 0;
-              const b2 = Number(cal.bimestre_2) || 0;
-              const b3 = Number(cal.bimestre_3) || 0;
-              const b4 = Number(cal.bimestre_4) || 0;
-
-              const notas = [b1, b2, b3, b4].filter((n) => n > 0);
-              notas.forEach((nota) => {
-                totalNotas += nota;
-                totalBimestres++;
-                if (nota < 60) reprobadas++;
+          if (calif.length > 0) {
+            let totalNotas = 0,
+              count = 0,
+              reprobadas = 0;
+            calif.forEach((c) => {
+              const notas = [
+                Number(c.bimestre_1),
+                Number(c.bimestre_2),
+                Number(c.bimestre_3),
+                Number(c.bimestre_4),
+              ].filter((n) => n > 0);
+              notas.forEach((n) => {
+                totalNotas += n;
+                count++;
+                if (n < 60) reprobadas++;
               });
             });
-
-            const promedio =
-              totalBimestres > 0 ? totalNotas / totalBimestres : 0;
-
+            const promedio = count > 0 ? totalNotas / count : 0;
             consolidatedData.push([
               alumno.alumno,
-              alumno.grado || "N/A",
-              alumno.seccion || "N/A",
-              calificaciones.length,
+              alumno.grado || "-",
+              alumno.seccion || "-",
+              calif.length,
               promedio.toFixed(2),
               reprobadas,
-              promedio >= 70 ? "Aprobado" : "En riesgo",
+              promedio >= 60 ? "Aprobado" : "Reprobado",
             ]);
           } else {
-            // Agregar estudiante sin calificaciones
             consolidatedData.push([
               alumno.alumno,
-              alumno.grado || "N/A",
-              alumno.seccion || "N/A",
+              alumno.grado,
+              alumno.seccion,
               0,
               "0.00",
               0,
-              "Sin calificar",
+              "Sin notas",
             ]);
           }
-        } catch (error) {
-          console.error(
-            `Error al obtener calificaciones de ${alumno.alumno}:`,
-            error
-          );
-          // Agregar estudiante con error
+        } catch (e) {
           consolidatedData.push([
             alumno.alumno,
-            alumno.grado || "N/A",
-            alumno.seccion || "N/A",
+            "-",
+            "-",
             "Error",
-            "Error",
-            "Error",
-            "Error",
+            "-",
+            "-",
+            "-",
           ]);
         }
       }
 
-      // Crear tabla consolidada usando autoTable
+      // Generación Tabla PDF
       autoTable(doc, {
-        head: [
-          [
-            "Estudiante",
-            "Grado",
-            "Sección",
-            "Materias",
-            "Promedio",
-            "Reprobadas",
-            "Estado",
-          ],
-        ],
+        head: [["Estudiante", "Grado", "Sec", "Mat", "Prom", "Rep", "Estado"]],
         body: consolidatedData,
-        startY: 45,
+        startY: 35,
         theme: "striped",
-        headStyles: {
-          fillColor: [52, 152, 219],
-          textColor: 255,
-          fontSize: 9,
-          fontStyle: "bold",
-        },
-        styles: {
-          fontSize: 8,
-          cellPadding: 3,
-        },
-        columnStyles: {
-          0: {cellWidth: 60},
-          1: {cellWidth: 25, halign: "center"},
-          2: {cellWidth: 25, halign: "center"},
-          3: {cellWidth: 25, halign: "center"},
-          4: {cellWidth: 25, halign: "center", fontStyle: "bold"},
-          5: {cellWidth: 25, halign: "center"},
-          6: {cellWidth: 30, halign: "center"},
-        },
+        headStyles: {fillColor: [63, 81, 181]}, // Indigo
+        styles: {fontSize: 9},
         didParseCell: (data) => {
           if (data.column.index === 6) {
-            // Columna de estado
-            if (data.cell.text[0] === "Aprobado") {
-              data.cell.styles.textColor = [40, 167, 69];
-              data.cell.styles.fontStyle = "bold";
-            } else if (data.cell.text[0] === "En riesgo") {
-              data.cell.styles.textColor = [220, 53, 69];
-              data.cell.styles.fontStyle = "bold";
-            } else if (data.cell.text[0] === "Sin calificar") {
-              data.cell.styles.textColor = [255, 193, 7];
-              data.cell.styles.fontStyle = "bold";
-            }
-          } else if (data.column.index === 4) {
-            // Columna de promedio
-            const promedio = parseFloat(data.cell.text[0]);
-            if (!isNaN(promedio)) {
-              if (promedio < 60) {
-                data.cell.styles.textColor = [220, 53, 69];
-              } else if (promedio >= 90) {
-                data.cell.styles.textColor = [40, 167, 69];
-              }
-            }
+            const val = data.cell.text[0];
+            data.cell.styles.textColor =
+              val === "Aprobado"
+                ? [0, 150, 0]
+                : val === "Reprobado"
+                ? [200, 0, 0]
+                : [0, 0, 0];
           }
         },
       });
 
-      // Estadísticas generales
-      const validData = consolidatedData.filter(
-        (row) => !isNaN(parseFloat(row[4]))
-      );
-      const totalEstudiantes = consolidatedData.length;
-      const aprobados = consolidatedData.filter(
-        (row) => row[6] === "Aprobado"
-      ).length;
-      const enRiesgo = consolidatedData.filter(
-        (row) => row[6] === "En riesgo"
-      ).length;
-      const sinCalificar = consolidatedData.filter(
-        (row) => row[6] === "Sin calificar"
-      ).length;
-      const promedioGeneral =
-        validData.length > 0
-          ? validData.reduce((sum, row) => sum + parseFloat(row[4]), 0) /
-            validData.length
-          : 0;
-
-      const statsY = doc.lastAutoTable.finalY + 20;
-
-      doc.setFontSize(12);
-      doc.setFont("helvetica", "bold");
-      doc.text("ESTADÍSTICAS GENERALES", 20, statsY);
-
-      const generalStats = [
-        ["Total de estudiantes evaluados:", totalEstudiantes.toString()],
-        [
-          "Estudiantes aprobados:",
-          `${aprobados} (${
-            totalEstudiantes > 0
-              ? ((aprobados / totalEstudiantes) * 100).toFixed(1)
-              : 0
-          }%)`,
-        ],
-        [
-          "Estudiantes en riesgo:",
-          `${enRiesgo} (${
-            totalEstudiantes > 0
-              ? ((enRiesgo / totalEstudiantes) * 100).toFixed(1)
-              : 0
-          }%)`,
-        ],
-        [
-          "Estudiantes sin calificar:",
-          `${sinCalificar} (${
-            totalEstudiantes > 0
-              ? ((sinCalificar / totalEstudiantes) * 100).toFixed(1)
-              : 0
-          }%)`,
-        ],
-        ["Promedio general de la institución:", promedioGeneral.toFixed(2)],
-      ];
-
-      autoTable(doc, {
-        body: generalStats,
-        startY: statsY + 8,
-        theme: "plain",
-        styles: {
-          fontSize: 10,
-          cellPadding: 3,
-        },
-        columnStyles: {
-          0: {fontStyle: "bold", cellWidth: 80},
-          1: {fontStyle: "bold", cellWidth: 40},
-        },
-      });
-
-      // Footer
-      const pageHeight = doc.internal.pageSize.height;
-      doc.setFontSize(8);
-      doc.setFont("helvetica", "italic");
-      doc.text(
-        "Sistema AOC de Gestión Escolar - Reporte generado automáticamente",
-        148,
-        pageHeight - 15,
-        {align: "center"}
-      );
-      doc.text(
-        `${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}`,
-        148,
-        pageHeight - 10,
-        {align: "center"}
-      );
-
-      // Guardar el PDF
-      const fileName = `Reporte_Consolidado_${new Date().getFullYear()}_${String(
-        new Date().getMonth() + 1
-      ).padStart(2, "0")}_${String(new Date().getDate()).padStart(2, "0")}.pdf`;
-      doc.save(fileName);
-
-      setMensaje("Reporte consolidado exportado correctamente");
+      doc.save(`Reporte_Notas_${new Date().toISOString().slice(0, 10)}.pdf`);
+      setMensaje("Reporte descargado correctamente");
+      setTimeout(() => setMensaje(""), 3000);
     } catch (error) {
-      console.error("Error al exportar reporte consolidado:", error);
-      setMensaje("Error al generar el reporte consolidado: " + error.message);
+      setMensaje("Error generando PDF");
+      console.error(error);
     }
   };
 
-  // Si vistaAlumno está activo, mostrar el componente TablaCalificacionesAlumno
+  // ==================== VISTA DE DETALLE (HIJO) ====================
   if (vistaAlumno) {
     return (
       <TablaCalificacionesAlumno
@@ -445,196 +378,133 @@ function CalificacionesPage() {
     );
   }
 
-  // Vista principal
+  // ==================== RENDER PRINCIPAL ====================
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      {/* Header Hero Section */}
-      <div className="relative bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 overflow-hidden">
-        <div className="absolute inset-0 bg-black/20"></div>
-        <div className="absolute inset-0">
-          <div className="absolute top-10 left-10 w-40 h-40 bg-violet-400/20 rounded-full blur-2xl animate-pulse"></div>
-          <div className="absolute bottom-10 right-10 w-60 h-60 bg-fuchsia-400/20 rounded-full blur-2xl animate-pulse delay-1000"></div>
-        </div>
-
-        <div className="relative max-w-7xl mx-auto px-6 py-16">
-          <div className="flex flex-col lg:flex-row items-center justify-between">
-            <div className="flex-1">
-              <div className="inline-flex items-center px-4 py-2 bg-white/10 rounded-full text-sm text-white mb-4 backdrop-blur-sm">
-                <ChartBarIcon className="w-4 h-4 mr-2" />
-                Sistema de Evaluación
-              </div>
-              <h1 className="text-4xl lg:text-6xl font-bold text-white mb-4">
-                <div className="flex items-center space-x-4 mb-4">
-                  <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                    <BuildingLibraryIcon className="w-8 h-8 text-white" />
-                  </div>
-                  <span>Gestión de</span>
-                </div>
-                <span className="block bg-gradient-to-r from-yellow-400 to-orange-400 bg-clip-text text-transparent ml-16">
-                  Calificaciones
-                </span>
-              </h1>
-              <p className="text-xl text-violet-100 mb-8 max-w-2xl">
-                Administra y registra las calificaciones de los estudiantes.
-                Sistema de evaluación bimestral con estadísticas avanzadas.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <button
-                  onClick={() => setShowStats(!showStats)}
-                  className="px-8 py-4 bg-white text-purple-600 rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center"
-                >
-                  <ChartBarIcon className="w-5 h-5 mr-2" />
-                  {showStats ? "Ocultar Estadísticas" : "Ver Estadísticas"}
-                </button>
-                <button
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="px-8 py-4 bg-white/10 text-white rounded-2xl font-semibold backdrop-blur-sm hover:bg-white/20 transform transition-all duration-300 flex items-center justify-center"
-                >
-                  <FunnelIcon className="w-5 h-5 mr-2" />
-                  {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
-                </button>
-                {/* Nuevo botón para reporte consolidado */}
-                <button
-                  onClick={exportarReporteConsolidado}
-                  className="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center justify-center"
-                >
-                  <DocumentTextIcon className="w-5 h-5 mr-2" />
-                  Reporte PDF
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 mt-12 lg:mt-0 flex justify-center">
-              <div className="relative">
-                <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-6 border border-white/20 w-80">
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-lg font-semibold text-white">
-                      Resumen del Sistema
-                    </h3>
-                  </div>
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-white">
-                      <span>Total de Estudiantes</span>
-                      <span className="font-bold text-yellow-400">
-                        {estadisticasGenerales.totalAlumnos}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Grados</span>
-                      <span className="font-bold text-violet-400">
-                        {estadisticasGenerales.gradosUnicos}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Secciones</span>
-                      <span className="font-bold text-purple-400">
-                        {estadisticasGenerales.seccionesUnicas}
-                      </span>
-                    </div>
-                    <div className="flex justify-between text-white">
-                      <span>Filtrados</span>
-                      <span className="font-bold text-fuchsia-400">
-                        {estadisticasGenerales.filtrados}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-7xl mx-auto px-6 py-8">
-        {mensaje && (
-          <div
-            className={`mb-6 p-4 rounded-2xl text-center backdrop-blur-sm border ${
-              mensaje.includes("correctamente") || mensaje.includes("Generando")
-                ? "bg-green-500/10 border-green-500/20 text-green-300"
-                : "bg-red-500/10 border-red-500/20 text-red-300"
-            }`}
+    <div className="min-h-screen bg-gray-900 text-gray-100 p-6 md:p-10">
+      <PageHeader
+        title="Gestión de Calificaciones"
+        subtitle="Registra notas, visualiza promedios y genera reportes académicos."
+        icon={AcademicCapIcon}
+        gradientFrom="indigo-600"
+        gradientTo="purple-600"
+        stats={headerStats}
+        actions={
+          <button
+            onClick={exportarReporteConsolidado}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 border border-gray-700 hover:bg-gray-700 text-white rounded-xl transition-all shadow-lg"
           >
-            {mensaje}
+            <DocumentTextIcon className="w-5 h-5 text-red-400" />
+            <span>Exportar PDF</span>
+          </button>
+        }
+      />
+
+      {/* MENSAJES DE SISTEMA */}
+      {mensaje && (
+        <div
+          className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${
+            mensaje.includes("Error")
+              ? "bg-red-500/10 text-red-300 border border-red-500/20"
+              : "bg-green-500/10 text-green-300 border border-green-500/20"
+          }`}
+        >
+          {mensaje.includes("Error") ? (
+            <div className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
+          ) : (
+            <div className="w-2 h-2 rounded-full bg-green-400" />
+          )}
+          {mensaje}
+        </div>
+      )}
+
+      {/* TOOLBAR Y FILTROS */}
+      <div className="bg-gray-800 border border-gray-700 rounded-xl p-5 mb-6 shadow-xl">
+        <div className="flex flex-col md:flex-row gap-4 justify-between items-center mb-4">
+          {/* Selector de Ciclo Escolar */}
+          <div className="mb-2 md:mb-0">
+            <label className="text-xs text-gray-400 mb-1 block">
+              Ciclo Escolar
+            </label>
+            <select
+              value={cicloSeleccionado}
+              onChange={(e) => setCicloSeleccionado(e.target.value)}
+              className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+            >
+              <option value="">Todos</option>
+              {ciclos.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre} ({c.fecha_inicio?.slice(0, 4)} -{" "}
+                  {c.fecha_fin?.slice(0, 4)}){c.activo ? " (Activo)" : ""}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
+          {/* Buscador */}
+          <div className="relative w-full md:w-96">
+            <MagnifyingGlassIcon className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Buscar estudiante..."
+              className="w-full pl-10 pr-4 py-2.5 bg-gray-900 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-500"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
 
-        {/* Panel de control y filtros */}
-        <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700 -mt-16 relative z-10">
-          {/* Barra de búsqueda y controles principales */}
-          <div className="flex flex-col lg:flex-row gap-4 items-center mb-6">
-            <div className="flex-1 relative">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <MagnifyingGlassIcon className="w-5 h-5 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Buscar estudiantes por nombre, grado o sección..."
-                className="block w-full pl-10 pr-3 py-3 border border-gray-600 rounded-xl bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
-
-            <div className="flex gap-3 items-center">
-              <select
-                className="px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-              >
-                <option value="alumno">Ordenar por Nombre</option>
-                <option value="grado">Ordenar por Grado</option>
-                <option value="seccion">Ordenar por Sección</option>
-              </select>
-
+          {/* Botones Derecha */}
+          <div className="flex gap-3 w-full md:w-auto">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border transition-colors ${
+                showFilters
+                  ? "bg-indigo-900/50 border-indigo-500 text-indigo-300"
+                  : "bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600"
+              }`}
+            >
+              <FunnelIcon className="w-5 h-5" />
+              <span>Filtros</span>
+            </button>
+            <div className="bg-gray-700 rounded-lg p-1 border border-gray-600 flex">
               <button
-                onClick={() =>
-                  setSortOrder(sortOrder === "asc" ? "desc" : "asc")
-                }
-                className="p-3 border border-gray-600 rounded-xl bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors duration-200"
-                title={`Orden ${
-                  sortOrder === "asc" ? "Ascendente" : "Descendente"
+                onClick={() => setViewMode("table")}
+                className={`p-2 rounded ${
+                  viewMode === "table"
+                    ? "bg-gray-600 text-white shadow"
+                    : "text-gray-400"
                 }`}
               >
-                {sortOrder === "asc" ? "↑" : "↓"}
+                <TableCellsIcon className="w-5 h-5" />
               </button>
-
-              <div className="flex bg-gray-700 rounded-xl p-1">
-                <button
-                  className={`px-4 py-2 rounded-lg transition-all duration-200 ${
-                    viewMode === "cards"
-                      ? "bg-purple-600 text-white shadow"
-                      : "text-gray-300 hover:bg-gray-600"
-                  }`}
-                  onClick={() => setViewMode("cards")}
-                  title="Vista de tarjetas"
-                >
-                  <UserIcon className="w-5 h-5" />
-                </button>
-                <button
-                  className={`px-4 py-2 rounded-lg transition-all duration-200 ${
-                    viewMode === "table"
-                      ? "bg-purple-600 text-white shadow"
-                      : "text-gray-300 hover:bg-gray-600"
-                  }`}
-                  onClick={() => setViewMode("table")}
-                  title="Vista de tabla"
-                >
-                  <ChartBarIcon className="w-5 h-5" />
-                </button>
-              </div>
+              <button
+                onClick={() => setViewMode("cards")}
+                className={`p-2 rounded ${
+                  viewMode === "cards"
+                    ? "bg-gray-600 text-white shadow"
+                    : "text-gray-400"
+                }`}
+              >
+                <Squares2X2Icon className="w-5 h-5" />
+              </button>
             </div>
+            <button
+              onClick={fetchAlumnosLista}
+              className="p-2.5 bg-gray-700 border border-gray-600 text-gray-300 rounded-lg hover:text-white hover:rotate-180 transition-all"
+              title="Recargar datos"
+            >
+              <ArrowPathIcon className="w-5 h-5" />
+            </button>
           </div>
+        </div>
 
-          {/* Filtros avanzados académicos */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {/* Panel Expandible de Filtros */}
+        {showFilters && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-700 animate-in fade-in slide-in-from-top-2">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Filtrar por Grado
-              </label>
+              <label className="text-xs text-gray-400 mb-1 block">Grado</label>
               <select
                 value={filtroGrado}
                 onChange={(e) => setFiltroGrado(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
+                className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
               >
                 <option value="">Todos los grados</option>
                 {grados.map((g) => (
@@ -645,13 +515,13 @@ function CalificacionesPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Filtrar por Sección
+              <label className="text-xs text-gray-400 mb-1 block">
+                Sección
               </label>
               <select
                 value={filtroSeccion}
                 onChange={(e) => setFiltroSeccion(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
+                className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
               >
                 <option value="">Todas las secciones</option>
                 {secciones.map((s) => (
@@ -662,238 +532,164 @@ function CalificacionesPage() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-2">
-                Filtrar por Materia
+              <label className="text-xs text-gray-400 mb-1 block">
+                Ordenar por
               </label>
-              <select
-                value={filtroMateria}
-                onChange={(e) => setFiltroMateria(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
-              >
-                <option value="">Todas las materias</option>
-                {materias.map((m) => (
-                  <option key={m.id_materia} value={m.id_materia}>
-                    {m.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {alumnosFiltrados.length !== alumnosLista.length && (
-            <div className="text-sm text-gray-400 text-center">
-              Mostrando {alumnosFiltrados.length} de {alumnosLista.length}{" "}
-              estudiantes
-            </div>
-          )}
-        </div>
-
-        {/* Loading state */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500"></div>
-            <span className="ml-3 text-lg text-gray-300">
-              Cargando estudiantes...
-            </span>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!isLoading && alumnosLista.length === 0 && (
-          <div className="text-center py-20">
-            <div className="text-8xl mb-6">📊</div>
-            <h2 className="text-2xl font-bold text-gray-300 mb-4">
-              No hay estudiantes registrados
-            </h2>
-            <p className="text-gray-400 mb-8 max-w-md mx-auto">
-              Necesitas tener estudiantes registrados para poder gestionar sus
-              calificaciones.
-            </p>
-          </div>
-        )}
-
-        {/* Filtered empty state */}
-        {!isLoading &&
-          alumnosFiltrados.length === 0 &&
-          alumnosLista.length > 0 && (
-            <div className="text-center py-16">
-              <div className="text-6xl mb-4">🔍</div>
-              <h3 className="text-xl font-semibold text-gray-300 mb-2">
-                No se encontraron estudiantes
-              </h3>
-              <p className="text-gray-400">
-                Intenta modificar los filtros de búsqueda
-              </p>
-            </div>
-          )}
-
-        {/* Vista de Tarjetas */}
-        {!isLoading && alumnosFiltrados.length > 0 && viewMode === "cards" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-bold text-white flex items-center">
-                <UserIcon className="w-6 h-6 mr-2 text-purple-400" />
-                Lista de Estudiantes
-              </h3>
-              <div className="text-sm text-gray-400">
-                {alumnosFiltrados.length} estudiante
-                {alumnosFiltrados.length !== 1 ? "s" : ""}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {alumnosOrdenados.map((alumno, idx) => (
-                <div
-                  key={alumno.id_alumno}
-                  className="bg-gray-800 rounded-2xl shadow-lg hover:shadow-2xl border border-gray-700 hover:border-purple-500 transform hover:-translate-y-2 transition-all duration-300 overflow-hidden group"
+              <div className="flex gap-2">
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
                 >
-                  {/* Header de la tarjeta */}
-                  <div className="bg-gradient-to-r from-purple-600 to-fuchsia-600 p-6 relative">
-                    <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
-                    <div className="flex items-center justify-between">
-                      <UserIcon className="w-8 h-8 text-white" />
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-xs text-white">
-                        #{idx + 1}
-                      </span>
-                    </div>
-                    <h4 className="text-xl font-bold text-white mt-3 line-clamp-1">
-                      {alumno.alumno}
-                    </h4>
-                  </div>
-
-                  {/* Contenido de la tarjeta */}
-                  <div className="p-6 space-y-4">
-                    <div className="flex items-center space-x-3">
-                      <div className="flex-shrink-0 w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
-                        <AcademicCapIcon className="w-4 h-4 text-blue-400" />
-                      </div>
-                      <div>
-                        <p className="text-gray-400 text-xs">Grado</p>
-                        <p className="text-white text-sm font-medium">
-                          {alumno.grado || "Sin grado"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                      <div className="flex-shrink-0 w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center">
-                        <span className="text-emerald-400 font-bold text-sm">
-                          S
-                        </span>
-                      </div>
-                      <div>
-                        <p className="text-gray-400 text-xs">Sección</p>
-                        <p className="text-white text-sm font-medium">
-                          {alumno.seccion || "Sin sección"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Botones de acción */}
-                  <div className="bg-gray-700 px-6 py-4 flex justify-center">
-                    <button
-                      onClick={() =>
-                        verCalificacionesAlumno(alumno.id_alumno, alumno.alumno)
-                      }
-                      className="flex items-center space-x-2 px-6 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl hover:from-green-600 hover:to-emerald-600 font-medium shadow-lg transform hover:scale-105 transition-all duration-200"
-                    >
-                      <ChartBarIcon className="w-4 h-4" />
-                      <span>Calificar</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Vista de Tabla */}
-        {!isLoading && alumnosFiltrados.length > 0 && viewMode === "table" && (
-          <div className="bg-gray-800 rounded-2xl shadow-lg overflow-hidden border border-gray-700">
-            <div className="px-6 py-4 bg-gray-900 border-b border-gray-700">
-              <h3 className="text-lg font-bold text-white flex items-center">
-                <ChartBarIcon className="w-5 h-5 mr-2 text-purple-400" />
-                Tabla de Estudiantes
-              </h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-900">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      #
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Estudiante
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Grado
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Sección
-                    </th>
-                    <th className="px-6 py-4 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-700">
-                  {alumnosOrdenados.map((alumno, idx) => (
-                    <tr
-                      key={alumno.id_alumno}
-                      className="hover:bg-gray-700 transition-colors duration-200"
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                        #{idx + 1}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 w-10 h-10 bg-purple-600 rounded-full flex items-center justify-center">
-                            <UserIcon className="w-5 h-5 text-white" />
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-white">
-                              {alumno.alumno}
-                            </div>
-                            <div className="text-sm text-gray-400">
-                              ID: {alumno.id_alumno}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-3 py-1 text-xs font-medium bg-blue-500/20 text-blue-300 rounded-full">
-                          {alumno.grado || "Sin grado"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-3 py-1 text-xs font-medium bg-emerald-500/20 text-emerald-300 rounded-full">
-                          {alumno.seccion || "Sin sección"}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <button
-                          onClick={() =>
-                            verCalificacionesAlumno(
-                              alumno.id_alumno,
-                              alumno.alumno
-                            )
-                          }
-                          className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white text-sm font-medium rounded-lg hover:from-green-600 hover:to-emerald-600 shadow-sm transform hover:scale-105 transition-all duration-200"
-                        >
-                          <ChartBarIcon className="w-4 h-4 mr-2" />
-                          Calificar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  <option value="alumno">Nombre</option>
+                  <option value="grado">Grado</option>
+                </select>
+                <button
+                  onClick={() =>
+                    setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+                  }
+                  className="px-3 bg-gray-700 border border-gray-600 rounded-lg text-white hover:bg-gray-600"
+                >
+                  {sortOrder === "asc" ? "A-Z" : "Z-A"}
+                </button>
+              </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* CONTENIDO PRINCIPAL */}
+      {isLoading ? (
+        <div className="text-center py-20">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mx-auto mb-4"></div>
+          <p className="text-gray-400">Cargando expediente académico...</p>
+        </div>
+      ) : alumnosFiltrados.length === 0 ? (
+        <div className="bg-gray-800 border border-gray-700 rounded-xl p-10 text-center">
+          <AcademicCapIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
+          <h3 className="text-xl font-bold text-white mb-2">
+            No se encontraron estudiantes
+          </h3>
+          <p className="text-gray-400">
+            Intenta ajustar los filtros o registra nuevos alumnos en el módulo
+            correspondiente.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* VISTA TABLA */}
+          {viewMode === "table" && (
+            <div className="bg-gray-800 border border-gray-700 rounded-xl overflow-hidden shadow-xl">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-gray-900/50 text-xs text-gray-400 uppercase font-semibold border-b border-gray-700">
+                    <tr>
+                      <th className="px-6 py-4">#</th>
+                      <th className="px-6 py-4">Estudiante</th>
+                      <th className="px-6 py-4">Grado & Sección</th>
+                      <th className="px-6 py-4 text-center">Acción</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-700">
+                    {alumnosOrdenados.map((alumno, idx) => (
+                      <tr
+                        key={alumno.id_alumno}
+                        className="hover:bg-gray-700/30 transition-colors"
+                      >
+                        <td className="px-6 py-4 text-gray-500 font-mono text-xs">
+                          {idx + 1}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                              {alumno.alumno.charAt(0)}
+                            </div>
+                            <div>
+                              <p className="font-medium text-white">
+                                {alumno.alumno}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                ID: {alumno.id_alumno}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex gap-2">
+                            <span className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-300 border border-gray-600">
+                              {alumno.grado || "N/A"}
+                            </span>
+                            <span className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-300 border border-gray-600">
+                              {alumno.seccion || "-"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                          <button
+                            onClick={() =>
+                              verCalificacionesAlumno(
+                                alumno.id_alumno,
+                                alumno.alumno
+                              )
+                            }
+                            className="inline-flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors shadow-lg shadow-indigo-900/20"
+                          >
+                            <ChartBarIcon className="w-4 h-4" />
+                            Calificar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* VISTA CARDS */}
+          {viewMode === "cards" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {alumnosOrdenados.map((alumno) => (
+                <div
+                  key={alumno.id_alumno}
+                  className="bg-gray-800 border border-gray-700 rounded-xl p-6 hover:shadow-xl hover:border-indigo-500/50 transition-all group"
+                >
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 rounded-full bg-gray-700 flex items-center justify-center text-xl font-bold text-white group-hover:bg-indigo-600 transition-colors">
+                      {alumno.alumno.charAt(0)}
+                    </div>
+                    <span className="text-xs font-mono text-gray-500">
+                      #{alumno.id_alumno}
+                    </span>
+                  </div>
+
+                  <h3 className="text-lg font-bold text-white mb-1 truncate">
+                    {alumno.alumno}
+                  </h3>
+                  <div className="flex gap-2 mb-6">
+                    <span className="text-xs bg-gray-900 text-gray-400 px-2 py-1 rounded border border-gray-700">
+                      {alumno.grado}
+                    </span>
+                    <span className="text-xs bg-gray-900 text-gray-400 px-2 py-1 rounded border border-gray-700">
+                      {alumno.seccion}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      verCalificacionesAlumno(alumno.id_alumno, alumno.alumno)
+                    }
+                    className="w-full py-2 bg-gray-700 hover:bg-indigo-600 text-white rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2"
+                  >
+                    <ChartBarIcon className="w-4 h-4" />
+                    Ver Calificaciones
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

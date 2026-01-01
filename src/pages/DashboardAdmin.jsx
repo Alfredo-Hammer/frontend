@@ -1,6 +1,9 @@
 import React, {useState, useEffect} from "react";
+import ciclosApi from "../api/ciclos";
 import {useNavigate} from "react-router-dom";
 import api from "../api/axiosConfig";
+import services from "../api/services";
+import PageHeader from "../components/PageHeader";
 import {
   AcademicCapIcon,
   UserGroupIcon,
@@ -21,6 +24,21 @@ import {
  * Muestra estadísticas generales del sistema
  */
 function DashboardAdmin({user}) {
+  const cargarCicloActual = async () => {
+    try {
+      const res = await ciclosApi.getCiclosSetup(token);
+      if (res.data && res.data.ciclos && res.data.actual) {
+        const ciclo = res.data.ciclos.find(
+          (c) => c.id_ciclo === res.data.actual
+        );
+        setCicloActual(ciclo ? ciclo.nombre : null);
+      } else {
+        setCicloActual(null);
+      }
+    } catch (error) {
+      setCicloActual(null);
+    }
+  };
   const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalAlumnos: 0,
@@ -32,6 +50,7 @@ function DashboardAdmin({user}) {
     asistenciaPromedio: 0,
     alumnosExcelentes: 0,
   });
+  const [cicloActual, setCicloActual] = useState(null);
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [escuela, setEscuela] = useState(null);
@@ -40,6 +59,7 @@ function DashboardAdmin({user}) {
   useEffect(() => {
     cargarEstadisticas();
     cargarEscuela();
+    cargarCicloActual();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -60,33 +80,20 @@ function DashboardAdmin({user}) {
     try {
       setLoading(true);
 
-      // Cargar datos en paralelo
-      const [alumnosRes, profesoresRes, gradosRes, seccionesRes, materiasRes] =
-        await Promise.all([
-          api.get("/api/alumnos", {
-            headers: {Authorization: `Bearer ${token}`},
-          }),
-          api.get("/api/profesores", {
-            headers: {Authorization: `Bearer ${token}`},
-          }),
-          api.get("/api/grados", {headers: {Authorization: `Bearer ${token}`}}),
-          api.get("/api/secciones", {
-            headers: {Authorization: `Bearer ${token}`},
-          }),
-          api.get("/api/materias", {
-            headers: {Authorization: `Bearer ${token}`},
-          }),
-        ]);
+      // Usar el nuevo endpoint de estadísticas del dashboard
+      const res = await api.get(services.dashboardAdmin, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
 
       setStats({
-        totalAlumnos: alumnosRes.data?.length || 0,
-        totalProfesores: profesoresRes.data?.length || 0,
-        totalGrados: gradosRes.data?.length || 0,
-        totalSecciones: seccionesRes.data?.length || 0,
-        totalMaterias: materiasRes.data?.length || 0,
-        promedioGeneral: 85.5, // TODO: Calcular desde API
-        asistenciaPromedio: 92.3, // TODO: Calcular desde API
-        alumnosExcelentes: 45, // TODO: Calcular desde API
+        totalAlumnos: res.data.totalAlumnos || 0,
+        totalProfesores: res.data.totalProfesores || 0,
+        totalGrados: res.data.totalGrados || 0,
+        totalSecciones: res.data.totalSecciones || 0,
+        totalMaterias: res.data.totalMaterias || 0,
+        promedioGeneral: parseFloat(res.data.promedioGeneral) || 0,
+        asistenciaPromedio: parseFloat(res.data.asistenciaPromedio) || 0,
+        alumnosExcelentes: 0, // TODO: Implementar en el backend
       });
 
       setRecentActivity([
@@ -123,71 +130,36 @@ function DashboardAdmin({user}) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-gray-950 to-slate-950 p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="relative bg-gradient-to-r from-cyan-600 to-blue-600 rounded-2xl p-8 overflow-hidden shadow-2xl">
-          <div className="absolute inset-0 bg-black/20"></div>
-          <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-cyan-300/10 rounded-full blur-2xl animate-pulse delay-700"></div>
-          <div className="absolute top-1/2 left-1/2 w-48 h-48 bg-blue-300/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-
-          <div className="relative z-10">
-            {/* Fila superior: Logo y nombre de escuela */}
-            {(escuela?.logo || escuela?.nombre) && (
-              <div className="flex items-center justify-end gap-4 mb-6 pb-4 border-b border-white/20">
-                {escuela?.nombre && (
-                  <div className="text-right">
-                    <p className="text-xl font-bold text-white">
-                      {escuela.nombre}
-                    </p>
-                    <p className="text-sm text-cyan-100">
-                      Sistema de Gestión Educativa
-                    </p>
-                  </div>
-                )}
-                {escuela?.logo && (
-                  <div className="relative">
-                    <div className="absolute inset-0 bg-white/20 rounded-xl blur-xl"></div>
-                    <img
-                      src={`http://localhost:4000${escuela.logo}`}
-                      alt={escuela.nombre}
-                      className="relative w-16 h-16 lg:w-20 lg:h-20 rounded-xl object-cover border-4 border-white/40 shadow-2xl"
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">
-                  Bienvenido, {user?.nombre} 👋
-                </h1>
-                <p className="text-cyan-100 text-lg">
-                  Panel de Control -{" "}
-                  {user?.rol === "admin" ? "Administrador" : "Director"}
-                </p>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="text-right bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
-                  <p className="text-cyan-100 text-sm">
-                    {new Date().toLocaleDateString("es-ES", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </p>
-                  <p className="text-white font-semibold text-lg">
-                    {new Date().toLocaleTimeString("es-ES", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
+        <PageHeader
+          title={`Bienvenido, ${user?.nombre || ""} 👋`}
+          subtitle={`Panel de Control - ${
+            user?.rol === "admin" ? "Administrador" : "Director"
+          }`}
+          icon={ChartBarIcon}
+          gradientFrom="cyan-500"
+          gradientTo="blue-600"
+          badge="Dashboard principal de tu escuela"
+          actions={
+            escuela?.logo && (
+              <div className="flex flex-col items-center gap-2">
+                <div className="relative">
+                  <div className="absolute -inset-1 rounded-2xl bg-white/20 blur-xl" />
+                  <img
+                    src={`http://localhost:4000${escuela.logo}`}
+                    alt={escuela?.nombre || "Logo de la escuela"}
+                    className="relative w-12 h-12 lg:w-14 lg:h-14 rounded-2xl object-cover border-2 border-white/60 shadow-xl"
+                  />
                 </div>
+                {cicloActual && (
+                  <div className="mt-1 px-3 py-1 rounded-xl bg-cyan-900/80 border border-cyan-400/40 text-cyan-100 text-xs font-semibold shadow">
+                    Ciclo Actual:{" "}
+                    <span className="font-bold">{cicloActual}</span>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-        </div>
+            )
+          }
+        />
 
         {/* Estadísticas Principales */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -322,7 +294,7 @@ function DashboardAdmin({user}) {
               </button>
 
               <button
-                onClick={() => navigate("/alumnos/registro")}
+                onClick={() => navigate("/estudiantes")}
                 className="w-full p-4 bg-gradient-to-r from-green-900/40 to-emerald-900/40 border border-green-700/40 rounded-lg hover:scale-105 transition-transform text-left"
               >
                 <div className="flex items-center justify-between">

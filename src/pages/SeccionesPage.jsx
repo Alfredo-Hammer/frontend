@@ -9,68 +9,80 @@ import {
   BuildingOfficeIcon,
   AcademicCapIcon,
   Squares2X2Icon,
+  UserIcon,
+  UsersIcon,
 } from "@heroicons/react/24/solid";
 import PageHeader from "../components/PageHeader";
 
 function SeccionesPage() {
+  // Estados principales
   const [secciones, setSecciones] = useState([]);
   const [grados, setGrados] = useState([]);
-  const [id_grado, setIdGrado] = useState("");
-  const [nombre, setNombre] = useState("");
+  const [profesores, setProfesores] = useState([]);
+  const [escuela, setEscuela] = useState(null);
+
+  // Estados del formulario
+  const [formData, setFormData] = useState({
+    nombre: "",
+    id_grado: "",
+    id_profesor_guia: "",
+  });
   const [editId, setEditId] = useState(null);
-  const [editNombre, setEditNombre] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [seccionesDelGrado, setSeccionesDelGrado] = useState([]);
   const [sugerenciasNombres, setSugerenciasNombres] = useState([]);
+
+  // Estados de UI
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterGrado, setFilterGrado] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState("groups");
   const [toast, setToast] = useState({
     show: false,
     message: "",
     type: "success",
   });
 
+  const token = localStorage.getItem("token");
+
   const showToast = (message, type = "success") => {
     setToast({show: true, message, type});
   };
 
-  // Nuevos estados para funcionalidades adicionales
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterGrado, setFilterGrado] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-  const [viewMode, setViewMode] = useState("groups"); // "groups" o "cards"
-  const [escuela, setEscuela] = useState(null);
-
-  const token = localStorage.getItem("token");
-  let id_profesor = null;
-  if (token) {
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      id_profesor = payload.id_usuario;
-    } catch {}
-  }
-
   useEffect(() => {
-    fetchSecciones();
-    fetchUser();
+    initializeData();
     // eslint-disable-next-line
   }, []);
 
-  // Cargar grados cuando se abre el modal
+  const initializeData = async () => {
+    setIsLoading(true);
+    try {
+      await Promise.all([fetchSecciones(), fetchUser()]);
+    } catch (error) {
+      console.error("Error inicializando datos:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Cargar datos complementarios cuando se abre el modal
   useEffect(() => {
     if (showModal) {
       fetchGrados();
+      fetchProfesores();
     }
     // eslint-disable-next-line
   }, [showModal]);
 
   // Cargar secciones existentes cuando se selecciona un grado
   useEffect(() => {
-    if (id_grado && showModal && !editId) {
-      fetchSeccionesDelGrado(id_grado);
+    if (formData.id_grado && showModal && !editId) {
+      fetchSeccionesDelGrado(formData.id_grado);
     }
     // eslint-disable-next-line
-  }, [id_grado, showModal, editId]);
+  }, [formData.id_grado, showModal, editId]);
 
   const fetchGrados = async () => {
     try {
@@ -78,22 +90,43 @@ function SeccionesPage() {
         headers: {Authorization: `Bearer ${token}`},
       });
       setGrados(res.data);
-      if (res.data.length > 0) setIdGrado(res.data[0].id_grado);
-    } catch {
+      if (res.data.length > 0 && !formData.id_grado) {
+        setFormData((prev) => ({...prev, id_grado: res.data[0].id_grado}));
+      }
+    } catch (error) {
+      console.error("Error al cargar grados:", error);
       showToast("Error al cargar grados", "error");
+    }
+  };
+
+  const fetchProfesores = async () => {
+    try {
+      const res = await api.get(services.profesores, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const data = res.data?.data || res.data || [];
+      setProfesores(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Error al cargar profesores:", error);
+      showToast("Error al cargar profesores", "error");
+      setProfesores([]);
     }
   };
 
   const fetchSeccionesDelGrado = async (gradoId) => {
     try {
-      const res = await api.get(`${services.secciones}?id_grado=${gradoId}`, {
+      const res = await api.get(services.secciones, {
         headers: {Authorization: `Bearer ${token}`},
       });
-      setSeccionesDelGrado(res.data);
+      // Filtrar por grado en el frontend
+      const seccionesFiltradas = (res.data?.data || res.data || []).filter(
+        (s) => s.id_grado === parseInt(gradoId)
+      );
+      setSeccionesDelGrado(seccionesFiltradas);
 
       // Generar sugerencias de nombres
-      const nombresUsados = res.data.map((s) =>
-        s.nombre_seccion?.toUpperCase().trim()
+      const nombresUsados = seccionesFiltradas.map((s) =>
+        s.nombre?.toUpperCase().trim()
       );
       const letras = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
       const sugerencias = letras.filter(
@@ -125,99 +158,115 @@ function SeccionesPage() {
   };
 
   const fetchSecciones = async () => {
-    setIsLoading(true);
     try {
       const res = await api.get(services.secciones, {
         headers: {Authorization: `Bearer ${token}`},
       });
-      setSecciones(res.data);
+      // El backend puede devolver {success: true, data: [...]} o directamente [...]
+      const data = res.data?.data || res.data || [];
+      setSecciones(data);
     } catch (err) {
+      console.error("Error al cargar secciones:", err);
       showToast("Error al cargar secciones", "error");
-    } finally {
-      setIsLoading(false);
     }
   };
 
-  const handleCrear = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!nombre.trim() || !id_grado) return;
+    if (!formData.nombre.trim() || !formData.id_grado) {
+      showToast("Por favor completa todos los campos requeridos", "error");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      await api.post(
-        services.secciones,
-        {nombre: nombre.trim(), id_profesor, id_grado},
-        {headers: {Authorization: `Bearer ${token}`}}
-      );
+      const payload = {
+        nombre: formData.nombre.trim(),
+        id_grado: parseInt(formData.id_grado),
+        id_profesor_guia: formData.id_profesor_guia || null,
+      };
+
+      if (editId) {
+        await api.put(`${services.secciones}/${editId}`, payload, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        showToast("✅ Sección actualizada correctamente", "success");
+      } else {
+        await api.post(services.secciones, payload, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        showToast("✅ Sección creada correctamente", "success");
+      }
+
       limpiarFormulario();
-      showToast("✅ Sección creada correctamente", "success");
       setShowModal(false);
       fetchSecciones();
     } catch (err) {
       const errorMsg =
+        err.response?.data?.message ||
         err.response?.data?.mensaje ||
         err.response?.data?.error ||
-        "Error al crear sección";
+        `Error al ${editId ? "actualizar" : "crear"} sección`;
       showToast(errorMsg, "error");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleEditar = async (id) => {
-    setIsSubmitting(true);
-    try {
-      await api.put(
-        services.secciones + `/${id}`,
-        {nombre: editNombre},
-        {headers: {Authorization: `Bearer ${token}`}}
-      );
-      setEditId(null);
-      setEditNombre("");
-      showToast("✅ Sección editada correctamente", "success");
-      setShowModal(false);
-      fetchSecciones();
-    } catch (err) {
-      showToast("Error al editar sección", "error");
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const limpiarFormulario = () => {
-    setNombre("");
+    setFormData({
+      nombre: "",
+      id_grado: "",
+      id_profesor_guia: "",
+    });
     setEditId(null);
-    setEditNombre("");
     setSeccionesDelGrado([]);
     setSugerenciasNombres([]);
   };
 
+  const handleEdit = (seccion) => {
+    setEditId(seccion.id_seccion);
+    setFormData({
+      nombre: seccion.nombre || "",
+      id_grado: seccion.id_grado || "",
+      id_profesor_guia: seccion.id_profesor_guia || "",
+    });
+    setShowModal(true);
+  };
+
   const handleEliminar = async (id) => {
-    if (!window.confirm("¿Seguro que deseas eliminar esta sección?")) return;
+    if (
+      !window.confirm(
+        "¿Estás seguro de eliminar esta sección? Esta acción no se puede deshacer."
+      )
+    )
+      return;
     try {
-      await api.delete(services.secciones + `/${id}`, {
+      await api.delete(`${services.secciones}/${id}`, {
         headers: {Authorization: `Bearer ${token}`},
       });
       showToast("✅ Sección eliminada correctamente", "success");
       fetchSecciones();
     } catch (err) {
-      showToast("Error al eliminar sección", "error");
+      const errorMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Error al eliminar sección";
+      showToast(errorMsg, "error");
     }
   };
 
   // Filtros y búsqueda
   const seccionesFiltradas = secciones.filter((seccion) => {
     const matchesSearch =
-      (seccion.nombre_seccion &&
-        seccion.nombre_seccion
+      (seccion.nombre &&
+        seccion.nombre.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (seccion.grado_nombre &&
+        seccion.grado_nombre
           .toLowerCase()
           .includes(searchTerm.toLowerCase())) ||
-      (seccion.nombre_grado &&
-        seccion.nombre_grado
-          .toLowerCase()
-          .includes(searchTerm.toLowerCase())) ||
-      (seccion.nombre_escuela &&
-        seccion.nombre_escuela
+      (seccion.profesor_guia_nombre &&
+        seccion.profesor_guia_nombre
           .toLowerCase()
           .includes(searchTerm.toLowerCase()));
     const matchesGrado =
@@ -231,8 +280,7 @@ function SeccionesPage() {
     if (!acc[key]) {
       acc[key] = {
         id_grado: seccion.id_grado,
-        nombre_grado: seccion.nombre_grado,
-        nombre_escuela: seccion.nombre_escuela,
+        nombre_grado: seccion.grado_nombre || "Sin grado",
         secciones: [],
       };
     }
@@ -243,51 +291,58 @@ function SeccionesPage() {
   // Estadísticas
   const estadisticas = {
     total: secciones.length,
+    estudiantes: secciones.reduce((sum, s) => {
+      const valor = s.estudiantes_inscritos ?? 0;
+      const numero = Number(valor);
+      return sum + (Number.isNaN(numero) ? 0 : numero);
+    }, 0),
     grados: [...new Set(secciones.map((s) => s.id_grado).filter(Boolean))]
       .length,
     grupos: Object.keys(seccionesPorGrado).length,
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
-      {/* Header Moderno y Compacto */}
-      <PageHeader
-        title="Gestión de Secciones"
-        subtitle="Organiza y administra las secciones académicas por grado y escuela"
-        icon={UserGroupIcon}
-        gradientFrom="cyan-600"
-        gradientTo="teal-600"
-        badge="Organización Estudiantil"
-        schoolLogo={
-          escuela?.logo ? `http://localhost:4000${escuela.logo}` : null
-        }
-        schoolName={escuela?.nombre}
-        stats={{
-          "Total Secciones": estadisticas.total,
-          Grados: estadisticas.grados,
-          Grupos: estadisticas.grupos,
-        }}
-        actions={
-          <>
-            <button
-              onClick={() => setShowModal(true)}
-              className="px-4 py-2 bg-white text-cyan-600 rounded-xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-200 flex items-center space-x-2"
-            >
-              <PlusIcon className="w-5 h-5" />
-              <span>Nueva Sección</span>
-            </button>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="px-4 py-2 bg-white/10 text-white rounded-xl font-semibold backdrop-blur-sm hover:bg-white/20 transition-all duration-200 flex items-center space-x-2"
-            >
-              <Squares2X2Icon className="w-5 h-5" />
-              <span>{showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}</span>
-            </button>
-          </>
-        }
-      />
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Header Moderno y Compacto */}
+        <PageHeader
+          title="Gestión de Secciones"
+          subtitle="Organiza y administra las secciones académicas por grado y escuela"
+          icon={UserGroupIcon}
+          gradientFrom="cyan-600"
+          gradientTo="teal-600"
+          badge="Organización Estudiantil"
+          schoolLogo={
+            escuela?.logo ? `http://localhost:4000${escuela.logo}` : null
+          }
+          schoolName={escuela?.nombre}
+          stats={{
+            "Total Secciones": estadisticas.total,
+            "Total Estudiantes": estadisticas.estudiantes,
+            Grados: estadisticas.grados,
+          }}
+          actions={
+            <>
+              <button
+                onClick={() => setShowModal(true)}
+                className="px-4 py-2 bg-white text-cyan-600 rounded-xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-200 flex items-center space-x-2"
+              >
+                <PlusIcon className="w-5 h-5" />
+                <span>Nueva Sección</span>
+              </button>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="px-4 py-2 bg-white/10 text-white rounded-xl font-semibold backdrop-blur-sm hover:bg-white/20 transition-all duration-200 flex items-center space-x-2"
+              >
+                <Squares2X2Icon className="w-5 h-5" />
+                <span>
+                  {showFilters ? "Ocultar Filtros" : "Mostrar Filtros"}
+                </span>
+              </button>
+            </>
+          }
+        />
 
-      <div className="max-w-7xl mx-auto px-6">
         {/* Barra de búsqueda y controles */}
         <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
           <div className="flex flex-col lg:flex-row gap-4 items-center">
@@ -446,7 +501,11 @@ function SeccionesPage() {
                         {grupo.nombre_grado}
                       </h4>
                       <p className="text-teal-100 text-sm">
-                        {grupo.nombre_escuela}
+                        {grupo.secciones.reduce(
+                          (sum, s) => sum + (s.estudiantes_inscritos || 0),
+                          0
+                        )}{" "}
+                        estudiantes inscritos
                       </p>
                     </div>
 
@@ -456,69 +515,88 @@ function SeccionesPage() {
                         {grupo.secciones.map((seccion) => (
                           <div
                             key={seccion.id_seccion}
-                            className="flex items-center justify-between p-3 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200"
+                            className="p-4 bg-gray-700 rounded-lg hover:bg-gray-600 transition-colors duration-200"
                           >
-                            <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 bg-teal-500/20 rounded-full flex items-center justify-center">
-                                <span className="text-teal-400 font-bold text-sm">
-                                  {seccion.nombre_seccion}
-                                </span>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-10 h-10 bg-teal-500/20 rounded-full flex items-center justify-center">
+                                  <span className="text-teal-400 font-bold">
+                                    {seccion.nombre}
+                                  </span>
+                                </div>
+                                <div>
+                                  <p className="text-white font-semibold">
+                                    Sección {seccion.nombre}
+                                  </p>
+                                  <div className="flex items-center space-x-2 text-xs text-gray-400">
+                                    <UsersIcon className="w-3 h-3" />
+                                    <span>
+                                      {seccion.estudiantes_inscritos || 0}{" "}
+                                      estudiante
+                                      {seccion.estudiantes_inscritos !== 1
+                                        ? "s"
+                                        : ""}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                              <div>
-                                <p className="text-white font-medium">
-                                  Sección {seccion.nombre_seccion}
-                                </p>
-                                <p className="text-gray-400 text-xs">
-                                  ID: {seccion.id_seccion}
-                                </p>
+                              <div className="flex items-center space-x-2">
+                                <button
+                                  onClick={() => handleEdit(seccion)}
+                                  className="p-2 bg-yellow-500/20 text-yellow-300 rounded-lg hover:bg-yellow-500/30 transition-colors duration-200"
+                                  title="Editar"
+                                >
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                                    />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    handleEliminar(seccion.id_seccion)
+                                  }
+                                  className="p-2 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-colors duration-200"
+                                  title="Eliminar"
+                                >
+                                  <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth={2}
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                    />
+                                  </svg>
+                                </button>
                               </div>
                             </div>
-                            <div className="flex items-center space-x-2">
-                              <button
-                                onClick={() => {
-                                  setEditId(seccion.id_seccion);
-                                  setEditNombre(seccion.nombre_seccion);
-                                  setShowModal(true);
-                                }}
-                                className="p-2 bg-yellow-500/20 text-yellow-300 rounded-lg hover:bg-yellow-500/30 transition-colors duration-200"
-                                title="Editar"
-                              >
-                                <svg
-                                  className="w-4 h-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                                  />
-                                </svg>
-                              </button>
-                              <button
-                                onClick={() =>
-                                  handleEliminar(seccion.id_seccion)
-                                }
-                                className="p-2 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-colors duration-200"
-                                title="Eliminar"
-                              >
-                                <svg
-                                  className="w-4 h-4"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
+                            {/* Profesor guía */}
+                            {seccion.profesor_guia_nombre &&
+                              seccion.profesor_guia_nombre !==
+                                "No asignado" && (
+                                <div className="flex items-center space-x-2 text-sm text-gray-300 bg-gray-600/50 p-2 rounded">
+                                  <UserIcon className="w-4 h-4 text-emerald-400" />
+                                  <span className="text-gray-400">
+                                    Profesor Guía:
+                                  </span>
+                                  <span className="font-medium">
+                                    {seccion.profesor_guia_nombre}
+                                  </span>
+                                </div>
+                              )}
                           </div>
                         ))}
                       </div>
@@ -552,38 +630,57 @@ function SeccionesPage() {
                     className="bg-gray-800 rounded-2xl shadow-lg hover:shadow-2xl border border-gray-700 hover:border-teal-500 transform hover:-translate-y-2 transition-all duration-300 overflow-hidden group"
                   >
                     {/* Header de la tarjeta */}
-                    <div className="bg-gradient-to-r from-cyan-600 to-teal-600 p-4 relative">
+                    <div className="bg-gradient-to-r from-cyan-600 to-teal-600 p-5 relative">
                       <div className="absolute top-0 right-0 w-16 h-16 bg-white/10 rounded-full -mr-8 -mt-8"></div>
-                      <div className="flex items-center justify-between">
-                        <UserGroupIcon className="w-6 h-6 text-white" />
+                      <div className="flex items-center justify-between mb-3">
+                        <UserGroupIcon className="w-7 h-7 text-white" />
+                        <span className="px-3 py-1 bg-white/20 rounded-full text-xs text-white font-medium">
+                          <UsersIcon className="w-3 h-3 inline mr-1" />
+                          {seccion.estudiantes_inscritos || 0}
+                        </span>
                       </div>
-                      <h3 className="text-2xl font-bold text-white mb-2">
-                        Sección {seccion.nombre_seccion}
+                      <h3 className="text-2xl font-bold text-white">
+                        Sección {seccion.nombre}
                       </h3>
+                      <p className="text-cyan-100 text-sm">
+                        {seccion.grado_nombre || "Sin grado"}
+                      </p>
                     </div>
 
                     {/* Contenido de la tarjeta */}
                     <div className="p-4 space-y-3">
                       <div className="flex items-center space-x-3">
-                        <div className="flex-shrink-0 w-8 h-8 bg-blue-500/20 rounded-full flex items-center justify-center">
-                          <AcademicCapIcon className="w-4 h-4 text-blue-400" />
+                        <div className="flex-shrink-0 w-9 h-9 bg-blue-500/20 rounded-full flex items-center justify-center">
+                          <AcademicCapIcon className="w-5 h-5 text-blue-400" />
                         </div>
-                        <div>
+                        <div className="flex-1">
                           <p className="text-gray-400 text-xs">Grado</p>
-                          <p className="text-white text-sm font-medium">
-                            {seccion.nombre_grado || "Sin grado"}
+                          <p className="text-white text-sm font-semibold">
+                            {seccion.grado_nombre || "Sin grado"}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center space-x-3">
-                        <div className="flex-shrink-0 w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center">
-                          <BuildingOfficeIcon className="w-4 h-4 text-emerald-400" />
+                        <div className="flex-shrink-0 w-9 h-9 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                          <UserIcon className="w-5 h-5 text-emerald-400" />
                         </div>
-                        <div>
-                          <p className="text-gray-400 text-xs">Escuela</p>
-                          <p className="text-white text-sm font-medium line-clamp-1">
-                            {seccion.nombre_escuela || "Sin escuela"}
+                        <div className="flex-1">
+                          <p className="text-gray-400 text-xs">Profesor Guía</p>
+                          <p className="text-white text-sm font-semibold line-clamp-1">
+                            {seccion.profesor_guia_nombre || "No asignado"}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-3">
+                        <div className="flex-shrink-0 w-9 h-9 bg-purple-500/20 rounded-full flex items-center justify-center">
+                          <UsersIcon className="w-5 h-5 text-purple-400" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-gray-400 text-xs">Estudiantes</p>
+                          <p className="text-white text-sm font-semibold">
+                            {seccion.estudiantes_inscritos || 0} inscritos
                           </p>
                         </div>
                       </div>
@@ -592,11 +689,7 @@ function SeccionesPage() {
                     {/* Botones de acción */}
                     <div className="bg-gray-700 px-4 py-3 flex justify-between items-center">
                       <button
-                        onClick={() => {
-                          setEditId(seccion.id_seccion);
-                          setEditNombre(seccion.nombre_seccion);
-                          setShowModal(true);
-                        }}
+                        onClick={() => handleEdit(seccion)}
                         className="flex items-center space-x-2 px-3 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 font-medium shadow-sm transform hover:scale-105 transition-all duration-200"
                       >
                         <svg
@@ -690,17 +783,7 @@ function SeccionesPage() {
                 </div>
               </div>
 
-              <form
-                onSubmit={
-                  editId
-                    ? (e) => {
-                        e.preventDefault();
-                        handleEditar(editId);
-                      }
-                    : handleCrear
-                }
-                className="p-8 space-y-8"
-              >
+              <form onSubmit={handleSubmit} className="p-8 space-y-8">
                 {/* Información Básica */}
                 <section>
                   <div className="flex items-center mb-6">
@@ -719,117 +802,156 @@ function SeccionesPage() {
                       Información de la Sección
                     </h4>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Nombre de la Sección *
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ej: A, B, 1, 2, etc."
-                      className={`w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 transition-all duration-200 ${
-                        editId
-                          ? "focus:ring-yellow-500 focus:border-yellow-500"
-                          : "focus:ring-teal-500 focus:border-teal-500"
-                      }`}
-                      value={editId ? editNombre : nombre}
-                      onChange={(e) =>
-                        editId
-                          ? setEditNombre(e.target.value)
-                          : setNombre(e.target.value)
-                      }
-                      required
-                    />
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Nombre de la Sección *
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej: A, B, 1, 2, etc."
+                        className={`w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 transition-all duration-200 ${
+                          editId
+                            ? "focus:ring-yellow-500 focus:border-yellow-500"
+                            : "focus:ring-teal-500 focus:border-teal-500"
+                        }`}
+                        value={formData.nombre}
+                        onChange={(e) =>
+                          setFormData({...formData, nombre: e.target.value})
+                        }
+                        required
+                      />
 
-                    {/* Sugerencias de nombres disponibles */}
-                    {!editId && sugerenciasNombres.length > 0 && (
-                      <div className="mt-3">
-                        <p className="text-xs text-gray-400 mb-2">
-                          Nombres disponibles (clic para usar):
-                        </p>
-                        <div className="flex flex-wrap gap-2">
-                          {sugerenciasNombres.slice(0, 5).map((letra) => (
-                            <button
-                              key={letra}
-                              type="button"
-                              onClick={() => setNombre(letra)}
-                              className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/40 text-teal-300 rounded-lg text-sm font-medium transition-all duration-200 border border-teal-500/30"
-                            >
-                              {letra}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Advertencia si no hay sugerencias */}
-                    {!editId &&
-                      sugerenciasNombres.length === 0 &&
-                      seccionesDelGrado.length > 0 && (
-                        <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-                          <p className="text-xs text-yellow-300">
-                            ⚠️ Ya se usaron las letras A-J. Considera usar
-                            números (1, 2, 3) o combinaciones (A1, B1).
+                      {/* Sugerencias de nombres disponibles */}
+                      {!editId && sugerenciasNombres.length > 0 && (
+                        <div className="mt-3">
+                          <p className="text-xs text-gray-400 mb-2">
+                            Nombres disponibles (clic para usar):
                           </p>
+                          <div className="flex flex-wrap gap-2">
+                            {sugerenciasNombres.slice(0, 5).map((letra) => (
+                              <button
+                                key={letra}
+                                type="button"
+                                onClick={() =>
+                                  setFormData({...formData, nombre: letra})
+                                }
+                                className="px-3 py-1.5 bg-teal-500/20 hover:bg-teal-500/40 text-teal-300 rounded-lg text-sm font-medium transition-all duration-200 border border-teal-500/30"
+                              >
+                                {letra}
+                              </button>
+                            ))}
+                          </div>
                         </div>
                       )}
+
+                      {/* Advertencia si no hay sugerencias */}
+                      {!editId &&
+                        sugerenciasNombres.length === 0 &&
+                        seccionesDelGrado.length > 0 && (
+                          <div className="mt-3 p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                            <p className="text-xs text-yellow-300">
+                              ⚠️ Ya se usaron las letras A-J. Considera usar
+                              números (1, 2, 3) o combinaciones (A1, B1).
+                            </p>
+                          </div>
+                        )}
+                    </div>
                   </div>
                 </section>
 
-                {/* Información Académica - Solo para crear */}
-                {!editId && (
-                  <section>
-                    <div className="flex items-center mb-6">
-                      <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center mr-3">
-                        <AcademicCapIcon className="w-5 h-5 text-emerald-400" />
-                      </div>
-                      <h4 className="text-xl font-bold text-white">
-                        Ubicación Académica
-                      </h4>
+                {/* Información Académica */}
+                <section>
+                  <div className="flex items-center mb-6">
+                    <div className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center mr-3">
+                      <AcademicCapIcon className="w-5 h-5 text-emerald-400" />
                     </div>
-                    <div className="grid grid-cols-1 gap-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-300 mb-2">
-                          Grado *
-                        </label>
-                        <select
-                          className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
-                          value={id_grado}
-                          onChange={(e) => setIdGrado(e.target.value)}
-                          required
-                        >
-                          <option value="">Seleccionar grado</option>
-                          {grados.map((g) => (
-                            <option key={g.id_grado} value={g.id_grado}>
-                              {g.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      {/* Mostrar secciones existentes del grado */}
-                      {seccionesDelGrado.length > 0 && (
-                        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
-                          <p className="text-sm font-semibold text-blue-300 mb-2">
-                            📋 Secciones ya registradas en este grado:
-                          </p>
-                          <div className="flex flex-wrap gap-2">
-                            {seccionesDelGrado.map((seccion) => (
-                              <span
-                                key={seccion.id_seccion}
-                                className="px-3 py-1.5 bg-blue-500/20 text-blue-200 rounded-lg text-sm font-medium border border-blue-500/40"
-                              >
-                                {seccion.nombre_seccion}
-                              </span>
-                            ))}
-                          </div>
-                          <p className="text-xs text-gray-400 mt-2">
-                            Asegúrate de no duplicar nombres de secciones
-                          </p>
-                        </div>
+                    <h4 className="text-xl font-bold text-white">
+                      Ubicación Académica
+                    </h4>
+                  </div>
+                  <div className="grid grid-cols-1 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Grado *
+                      </label>
+                      <select
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
+                        value={formData.id_grado}
+                        onChange={(e) =>
+                          setFormData({...formData, id_grado: e.target.value})
+                        }
+                        required
+                        disabled={editId}
+                      >
+                        <option value="">Seleccionar grado</option>
+                        {grados.map((g) => (
+                          <option key={g.id_grado} value={g.id_grado}>
+                            {g.nombre}
+                          </option>
+                        ))}
+                      </select>
+                      {editId && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          El grado no se puede cambiar después de crear la
+                          sección
+                        </p>
                       )}
                     </div>
-                  </section>
-                )}
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Profesor Guía (opcional)
+                      </label>
+                      <select
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all duration-200"
+                        value={formData.id_profesor_guia}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            id_profesor_guia: e.target.value,
+                          })
+                        }
+                      >
+                        <option value="">Sin profesor guía</option>
+                        {profesores.map((p) => (
+                          <option
+                            key={p.id_profesor || p.id_usuario}
+                            value={p.id_profesor || p.id_usuario}
+                          >
+                            {p.nombre} {p.apellido}
+                            {p.especialidad && ` - ${p.especialidad}`}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-gray-400 mt-1">
+                        El profesor guía será el tutor principal de esta sección
+                      </p>
+                    </div>
+
+                    {/* Mostrar secciones existentes del grado */}
+                    {!editId && seccionesDelGrado.length > 0 && (
+                      <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
+                        <p className="text-sm font-semibold text-blue-300 mb-2">
+                          📋 Secciones ya registradas en este grado:
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {seccionesDelGrado.map((seccion) => (
+                            <span
+                              key={seccion.id_seccion}
+                              className="px-3 py-1.5 bg-blue-500/20 text-blue-200 rounded-lg text-sm font-medium border border-blue-500/40"
+                            >
+                              {seccion.nombre}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-2">
+                          Asegúrate de no duplicar nombres de secciones
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </section>
 
                 {/* Botones */}
                 <div className="flex justify-end space-x-4 pt-6 border-t border-gray-700">
@@ -839,7 +961,8 @@ function SeccionesPage() {
                       setShowModal(false);
                       limpiarFormulario();
                     }}
-                    className="px-6 py-3 bg-gray-700 text-gray-300 rounded-xl hover:bg-gray-600 font-medium transition-colors duration-200"
+                    disabled={isSubmitting}
+                    className="px-6 py-3 bg-gray-700 text-gray-300 rounded-xl hover:bg-gray-600 font-medium transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancelar
                   </button>
@@ -859,7 +982,7 @@ function SeccionesPage() {
                     {isSubmitting ? (
                       <div className="flex items-center">
                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                        {editId ? "Guardando..." : "Creando..."}
+                        {editId ? "Actualizando..." : "Creando..."}
                       </div>
                     ) : (
                       <div className="flex items-center">
@@ -876,7 +999,7 @@ function SeccionesPage() {
                             d="M5 13l4 4L19 7"
                           />
                         </svg>
-                        {editId ? "Guardar Cambios" : "Crear Sección"}
+                        {editId ? "Actualizar Sección" : "Crear Sección"}
                       </div>
                     )}
                   </button>

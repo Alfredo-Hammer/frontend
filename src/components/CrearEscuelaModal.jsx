@@ -145,6 +145,23 @@ export default function CrearEscuelaModal({
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+
+    // Validar campos obligatorios
+    if (
+      !form.nombre ||
+      !form.direccion ||
+      !form.codigo_escuela ||
+      !form.codigo_establecimiento ||
+      !form.nivel_educativo ||
+      !form.nombre_director ||
+      !form.municipio
+    ) {
+      setError(
+        "Por favor completa todos los campos obligatorios, incluyendo código de escuela y código de establecimiento."
+      );
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
@@ -164,7 +181,10 @@ export default function CrearEscuelaModal({
       const resData = await res.json();
 
       if (!res.ok) {
-        throw new Error(resData.message || "Error al crear escuela");
+        // Priorizar mensajes del backend (por ejemplo, códigos de escuela duplicados)
+        const backendMessage =
+          resData.error || resData.message || "Error al crear escuela";
+        throw new Error(backendMessage);
       }
 
       // Si el backend devuelve un nuevo token, actualízalo

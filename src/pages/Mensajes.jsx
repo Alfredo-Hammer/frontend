@@ -28,14 +28,10 @@ const Mensajes = () => {
   const [loading, setLoading] = useState(true);
   const [enviando, setEnviando] = useState(false);
   const [busqueda, setBusqueda] = useState("");
-  const [mostrarNuevaConversacion, setMostrarNuevaConversacion] =
-    useState(false);
-  const [usuarios, setUsuarios] = useState([]);
   const [todosUsuarios, setTodosUsuarios] = useState([]); // Todos los usuarios de la escuela
-  const [usuarioSeleccionado, setUsuarioSeleccionado] = useState(null);
-  const [mensajeInicial, setMensajeInicial] = useState("");
-  const [busquedaContacto, setBusquedaContacto] = useState("");
+  const [contactosPadres, setContactosPadres] = useState([]); // Contactos de padres para profesor
   const [filtroEstado, setFiltroEstado] = useState("todos"); // todos, noLeidos, leidos
+  const [selectedTab, setSelectedTab] = useState("conversaciones"); // conversaciones | personal | padres
   const [mostrarInfo, setMostrarInfo] = useState(false);
   const [escuelaInfo, setEscuelaInfo] = useState(null);
   const [usuarioActual, setUsuarioActual] = useState(null);
@@ -50,15 +46,22 @@ const Mensajes = () => {
   };
 
   const mensajesEndRef = useRef(null);
+  const mensajesContainerRef = useRef(null);
   const token = localStorage.getItem("token");
   const {cargarContador} = useMensajes();
 
   useEffect(() => {
     // Cargar usuario actual
     const userStr = localStorage.getItem("user");
+    let parsed = null;
     if (userStr) {
       try {
-        setUsuarioActual(JSON.parse(userStr));
+        parsed = JSON.parse(userStr);
+        setUsuarioActual(parsed);
+        // Ajustar tab por defecto para profesor
+        if (parsed?.rol === "profesor") {
+          setSelectedTab("personal");
+        }
       } catch (e) {
         console.error("Error al parsear usuario:", e);
       }
@@ -67,6 +70,33 @@ const Mensajes = () => {
     cargarConversaciones();
     cargarTodosUsuarios();
     cargarInfoEscuela();
+
+    // Si es profesor, cargar contactos de padres desde la vista
+    if (parsed?.rol === "profesor") {
+      cargarContactosPadres(parsed.id_profesor);
+    }
+    // Cargar contactos de padres para profesor desde la vista
+    const cargarContactosPadres = async (id_profesor) => {
+      try {
+        const response = await axios.get(
+          `${API_URL}/profesores/${id_profesor}/contactos`,
+          {
+            headers: {Authorization: `Bearer ${token}`},
+          }
+        );
+        setContactosPadres(response.data.data || []);
+      } catch (error) {
+        setContactosPadres([]);
+        console.error("Error al cargar contactos de padres:", error);
+      }
+    };
+
+    // Polling para actualizar lista de conversaciones cada 15 segundos
+    const intervalConversaciones = setInterval(() => {
+      cargarConversaciones();
+    }, 15000);
+
+    return () => clearInterval(intervalConversaciones);
   }, []);
 
   // Actualizar actividad del usuario para mostrar estado en línea
@@ -110,9 +140,18 @@ const Mensajes = () => {
   };
 
   useEffect(() => {
+    let intervalMensajes;
     if (conversacionActiva && conversacionActiva.id_conversacion) {
       cargarMensajes(conversacionActiva.id_conversacion);
+
+      // Polling para mensajes nuevos cada 3 segundos
+      intervalMensajes = setInterval(() => {
+        cargarMensajes(conversacionActiva.id_conversacion);
+      }, 3000);
     }
+    return () => {
+      if (intervalMensajes) clearInterval(intervalMensajes);
+    };
   }, [conversacionActiva]);
 
   useEffect(() => {
@@ -120,7 +159,13 @@ const Mensajes = () => {
   }, [mensajes]);
 
   const scrollToBottom = () => {
-    mensajesEndRef.current?.scrollIntoView({behavior: "smooth"});
+    if (mensajesContainerRef.current) {
+      const {scrollHeight, clientHeight} = mensajesContainerRef.current;
+      mensajesContainerRef.current.scrollTo({
+        top: scrollHeight - clientHeight,
+        behavior: "smooth",
+      });
+    }
   };
 
   const cargarConversaciones = async () => {
@@ -155,40 +200,49 @@ const Mensajes = () => {
     e.preventDefault();
     if (!nuevoMensaje.trim() || !conversacionActiva) return;
 
+    const mensajeTemp = nuevoMensaje;
+    setNuevoMensaje(""); // Limpiar input inmediatamente
+
+    // Optimistic update: Agregar mensaje temporalmente a la lista
+    const tempId = Date.now();
+    const nuevoMensajeObj = {
+      id_mensaje: tempId,
+      contenido: mensajeTemp,
+      fecha_envio: new Date().toISOString(),
+      remitente: usuarioActual?.nombre || "Yo",
+      id_usuario_remitente: usuarioActual?.id_usuario,
+      enviando: true,
+    };
+
+    setMensajes((prev) => [...prev, nuevoMensajeObj]);
+    // Scroll inmediato
+    setTimeout(() => scrollToBottom(), 100);
+
     setEnviando(true);
     try {
       await axios.post(
         `${API_URL}/mensajes`,
         {
           id_conversacion: conversacionActiva.id_conversacion,
-          mensaje: nuevoMensaje,
+          mensaje: mensajeTemp,
         },
         {headers: {Authorization: `Bearer ${token}`}}
       );
 
-      setNuevoMensaje("");
+      // Recargar mensajes reales para confirmar
       cargarMensajes(conversacionActiva.id_conversacion);
       cargarConversaciones();
-
-      // Actualizar contador después de enviar mensaje
       cargarContador();
     } catch (error) {
       console.error("Error al enviar mensaje:", error);
+      showToast("Error al enviar mensaje", "error");
+      setNuevoMensaje(mensajeTemp); // Restaurar mensaje en caso de error
     } finally {
       setEnviando(false);
     }
   };
 
-  const cargarUsuarios = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/mensajes/usuarios`, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      setUsuarios(response.data.data);
-    } catch (error) {
-      console.error("Error al cargar usuarios:", error);
-    }
-  };
+  // Eliminado: cargarUsuarios (se usa todosUsuarios)
 
   const cargarTodosUsuarios = async () => {
     console.log("🚀 INICIO cargarTodosUsuarios");
@@ -229,38 +283,7 @@ const Mensajes = () => {
     }
   };
 
-  const crearNuevaConversacion = async () => {
-    if (!usuarioSeleccionado || !mensajeInicial.trim()) {
-      showToast("Selecciona un usuario y escribe un mensaje", "warning");
-      return;
-    }
-
-    try {
-      const response = await axios.post(
-        `${API_URL}/mensajes/conversacion`,
-        {
-          participantes: [usuarioSeleccionado.id_usuario],
-          titulo: `Chat con ${usuarioSeleccionado.nombre} ${usuarioSeleccionado.apellido}`,
-          tipo: "directa",
-          mensaje_inicial: mensajeInicial,
-        },
-        {headers: {Authorization: `Bearer ${token}`}}
-      );
-
-      setMostrarNuevaConversacion(false);
-      setUsuarioSeleccionado(null);
-      setMensajeInicial("");
-      cargarConversaciones();
-
-      // Abrir conversación recién creada
-      const nuevaConv = conversaciones.find(
-        (c) => c.id_conversacion === response.data.data.id_conversacion
-      );
-      if (nuevaConv) setConversacionActiva(nuevaConv);
-    } catch (error) {
-      console.error("Error al crear conversación:", error);
-    }
-  };
+  // Eliminado: crearNuevaConversacion (ahora se inicia con clic en lista)
 
   // Combinar usuarios con conversaciones existentes
   const obtenerListaCompleta = () => {
@@ -283,6 +306,34 @@ const Mensajes = () => {
     });
 
     console.log("🗺️ Conversaciones mapeadas:", conversacionesPorUsuario);
+
+    // Si el usuario es profesor y está en la pestaña "padres", usar contactosPadres
+    if (usuarioActual?.rol === "profesor" && selectedTab === "padres") {
+      return contactosPadres.map((contacto) => ({
+        id_usuario: contacto.id_padre,
+        tipo: "usuario",
+        titulo: `${contacto.nombre_padre}`,
+        otros_participantes: [
+          {
+            id_usuario: contacto.id_padre,
+            nombre: contacto.nombre_padre,
+            foto: contacto.foto_padre,
+            email: contacto.email_padre,
+            rol: "Padre",
+            contexto: `Padre de ${contacto.nombre_estudiante} - ${contacto.nombre_seccion}`,
+          },
+        ],
+        usuario_info: {
+          id_usuario: contacto.id_padre,
+          nombre: contacto.nombre_padre,
+          foto: contacto.foto_padre,
+          email: contacto.email_padre,
+          rol: "Padre",
+          contexto: `Padre de ${contacto.nombre_estudiante} - ${contacto.nombre_seccion}`,
+        },
+        no_leidos: 0,
+      }));
+    }
 
     // Combinar usuarios con sus conversaciones (sin duplicados)
     const listaCompleta = todosUsuarios
@@ -315,39 +366,45 @@ const Mensajes = () => {
     return listaCompleta;
   };
 
-  const conversacionesFiltradas = obtenerListaCompleta().filter((item) => {
-    // Filtro por búsqueda
-    if (busqueda) {
+  const conversacionesFiltradas = (() => {
+    const lista = obtenerListaCompleta();
+    const q = busqueda?.toLowerCase() || "";
+
+    const porBusqueda = (item) => {
+      if (!q) return true;
       const titulo = item.titulo?.toLowerCase() || "";
       const nombreUsuario = `${item.usuario_info?.nombre || ""} ${
         item.usuario_info?.apellido || ""
       }`.toLowerCase();
       const ultimoMensaje = item.ultimo_mensaje?.mensaje?.toLowerCase() || "";
+      return (
+        titulo.includes(q) ||
+        nombreUsuario.includes(q) ||
+        ultimoMensaje.includes(q)
+      );
+    };
 
-      if (
-        !titulo.includes(busqueda.toLowerCase()) &&
-        !nombreUsuario.includes(busqueda.toLowerCase()) &&
-        !ultimoMensaje.includes(busqueda.toLowerCase())
-      ) {
-        return false;
+    let filtrada = lista.filter((item) => porBusqueda(item));
+
+    if (selectedTab === "conversaciones") {
+      filtrada = filtrada.filter((item) => item.tipo === "conversacion");
+      if (filtroEstado === "noLeidos") {
+        filtrada = filtrada.filter((item) => item.no_leidos > 0);
+      } else if (filtroEstado === "leidos") {
+        filtrada = filtrada.filter((item) => (item.no_leidos || 0) === 0);
       }
+    } else if (selectedTab === "personal") {
+      filtrada = filtrada.filter(
+        (item) => item.usuario_info?.tipo_contacto === "usuario"
+      );
+    } else if (selectedTab === "padres") {
+      filtrada = filtrada.filter(
+        (item) => item.usuario_info?.tipo_contacto === "padre"
+      );
     }
 
-    // Filtro por estado (solo aplica a conversaciones existentes)
-    if (item.tipo === "conversacion") {
-      if (filtroEstado === "noLeidos" && item.no_leidos === 0) {
-        return false;
-      }
-      if (filtroEstado === "leidos" && item.no_leidos > 0) {
-        return false;
-      }
-    } else if (filtroEstado !== "todos") {
-      // Si está filtrando por leídos/no leídos, no mostrar usuarios sin conversación
-      return false;
-    }
-
-    return true;
-  });
+    return filtrada;
+  })();
 
   if (loading) return <Loader />;
 
@@ -505,28 +562,44 @@ const Mensajes = () => {
       <div className="flex flex-1 overflow-hidden">
         {/* Sidebar conversaciones */}
         <div className="w-1/3 bg-slate-900 border-r border-slate-700 flex flex-col">
-          {/* Header sidebar */}
+          {/* Header sidebar con búsqueda y tabs */}
           <div className="p-4 border-b border-slate-700">
             <div className="flex gap-2 mb-3">
               <div className="relative flex-1">
                 <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Buscar conversación..."
+                  placeholder={
+                    selectedTab === "conversaciones"
+                      ? "Buscar conversación..."
+                      : selectedTab === "personal"
+                      ? "Buscar personal..."
+                      : "Buscar padres..."
+                  }
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
               </div>
-              <button
-                onClick={() => {
-                  setMostrarNuevaConversacion(true);
-                  cargarUsuarios();
-                }}
-                className="p-2 bg-cyan-600 hover:bg-cyan-700 rounded-lg transition"
-              >
-                <PlusCircleIcon className="h-6 w-6 text-white" />
-              </button>
+            </div>
+            <div className="flex gap-2">
+              {[
+                {key: "conversaciones", label: "Conversaciones"},
+                {key: "personal", label: "Personal"},
+                {key: "padres", label: "Padres de Familia"},
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setSelectedTab(tab.key)}
+                  className={`px-3 py-1 rounded-md text-sm transition border ${
+                    selectedTab === tab.key
+                      ? "bg-cyan-600 text-white border-cyan-500"
+                      : "bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -536,12 +609,20 @@ const Mensajes = () => {
               <div className="p-8 text-center text-slate-400">
                 <UserCircleIcon className="h-16 w-16 mx-auto mb-4 text-slate-600" />
                 <p className="text-lg font-semibold">
-                  No hay usuarios disponibles
+                  {selectedTab === "conversaciones"
+                    ? "No hay conversaciones"
+                    : selectedTab === "personal"
+                    ? "No hay personal disponible"
+                    : "No hay padres vinculados"}
                 </p>
                 <p className="text-sm mt-2">
                   {busqueda
                     ? "No se encontraron resultados"
-                    : "No hay usuarios en la escuela"}
+                    : selectedTab === "conversaciones"
+                    ? "Aún no has iniciado chats. Selecciona un contacto para empezar."
+                    : selectedTab === "personal"
+                    ? "Verifica que existan usuarios con roles admin/director/profesor/secretariado en tu escuela activa."
+                    : "Verifica que tus estudiantes estén matriculados y vinculados con sus padres."}
                 </p>
               </div>
             ) : (
@@ -583,7 +664,9 @@ const Mensajes = () => {
                             `${API_URL}/mensajes/conversacion`,
                             {
                               participantes: [item.id_usuario],
-                              titulo: `Chat con ${usuario.nombre} ${usuario.apellido}`,
+                              titulo: `Chat con ${
+                                item.usuario_info?.nombre || "Padre"
+                              }`,
                               tipo: "directa",
                             },
                             {headers: {Authorization: `Bearer ${token}`}}
@@ -605,30 +688,21 @@ const Mensajes = () => {
                                 response.data.data.id_conversacion
                             );
 
-                          console.log("🔍 Conversación encontrada:", nuevaConv);
-                          console.log(
-                            "👥 Otros participantes:",
-                            nuevaConv?.otros_participantes
-                          );
-
                           if (nuevaConv) {
                             setConversacionActiva(nuevaConv);
                           } else {
-                            console.log(
-                              "⚠️ No se encontró la conversación, usando fallback"
-                            );
-                            // Fallback: crear objeto temporal con datos mínimos
                             setConversacionActiva({
                               id_conversacion:
                                 response.data.data.id_conversacion,
-                              titulo: `Chat con ${usuario.nombre} ${usuario.apellido}`,
-                              otros_participantes: [usuario],
+                              titulo: `Chat con ${
+                                item.usuario_info?.nombre || "Padre"
+                              }`,
+                              otros_participantes: [item.usuario_info],
                               no_leidos: 0,
                               tipo: "conversacion",
                             });
                           }
                         } catch (error) {
-                          console.error("Error al crear conversación:", error);
                           showToast(
                             "Error al iniciar la conversación",
                             "error"
@@ -642,12 +716,10 @@ const Mensajes = () => {
                   >
                     <div className="flex items-start gap-3">
                       <div className="flex-shrink-0 relative">
-                        {usuario?.imagen ? (
+                        {item.usuario_info?.foto ? (
                           <img
-                            src={`${API_URL.replace("/api", "")}${
-                              usuario.imagen
-                            }`}
-                            alt=""
+                            src={item.usuario_info.foto}
+                            alt="Foto padre"
                             className="h-12 w-12 rounded-full object-cover"
                           />
                         ) : (
@@ -655,7 +727,7 @@ const Mensajes = () => {
                         )}
                         {/* Badge de estado en línea */}
                         <EstadoEnLinea
-                          enLinea={usuario?.en_linea}
+                          enLinea={item.usuario_info?.en_linea}
                           size="medium"
                         />
                       </div>
@@ -663,11 +735,16 @@ const Mensajes = () => {
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <h3 className="font-semibold text-white truncate">
-                              {usuario?.nombre} {usuario?.apellido}
+                              {item.usuario_info?.nombre}
                             </h3>
                             <p className="text-xs text-slate-500">
-                              {usuario?.rol}
+                              {item.usuario_info?.rol}
                             </p>
+                            {item.usuario_info?.contexto && (
+                              <p className="text-xs text-cyan-400 mt-1">
+                                {item.usuario_info.contexto}
+                              </p>
+                            )}
                           </div>
                           {esConversacion && item.no_leidos > 0 && (
                             <span className="ml-2 px-2 py-1 bg-cyan-600 text-white text-xs rounded-full">
@@ -766,10 +843,14 @@ const Mensajes = () => {
               </div>
 
               {/* Mensajes */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div
+                ref={mensajesContainerRef}
+                className="flex-1 overflow-y-auto p-4 space-y-6 bg-slate-950/50 scroll-smooth"
+              >
                 {mensajes.map((msg) => {
                   const esMio = usuarioActual
-                    ? msg.id_remitente === usuarioActual.id_usuario
+                    ? msg.id_remitente === usuarioActual.id_usuario ||
+                      msg.id_usuario_remitente === usuarioActual.id_usuario
                     : false;
 
                   return (
@@ -777,37 +858,64 @@ const Mensajes = () => {
                       key={msg.id_mensaje}
                       className={`flex ${
                         esMio ? "justify-end" : "justify-start"
-                      }`}
+                      } animate-fade-in-up`}
                     >
                       <div
-                        className={`max-w-md ${esMio ? "order-2" : "order-1"}`}
+                        className={`max-w-[75%] flex flex-col ${
+                          esMio ? "items-end" : "items-start"
+                        }`}
                       >
                         {!esMio && (
-                          <p className="text-xs text-slate-400 mb-1 ml-2">
+                          <span className="text-xs text-slate-400 mb-1 ml-2 font-medium">
                             {msg.nombre} {msg.apellido}
-                          </p>
+                          </span>
                         )}
+
                         <div
-                          className={`px-4 py-2 rounded-2xl ${
+                          className={`relative px-5 py-3 shadow-md transition-all duration-200 hover:shadow-lg ${
                             esMio
-                              ? "bg-cyan-600 text-white"
-                              : "bg-slate-800 text-slate-100"
+                              ? "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 text-white rounded-2xl rounded-tr-sm"
+                              : "bg-gradient-to-r from-slate-800 to-slate-700 text-slate-100 rounded-2xl rounded-tl-sm border border-slate-700"
                           }`}
                         >
-                          <p className="whitespace-pre-wrap break-words">
-                            {msg.mensaje}
+                          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+                            {msg.contenido || msg.mensaje}
                           </p>
+
+                          {/* Triángulo decorativo (cola del globo) */}
+                          <div
+                            className={`absolute top-0 w-0 h-0 border-[6px] border-transparent ${
+                              esMio
+                                ? "-right-[6px] border-t-pink-600"
+                                : "-left-[6px] border-t-slate-800"
+                            }`}
+                          />
                         </div>
-                        <p className="text-xs text-slate-500 mt-1 ml-2">
-                          {new Date(msg.fecha_envio).toLocaleTimeString(
-                            "es-SV",
-                            {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            }
+
+                        <div
+                          className={`flex items-center gap-1 mt-1 ${
+                            esMio ? "mr-1" : "ml-1"
+                          }`}
+                        >
+                          <span className="text-[10px] text-slate-500 font-medium">
+                            {new Date(msg.fecha_envio).toLocaleTimeString(
+                              "es-SV",
+                              {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              }
+                            )}
+                          </span>
+                          {esMio && (
+                            <CheckCircleIcon
+                              className={`h-3 w-3 ${
+                                msg.leido_por_mi
+                                  ? "text-blue-400"
+                                  : "text-slate-500"
+                              }`}
+                            />
                           )}
-                          {msg.editado && " (editado)"}
-                        </p>
+                        </div>
                       </div>
                     </div>
                   );
@@ -855,237 +963,7 @@ const Mensajes = () => {
         </div>
       </div>
 
-      {/* Modal nueva conversación */}
-      {mostrarNuevaConversacion && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-slate-900 rounded-lg p-6 w-full max-w-md">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-white">
-                Nueva Conversación
-              </h3>
-              <button
-                onClick={() => {
-                  setMostrarNuevaConversacion(false);
-                  setUsuarioSeleccionado(null);
-                  setMensajeInicial("");
-                  setBusquedaContacto("");
-                }}
-                className="text-slate-400 hover:text-white"
-              >
-                <XMarkIcon className="h-6 w-6" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {/* Buscador de contactos */}
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Buscar contacto
-                </label>
-                <div className="relative">
-                  <MagnifyingGlassIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Buscar por nombre, email..."
-                    value={busquedaContacto}
-                    onChange={(e) => setBusquedaContacto(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Seleccionar contacto
-                </label>
-                <select
-                  value={usuarioSeleccionado?.id_usuario || ""}
-                  onChange={(e) => {
-                    const usuario = usuarios.find(
-                      (u) => u.id_usuario === parseInt(e.target.value)
-                    );
-                    setUsuarioSeleccionado(usuario);
-                  }}
-                  className="w-full px-4 py-2 bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                >
-                  <option value="">-- Seleccionar --</option>
-
-                  {/* Usuarios del sistema filtrados */}
-                  {usuarios.filter(
-                    (u) =>
-                      u.tipo_contacto === "usuario" &&
-                      (!busquedaContacto ||
-                        u.nombre
-                          .toLowerCase()
-                          .includes(busquedaContacto.toLowerCase()) ||
-                        u.apellido
-                          .toLowerCase()
-                          .includes(busquedaContacto.toLowerCase()) ||
-                        u.email
-                          .toLowerCase()
-                          .includes(busquedaContacto.toLowerCase()) ||
-                        u.rol
-                          .toLowerCase()
-                          .includes(busquedaContacto.toLowerCase()))
-                  ).length > 0 && (
-                    <optgroup label="📋 Usuarios del Sistema">
-                      {usuarios
-                        .filter(
-                          (u) =>
-                            u.tipo_contacto === "usuario" &&
-                            (!busquedaContacto ||
-                              u.nombre
-                                .toLowerCase()
-                                .includes(busquedaContacto.toLowerCase()) ||
-                              u.apellido
-                                .toLowerCase()
-                                .includes(busquedaContacto.toLowerCase()) ||
-                              u.email
-                                .toLowerCase()
-                                .includes(busquedaContacto.toLowerCase()) ||
-                              u.rol
-                                .toLowerCase()
-                                .includes(busquedaContacto.toLowerCase()))
-                        )
-                        .map((u) => (
-                          <option
-                            key={`usuario-${u.id_usuario}`}
-                            value={u.id_usuario}
-                          >
-                            {u.en_linea ? "🟢 " : ""}
-                            {u.nombre} {u.apellido} - {u.rol}
-                          </option>
-                        ))}
-                    </optgroup>
-                  )}
-
-                  {/* Padres de familia filtrados */}
-                  {usuarios.filter(
-                    (u) =>
-                      u.tipo_contacto === "padre" &&
-                      (!busquedaContacto ||
-                        u.nombre
-                          .toLowerCase()
-                          .includes(busquedaContacto.toLowerCase()) ||
-                        u.apellido
-                          .toLowerCase()
-                          .includes(busquedaContacto.toLowerCase()) ||
-                        u.email
-                          .toLowerCase()
-                          .includes(busquedaContacto.toLowerCase()) ||
-                        u.nombre_estudiante
-                          .toLowerCase()
-                          .includes(busquedaContacto.toLowerCase()))
-                  ).length > 0 && (
-                    <optgroup label="👨‍👩‍👧 Padres de Familia">
-                      {usuarios
-                        .filter(
-                          (u) =>
-                            u.tipo_contacto === "padre" &&
-                            (!busquedaContacto ||
-                              u.nombre
-                                .toLowerCase()
-                                .includes(busquedaContacto.toLowerCase()) ||
-                              u.apellido
-                                .toLowerCase()
-                                .includes(busquedaContacto.toLowerCase()) ||
-                              u.email
-                                .toLowerCase()
-                                .includes(busquedaContacto.toLowerCase()) ||
-                              u.nombre_estudiante
-                                .toLowerCase()
-                                .includes(busquedaContacto.toLowerCase()))
-                        )
-                        .map((u) => (
-                          <option
-                            key={`padre-${u.id_usuario}`}
-                            value={u.id_usuario}
-                          >
-                            {u.nombre} {u.apellido} (Padre de{" "}
-                            {u.nombre_estudiante})
-                          </option>
-                        ))}
-                    </optgroup>
-                  )}
-                </select>
-
-                {/* Información adicional del contacto seleccionado */}
-                {usuarioSeleccionado && (
-                  <div className="mt-2 p-3 bg-slate-800 rounded-lg border border-slate-700">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0">
-                        {usuarioSeleccionado.tipo_contacto === "usuario" && (
-                          <div
-                            className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                              usuarioSeleccionado.en_linea
-                                ? "bg-green-500/20 border-2 border-green-500"
-                                : "bg-slate-700"
-                            }`}
-                          >
-                            <UserCircleIcon
-                              className={`h-8 w-8 ${
-                                usuarioSeleccionado.en_linea
-                                  ? "text-green-400"
-                                  : "text-slate-400"
-                              }`}
-                            />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm text-slate-300 font-semibold">
-                            {usuarioSeleccionado.nombre}{" "}
-                            {usuarioSeleccionado.apellido}
-                          </p>
-                          {usuarioSeleccionado.tipo_contacto === "usuario" &&
-                            usuarioSeleccionado.en_linea && (
-                              <span className="text-xs text-green-400 flex items-center gap-1">
-                                <span className="h-2 w-2 bg-green-400 rounded-full animate-pulse"></span>
-                                En línea
-                              </span>
-                            )}
-                        </div>
-                        <p className="text-xs text-slate-400 mt-1">
-                          <span className="font-semibold">Email:</span>{" "}
-                          {usuarioSeleccionado.email}
-                        </p>
-                        {usuarioSeleccionado.tipo_contacto === "padre" && (
-                          <p className="text-xs text-cyan-400 mt-1">
-                            <span className="font-semibold">Estudiante:</span>{" "}
-                            {usuarioSeleccionado.nombre_estudiante}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Mensaje inicial
-                </label>
-                <textarea
-                  value={mensajeInicial}
-                  onChange={(e) => setMensajeInicial(e.target.value)}
-                  placeholder="Escribe tu mensaje..."
-                  rows="4"
-                  className="w-full px-4 py-2 bg-slate-800 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-cyan-500 resize-none"
-                />
-              </div>
-
-              <button
-                onClick={crearNuevaConversacion}
-                disabled={!usuarioSeleccionado || !mensajeInicial.trim()}
-                className="w-full py-2 bg-cyan-600 hover:bg-cyan-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg transition font-medium"
-              >
-                Crear Conversación
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal de nueva conversación eliminado: usar tabs y clic directo en lista */}
 
       {/* Toast Notifications */}
       {toast.show && (

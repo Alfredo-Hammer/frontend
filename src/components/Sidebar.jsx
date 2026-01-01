@@ -34,6 +34,7 @@ import {useNavigate, useLocation} from "react-router-dom";
 import ConfirmModal from "./ConfirmModal";
 import {filterMenuByRole} from "../config/roles";
 import {useMensajes} from "../context/MensajesContext";
+import api from "../api/axiosConfig";
 
 const menuSections = [
   {
@@ -79,16 +80,23 @@ const menuSections = [
         path: "/secciones",
         color: "text-teal-400",
       },
+      {
+        key: "carga_academica",
+        label: "Carga Académica",
+        icon: <ClipboardDocumentListIcon className="h-5 w-5" />,
+        path: "/carga-academica",
+        color: "text-blue-400",
+      },
     ],
   },
   {
     title: "Gestión de Personas",
     items: [
       {
-        key: "alumnos",
+        key: "estudiantes",
         label: "Estudiantes",
         icon: <UserIcon className="h-5 w-5" />,
-        path: "/alumnos",
+        path: "/estudiantes",
         color: "text-green-400",
       },
       {
@@ -287,13 +295,6 @@ const menuSections = [
     title: "Ayuda",
     items: [
       {
-        key: "soporte",
-        label: "Soporte Técnico",
-        icon: <QuestionMarkCircleIcon className="h-5 w-5" />,
-        path: "/soporte",
-        color: "text-blue-400",
-      },
-      {
         key: "manual",
         label: "Manual de Usuario",
         icon: <InformationCircleIcon className="h-5 w-5" />,
@@ -307,6 +308,13 @@ const menuSections = [
         path: "/acerca",
         color: "text-purple-400",
       },
+      {
+        key: "soporte",
+        label: "Contacto o soporte",
+        icon: <QuestionMarkCircleIcon className="h-5 w-5" />,
+        path: "/soporte",
+        color: "text-blue-400",
+      },
     ],
   },
 ];
@@ -314,6 +322,7 @@ const menuSections = [
 function Sidebar({setToken, user}) {
   const [collapsed, setCollapsed] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [escuela, setEscuela] = useState(null);
   const [expandedSections, setExpandedSections] = useState({
     Principal: true,
     "Gestión Académica": true,
@@ -323,6 +332,21 @@ function Sidebar({setToken, user}) {
 
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Fetch escuela data
+  useEffect(() => {
+    const fetchEscuela = async () => {
+      if (user?.id_escuela) {
+        try {
+          const res = await api.get(`/api/escuelas/${user.id_escuela}`);
+          setEscuela(res.data);
+        } catch (err) {
+          console.error("Error fetching school data:", err);
+        }
+      }
+    };
+    fetchEscuela();
+  }, [user]);
 
   // Filtrar menú según el rol del usuario
   useEffect(() => {
@@ -360,17 +384,28 @@ function Sidebar({setToken, user}) {
       {/* Header */}
       <div className="flex items-center justify-between p-6 border-b border-gray-700 bg-gradient-to-r from-cyan-900/50 to-blue-900/50">
         {!collapsed && (
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl">
-              <AcademicCapIcon className="h-8 w-8 text-white" />
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="p-2 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl flex-shrink-0">
+              {escuela?.logo ? (
+                <img
+                  src={`${api.defaults.baseURL}${escuela.logo}`}
+                  alt="Logo"
+                  className="h-8 w-8 object-cover rounded-lg bg-white"
+                />
+              ) : (
+                <AcademicCapIcon className="h-8 w-8 text-white" />
+              )}
             </div>
-            <div>
-              <span className="block text-xl font-extrabold tracking-wide">
+            <div className="min-w-0 flex-1">
+              <span className="block text-xl font-extrabold tracking-wide whitespace-nowrap">
                 <span className="text-white">Sistema</span>
                 <span className="text-cyan-400 ml-1">AOC</span>
               </span>
-              <span className="block text-xs text-gray-400 font-medium">
-                Gestión Escolar
+              <span
+                className="block text-xs text-gray-400 font-medium truncate"
+                title={escuela?.nombre || "Gestión Escolar"}
+              >
+                {escuela?.nombre || "Gestión Escolar"}
               </span>
             </div>
           </div>

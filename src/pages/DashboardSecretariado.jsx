@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from "react";
+import React, { useState, useEffect } from "react";
 import api from "../api/axiosConfig";
 import {
   Users,
@@ -21,8 +21,6 @@ import {
 import {
   BarChart,
   Bar,
-  LineChart,
-  Line,
   Cell,
   XAxis,
   YAxis,
@@ -31,22 +29,19 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-function DashboardSecretariado({user}) {
+function DashboardSecretariado({ user }) {
   const [loading, setLoading] = useState(true);
   const [escuela, setEscuela] = useState(null);
   const [estadisticas, setEstadisticas] = useState({
-    estudiantesActivos: 0,
+    totalAlumnos: 0,
+    totalProfesores: 0,
+    totalMaterias: 0,
+    totalGrados: 0,
+    totalSecciones: 0,
     nuevasInscripciones: 0,
-    pendientesPago: 0,
-    citasPendientes: 0,
-    constanciasEmitidas: 0,
-    asistenciaHoy: 0,
   });
   const [alumnos, setAlumnos] = useState([]);
-  const [profesores, setProfesores] = useState([]);
   const [grados, setGrados] = useState([]);
-  const [secciones, setSecciones] = useState([]);
-  const [materias, setMaterias] = useState([]);
   const token = localStorage.getItem("token");
 
   // Calcular distribución por grados con datos reales
@@ -133,60 +128,37 @@ function DashboardSecretariado({user}) {
   const cargarDatos = async () => {
     try {
       setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
 
       // Cargar datos en paralelo
       const [
         escuelaRes,
-        alumnosRes,
-        profesoresRes,
-        gradosRes,
-        seccionesRes,
-        materiasRes,
+        dashboardRes,
+        alumnosRes, // Necesario para el gráfico
+        gradosRes, // Necesario para el gráfico
       ] = await Promise.all([
         user?.id_escuela
-          ? api.get(`/api/escuelas/${user.id_escuela}`, {
-              headers: {Authorization: `Bearer ${token}`},
-            })
-          : Promise.resolve({data: null}),
-        api.get("/api/alumnos", {
-          headers: {Authorization: `Bearer ${token}`},
-        }),
-        api.get("/api/profesores", {
-          headers: {Authorization: `Bearer ${token}`},
-        }),
-        api.get("/api/grados", {
-          headers: {Authorization: `Bearer ${token}`},
-        }),
-        api.get("/api/secciones", {
-          headers: {Authorization: `Bearer ${token}`},
-        }),
-        api.get("/api/materias", {
-          headers: {Authorization: `Bearer ${token}`},
-        }),
+          ? api.get(`/api/escuelas/${user.id_escuela}`, { headers })
+          : Promise.resolve({ data: null }),
+        api.get("/api/dashboard/admin", { headers }),
+        api.get("/api/alumnos", { headers }),
+        api.get("/api/grados", { headers }),
       ]);
 
       setEscuela(escuelaRes.data);
       setAlumnos(alumnosRes.data);
-      setProfesores(profesoresRes.data);
       setGrados(gradosRes.data);
-      setSecciones(seccionesRes.data);
-      setMaterias(materiasRes.data);
 
-      // Calcular estadísticas reales
-      setEstadisticas({
-        estudiantesActivos: alumnosRes.data.length,
-        nuevasInscripciones: alumnosRes.data.filter((a) => {
-          // Contar alumnos registrados en los últimos 30 días
-          const fechaRegistro = new Date(a.fecha_registro || a.createdAt);
-          const hace30dias = new Date();
-          hace30dias.setDate(hace30dias.getDate() - 30);
-          return fechaRegistro > hace30dias;
-        }).length,
-        pendientesPago: 0, // Placeholder - implementar cuando tengas módulo de pagos
-        citasPendientes: 0, // Placeholder - implementar cuando tengas módulo de citas
-        constanciasEmitidas: 0, // Placeholder - implementar cuando tengas módulo de documentos
-        asistenciaHoy: 94.5, // Placeholder - obtener del módulo de asistencia
-      });
+      // Calcular nuevas inscripciones del lado del cliente
+      const nuevasInscripciones = alumnosRes.data.filter((a) => {
+        const fechaRegistro = new Date(a.fecha_registro || a.createdAt);
+        const hace30dias = new Date();
+        hace30dias.setDate(hace30dias.getDate() - 30);
+        return fechaRegistro > hace30dias;
+      }).length;
+
+      setEstadisticas({ ...dashboardRes.data, nuevasInscripciones });
+
     } catch (error) {
       console.error("Error al cargar datos:", error);
     } finally {
@@ -310,7 +282,7 @@ function DashboardSecretariado({user}) {
               </div>
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {estadisticas.estudiantesActivos}
+              {estadisticas.totalAlumnos}
             </h3>
             <p className="text-blue-200 text-sm">Estudiantes Activos</p>
           </div>
@@ -326,7 +298,7 @@ function DashboardSecretariado({user}) {
               </div>
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {profesores.length}
+              {estadisticas.totalProfesores}
             </h3>
             <p className="text-green-200 text-sm">Profesores</p>
           </div>
@@ -342,7 +314,7 @@ function DashboardSecretariado({user}) {
               </div>
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {grados.length}
+              {estadisticas.totalGrados}
             </h3>
             <p className="text-yellow-200 text-sm">Grados</p>
           </div>
@@ -358,7 +330,7 @@ function DashboardSecretariado({user}) {
               </div>
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {secciones.length}
+              {estadisticas.totalSecciones}
             </h3>
             <p className="text-purple-200 text-sm">Secciones</p>
           </div>
@@ -374,7 +346,7 @@ function DashboardSecretariado({user}) {
               </div>
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {materias.length}
+              {estadisticas.totalMaterias}
             </h3>
             <p className="text-cyan-200 text-sm">Materias</p>
           </div>

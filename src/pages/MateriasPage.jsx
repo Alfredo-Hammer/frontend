@@ -11,12 +11,14 @@ import {
   ClockIcon,
 } from "@heroicons/react/24/solid";
 import PageHeader from "../components/PageHeader";
+import Toast from "../components/Toast";
+import ConfirmModal from "../components/ConfirmModal";
 
 function MateriasPage() {
   const [materias, setMaterias] = useState([]);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [mensaje, setMensaje] = useState("");
+  const [categoria, setCategoria] = useState("General");
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -24,14 +26,53 @@ function MateriasPage() {
   const [user, setUser] = useState(null);
   const [escuela, setEscuela] = useState(null);
 
+  // Estados para Toast y ConfirmModal
+  const [toast, setToast] = useState({
+    show: false,
+    message: "",
+    type: "success",
+  });
+  const [confirmModal, setConfirmModal] = useState({
+    show: false,
+    title: "",
+    message: "",
+    onConfirm: null,
+    type: "warning",
+    loading: false,
+  });
+
   // Nuevos estados para funcionalidades adicionales
   const [searchTerm, setSearchTerm] = useState("");
   const [viewMode, setViewMode] = useState("cards"); // "cards" o "table"
   const [sortBy, setSortBy] = useState("nombre");
   const [sortOrder, setSortOrder] = useState("asc");
   const [showFilters, setShowFilters] = useState(false);
+  const [filtroCategoria, setFiltroCategoria] = useState("");
+
+  // Categorías disponibles según MINED Nicaragua
+  const CATEGORIAS_MATERIAS = [
+    "General",
+    "Ciencias Exactas",
+    "Ciencias Naturales",
+    "Ciencias Sociales",
+    "Idiomas",
+    "Arte y Cultura",
+    "Educación Física",
+    "Tecnología",
+    "Formación Ciudadana",
+    "Educación Técnica",
+  ];
 
   const token = localStorage.getItem("token");
+
+  // Funciones auxiliares para Toast
+  const showToast = (message, type = "success") => {
+    setToast({show: true, message, type});
+  };
+
+  const hideToast = () => {
+    setToast({show: false, message: "", type: "success"});
+  };
 
   // Verificar si el usuario puede editar/eliminar (solo admin, director, secretaria)
   const canEdit =
@@ -79,13 +120,6 @@ function MateriasPage() {
     }
   };
 
-  useEffect(() => {
-    if (mensaje) {
-      const timer = setTimeout(() => setMensaje(""), 3000);
-      return () => clearTimeout(timer);
-    }
-  }, [mensaje]);
-
   const fetchMaterias = async () => {
     setIsLoading(true);
     try {
@@ -94,9 +128,12 @@ function MateriasPage() {
         params: {_t: new Date().getTime()},
       });
 
-      setMaterias(res.data);
+      // Extraer el array de materias del campo data de la respuesta
+      setMaterias(res.data.data || res.data || []);
     } catch (error) {
-      setMensaje("Error al cargar materias");
+      console.error("Error al cargar materias:", error);
+      showToast("Error al cargar materias", "error");
+      setMaterias([]); // Asegurar que materias sea siempre un array
     } finally {
       setIsLoading(false);
     }
@@ -112,18 +149,20 @@ function MateriasPage() {
         {
           nombre,
           descripcion,
+          categoria,
         },
         {headers: {Authorization: `Bearer ${token}`}}
       );
       limpiarFormulario();
       setShowModal(false);
-      setMensaje("Materia creada correctamente");
+      showToast("Materia creada correctamente", "success");
       fetchMaterias();
     } catch (error) {
-      setMensaje(
+      showToast(
         error.response?.data?.error ||
           error.response?.data?.message ||
-          "Error al crear materia"
+          "Error al crear materia",
+        "error"
       );
     } finally {
       setIsSubmitting(false);
@@ -138,42 +177,67 @@ function MateriasPage() {
         {
           nombre,
           descripcion,
+          categoria,
         },
         {headers: {Authorization: `Bearer ${token}`}}
       );
       limpiarFormulario();
       setShowModal(false);
-      setMensaje("Materia actualizada correctamente");
+      showToast("Materia actualizada correctamente", "success");
       fetchMaterias();
     } catch (error) {
-      setMensaje(
+      showToast(
         error.response?.data?.error ||
           error.response?.data?.message ||
-          "Error al actualizar materia"
+          "Error al actualizar materia",
+        "error"
       );
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleEliminar = async (id) => {
-    if (!window.confirm("¿Está seguro que desea eliminar esta materia?"))
-      return;
+  const handleEliminar = (id, nombreMateria) => {
+    setConfirmModal({
+      show: true,
+      title: "¿Eliminar materia?",
+      message: `¿Estás seguro que deseas eliminar la materia "${nombreMateria}"? Esta acción no se puede deshacer.`,
+      onConfirm: () => confirmarEliminacion(id),
+      type: "danger",
+      loading: false,
+    });
+  };
+
+  const confirmarEliminacion = async (id) => {
+    setConfirmModal((prev) => ({...prev, loading: true}));
 
     try {
       await api.delete(services.materias + `/${id}`, {
         headers: {Authorization: `Bearer ${token}`},
       });
-      setMensaje("Materia eliminada correctamente");
+      showToast("Materia eliminada correctamente", "success");
       fetchMaterias();
+      setConfirmModal({
+        show: false,
+        title: "",
+        message: "",
+        onConfirm: null,
+        type: "warning",
+        loading: false,
+      });
     } catch (error) {
-      setMensaje("Error al eliminar materia");
+      showToast(
+        error.response?.data?.message || "Error al eliminar materia",
+        "error"
+      );
+      setConfirmModal((prev) => ({...prev, loading: false}));
     }
   };
 
   const limpiarFormulario = () => {
     setNombre("");
     setDescripcion("");
+    setCategoria("General");
     setEditId(null);
   };
 
@@ -181,17 +245,30 @@ function MateriasPage() {
     setEditId(materia.id_materia);
     setNombre(materia.nombre);
     setDescripcion(materia.descripcion || "");
+    setCategoria(materia.categoria || "General");
     setShowModal(true);
   };
 
   // Filtros y búsqueda
-  const materiasFiltradas = materias.filter((materia) => {
-    const matchesSearch =
-      materia.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (materia.descripcion &&
-        materia.descripcion.toLowerCase().includes(searchTerm.toLowerCase()));
-    return matchesSearch;
-  });
+  const materiasFiltradas = (Array.isArray(materias) ? materias : []).filter(
+    (materia) => {
+      const matchesSearch =
+        materia.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (materia.descripcion &&
+          materia.descripcion
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase())) ||
+        (materia.codigo_materia &&
+          materia.codigo_materia
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()));
+
+      const matchesCategoria =
+        filtroCategoria === "" || materia.categoria === filtroCategoria;
+
+      return matchesSearch && matchesCategoria;
+    }
+  );
 
   // Ordenamiento
   const materiasOrdenadas = [...materiasFiltradas].sort((a, b) => {
@@ -212,10 +289,11 @@ function MateriasPage() {
 
   // Estadísticas
   const estadisticas = {
-    total: materias.length,
-    conGrados: materias.filter(
-      (m) => m.grados_nombres && m.grados_nombres.length > 0
-    ).length,
+    total: Array.isArray(materias) ? materias.length : 0,
+    conGrados: Array.isArray(materias)
+      ? materias.filter((m) => m.grados_nombres && m.grados_nombres.length > 0)
+          .length
+      : 0,
   };
 
   return (
@@ -260,17 +338,6 @@ function MateriasPage() {
             </>
           }
         />
-        {mensaje && (
-          <div
-            className={`mb-6 p-4 rounded-2xl text-center backdrop-blur-sm border ${
-              mensaje.includes("correctamente")
-                ? "bg-green-500/10 border-green-500/20 text-green-300"
-                : "bg-red-500/10 border-red-500/20 text-red-300"
-            }`}
-          >
-            {mensaje}
-          </div>
-        )}
 
         {/* Barra de búsqueda y controles */}
         <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
@@ -281,7 +348,7 @@ function MateriasPage() {
               </div>
               <input
                 type="text"
-                placeholder="Buscar materias por nombre o descripción..."
+                placeholder="Buscar materias por nombre, código o descripción..."
                 className="block w-full pl-10 pr-3 py-3 border border-gray-600 rounded-xl bg-gray-700 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -291,10 +358,25 @@ function MateriasPage() {
             <div className="flex gap-3 items-center">
               <select
                 className="px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
+                value={filtroCategoria}
+                onChange={(e) => setFiltroCategoria(e.target.value)}
+              >
+                <option value="">Todas las categorías</option>
+                {CATEGORIAS_MATERIAS.map((categoria) => (
+                  <option key={categoria} value={categoria}>
+                    {categoria}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="px-4 py-3 border border-gray-600 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-gray-700 text-white"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
               >
                 <option value="nombre">Ordenar por Nombre</option>
+                <option value="categoria">Ordenar por Categoría</option>
+                <option value="codigo_materia">Ordenar por Código</option>
               </select>
 
               <button
@@ -356,7 +438,7 @@ function MateriasPage() {
         {/* Empty State */}
         {!isLoading &&
           materiasOrdenadas.length === 0 &&
-          materias.length === 0 && (
+          (!Array.isArray(materias) || materias.length === 0) && (
             <div className="text-center py-20">
               <div className="text-8xl mb-6">📚</div>
               <h2 className="text-2xl font-bold text-gray-300 mb-4">
@@ -381,6 +463,7 @@ function MateriasPage() {
         {/* Filtered empty state */}
         {!isLoading &&
           materiasOrdenadas.length === 0 &&
+          Array.isArray(materias) &&
           materias.length > 0 && (
             <div className="text-center py-16">
               <div className="text-6xl mb-4">🔍</div>
@@ -406,6 +489,11 @@ function MateriasPage() {
                   <div className="absolute top-0 right-0 w-20 h-20 bg-white/10 rounded-full -mr-10 -mt-10"></div>
                   <div className="flex items-center justify-between">
                     <BookOpenIcon className="w-8 h-8 text-white" />
+                    {materia.codigo_materia && (
+                      <span className="bg-white/20 text-white px-3 py-1 rounded-full text-xs font-bold">
+                        {materia.codigo_materia}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-xl font-bold text-white mt-3 line-clamp-2">
                     {materia.nombre}
@@ -414,6 +502,11 @@ function MateriasPage() {
 
                 {/* Contenido de la tarjeta */}
                 <div className="p-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="px-3 py-1 text-xs font-medium bg-indigo-500/20 text-indigo-300 rounded-full">
+                      {materia.categoria || "General"}
+                    </span>
+                  </div>
                   {materia.descripcion && (
                     <p className="text-gray-300 text-sm line-clamp-3">
                       {materia.descripcion}
@@ -445,7 +538,9 @@ function MateriasPage() {
                         <span>Editar</span>
                       </button>
                       <button
-                        onClick={() => handleEliminar(materia.id_materia)}
+                        onClick={() =>
+                          handleEliminar(materia.id_materia, materia.nombre)
+                        }
                         className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 shadow-sm transform hover:scale-105 transition-all duration-200"
                         title="Eliminar"
                       >
@@ -487,16 +582,13 @@ function MateriasPage() {
                       Materia
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
+                      Código
+                    </th>
+                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
                       Categoría
                     </th>
                     <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Nivel
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Créditos
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">
-                      Horas
+                      Descripción
                     </th>
                     <th className="px-6 py-4 text-center text-xs font-medium text-gray-300 uppercase tracking-wider">
                       Acciones
@@ -518,29 +610,23 @@ function MateriasPage() {
                             <div className="text-sm font-medium text-white line-clamp-1">
                               {materia.nombre}
                             </div>
-                            <div className="text-sm text-gray-400 line-clamp-1">
-                              {materia.descripcion || "Sin descripción"}
-                            </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-3 py-1 text-xs font-medium bg-purple-500/20 text-purple-300 rounded-full">
-                          {materia.categoria || "Sin categoría"}
+                        <span className="px-3 py-1 text-xs font-bold bg-purple-500/20 text-purple-300 rounded-full">
+                          {materia.codigo_materia || "Sin código"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="px-3 py-1 text-xs font-medium bg-blue-500/20 text-blue-300 rounded-full">
-                          {materia.nivel || "Sin nivel"}
+                        <span className="px-3 py-1 text-xs font-medium bg-indigo-500/20 text-indigo-300 rounded-full">
+                          {materia.categoria || "General"}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                        {materia.creditos || "-"}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                        {materia.horas_semanales
-                          ? `${materia.horas_semanales}h`
-                          : "-"}
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-300 max-w-xs">
+                          {materia.descripcion || "Sin descripción"}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
                         {canEdit ? (
@@ -565,7 +651,12 @@ function MateriasPage() {
                               </svg>
                             </button>
                             <button
-                              onClick={() => handleEliminar(materia.id_materia)}
+                              onClick={() =>
+                                handleEliminar(
+                                  materia.id_materia,
+                                  materia.nombre
+                                )
+                              }
                               className="p-2 bg-red-500/20 text-red-300 rounded-lg hover:bg-red-500/30 transition-colors duration-200"
                               title="Eliminar"
                             >
@@ -674,6 +765,34 @@ function MateriasPage() {
                         required
                       />
                     </div>
+
+                    <div className="md:col-span-1">
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Categoría *
+                      </label>
+                      <select
+                        className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
+                        value={categoria}
+                        onChange={(e) => setCategoria(e.target.value)}
+                        required
+                      >
+                        {CATEGORIAS_MATERIAS.map((cat) => (
+                          <option key={cat} value={cat} className="bg-gray-800">
+                            {cat}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="md:col-span-1">
+                      <label className="block text-sm font-medium text-gray-300 mb-2">
+                        Código
+                      </label>
+                      <div className="px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-gray-400">
+                        Se genera automáticamente
+                      </div>
+                    </div>
+
                     <div className="md:col-span-2">
                       <label className="block text-sm font-medium text-gray-300 mb-2">
                         Descripción
@@ -740,6 +859,38 @@ function MateriasPage() {
           </div>
         )}
       </div>
+
+      {/* Toast Component */}
+      {toast.show && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={hideToast}
+          duration={4000}
+        />
+      )}
+
+      {/* Confirm Modal Component */}
+      <ConfirmModal
+        open={confirmModal.show}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() =>
+          setConfirmModal({
+            show: false,
+            title: "",
+            message: "",
+            onConfirm: null,
+            type: "warning",
+            loading: false,
+          })
+        }
+        type={confirmModal.type}
+        loading={confirmModal.loading}
+      />
     </div>
   );
 }

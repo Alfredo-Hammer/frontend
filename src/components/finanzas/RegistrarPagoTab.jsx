@@ -11,7 +11,10 @@ import Toast from "../Toast";
 const RegistrarPagoTab = () => {
   const [loading, setLoading] = useState(false);
   const [estudiantes, setEstudiantes] = useState([]);
+  const [todosEstudiantes, setTodosEstudiantes] = useState([]);
   const [conceptos, setConceptos] = useState([]);
+  const [grados, setGrados] = useState([]);
+  const [secciones, setSecciones] = useState([]);
   const [busquedaEstudiante, setBusquedaEstudiante] = useState("");
   const [estudianteSeleccionado, setEstudianteSeleccionado] = useState(null);
   const [mostrarResultados, setMostrarResultados] = useState(false);
@@ -20,6 +23,12 @@ const RegistrarPagoTab = () => {
     show: false,
     message: "",
     type: "success",
+  });
+
+  // Filtros avanzados
+  const [filtros, setFiltros] = useState({
+    id_grado: "",
+    id_seccion: "",
   });
 
   const showToast = (message, type = "success") => {
@@ -38,18 +47,23 @@ const RegistrarPagoTab = () => {
   });
 
   useEffect(() => {
-    cargarConceptos();
+    cargarDatosIniciales();
   }, []);
 
   useEffect(() => {
-    if (busquedaEstudiante.length >= 3) {
-      buscarEstudiantes();
+    aplicarFiltros();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busquedaEstudiante, filtros.id_grado, filtros.id_seccion]);
+
+  useEffect(() => {
+    if (filtros.id_grado) {
+      cargarSeccionesPorGrado(filtros.id_grado);
     } else {
-      setEstudiantes([]);
-      setMostrarResultados(false);
+      setSecciones([]);
+      setFiltros((prev) => ({...prev, id_seccion: ""}));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busquedaEstudiante]);
+  }, [filtros.id_grado]);
 
   useEffect(() => {
     if (formData.id_concepto) {
@@ -67,26 +81,88 @@ const RegistrarPagoTab = () => {
     formData.descuento_monto,
   ]);
 
-  const cargarConceptos = async () => {
+  const cargarDatosIniciales = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await api.get(services.finanzasConceptos, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      setConceptos(response.data.filter((c) => c.activo));
+
+      const [conceptosRes, estudiantesRes, gradosRes] = await Promise.all([
+        api.get(services.finanzasConceptos, {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+        api.get(services.alumnos, {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+        api.get(services.grados, {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+      ]);
+
+      // Normalizar formatos de respuesta
+      const conceptosData = Array.isArray(conceptosRes.data?.conceptos)
+        ? conceptosRes.data.conceptos
+        : Array.isArray(conceptosRes.data?.data)
+        ? conceptosRes.data.data
+        : Array.isArray(conceptosRes.data)
+        ? conceptosRes.data
+        : [];
+
+      const estudiantesData = Array.isArray(estudiantesRes.data?.data)
+        ? estudiantesRes.data.data
+        : Array.isArray(estudiantesRes.data)
+        ? estudiantesRes.data
+        : [];
+
+      const gradosData = Array.isArray(gradosRes.data?.data)
+        ? gradosRes.data.data
+        : Array.isArray(gradosRes.data)
+        ? gradosRes.data
+        : [];
+
+      console.log("✅ Datos finanzas - conceptos:", conceptosData.length);
+      console.log("✅ Datos finanzas - estudiantes:", estudiantesData.length);
+      console.log("✅ Datos finanzas - grados:", gradosData.length);
+
+      setConceptos(conceptosData.filter((c) => c.activo !== false));
+      setTodosEstudiantes(estudiantesData);
+      setGrados(gradosData);
     } catch (error) {
-      console.error("Error cargando conceptos:", error);
+      console.error("Error cargando datos iniciales:", error);
+      showToast(
+        "Error al cargar datos iniciales de finanzas. Revisa la consola.",
+        "error"
+      );
     }
   };
 
-  const buscarEstudiantes = async () => {
+  const cargarSeccionesPorGrado = async (idGrado) => {
     try {
       const token = localStorage.getItem("token");
-      const response = await api.get(services.alumnos, {
+      const response = await api.get(services.secciones, {
         headers: {Authorization: `Bearer ${token}`},
+        params: {id_grado: idGrado},
       });
 
-      const filtrados = response.data.filter(
+      console.log("Secciones recibidas:", response.data); // Debug
+
+      // El backend responde como { success: true, data: [...] }
+      const seccionesData = Array.isArray(response.data?.data)
+        ? response.data.data
+        : [];
+
+      console.log("Secciones filtradas:", seccionesData); // Debug
+      setSecciones(seccionesData);
+    } catch (error) {
+      console.error("Error cargando secciones:", error);
+      setSecciones([]);
+    }
+  };
+
+  const aplicarFiltros = () => {
+    let resultados = [...todosEstudiantes];
+
+    // Filtro por texto de búsqueda
+    if (busquedaEstudiante.length >= 2) {
+      resultados = resultados.filter(
         (est) =>
           est.nombre
             ?.toLowerCase()
@@ -98,12 +174,32 @@ const RegistrarPagoTab = () => {
             ?.toLowerCase()
             .includes(busquedaEstudiante.toLowerCase())
       );
-
-      setEstudiantes(filtrados);
-      setMostrarResultados(true);
-    } catch (error) {
-      console.error("Error buscando estudiantes:", error);
     }
+
+    // Filtro por grado
+    if (filtros.id_grado) {
+      resultados = resultados.filter((est) => {
+        // Verificar si el estudiante tiene matrícula en el grado seleccionado
+        return est.matricula_actual?.id_grado === parseInt(filtros.id_grado);
+      });
+    }
+
+    // Filtro por sección
+    if (filtros.id_seccion) {
+      resultados = resultados.filter((est) => {
+        return (
+          est.matricula_actual?.id_seccion === parseInt(filtros.id_seccion)
+        );
+      });
+    }
+
+    setEstudiantes(resultados);
+    setMostrarResultados(
+      resultados.length > 0 &&
+        (busquedaEstudiante.length >= 2 ||
+          filtros.id_grado ||
+          filtros.id_seccion)
+    );
   };
 
   const seleccionarEstudiante = (estudiante) => {
@@ -147,16 +243,59 @@ const RegistrarPagoTab = () => {
       setLoading(true);
       const token = localStorage.getItem("token");
 
-      const pagoData = {
+      const now = new Date();
+      const descuentoTotal = parseFloat(formData.descuento_monto) || 0;
+      const montoOriginal = parseFloat(formData.monto_original);
+      const montoFinal = parseFloat(formData.monto_total);
+
+      // Paso 1: Crear la cuenta por cobrar
+      console.log(
+        "📝 Estudiante seleccionado completo:",
+        estudianteSeleccionado
+      );
+
+      const cuentaData = {
         id_estudiante: estudianteSeleccionado.id_estudiante,
         id_concepto: parseInt(formData.id_concepto),
-        monto_original: parseFloat(formData.monto_original),
-        descuento_porcentaje: parseFloat(formData.descuento_porcentaje) || 0,
-        descuento_monto: parseFloat(formData.descuento_monto) || 0,
-        monto_total: parseFloat(formData.monto_total),
-        metodo_pago: formData.metodo_pago,
-        numero_referencia: formData.numero_referencia || null,
+        monto_original: montoOriginal,
+        descuento_aplicado: descuentoTotal,
+        fecha_vencimiento: now.toISOString().split("T")[0], // Fecha actual
+        mes_aplicado: now.getMonth() + 1,
+        año_aplicado: now.getFullYear(),
         observaciones: formData.observaciones || null,
+      };
+
+      console.log("📤 Enviando cuentaData:", cuentaData);
+
+      const cuentaResponse = await api.post(
+        `${services.API_BASE}/finanzas/cuentas-por-cobrar`,
+        cuentaData,
+        {
+          headers: {Authorization: `Bearer ${token}`},
+        }
+      );
+
+      const id_cuenta = cuentaResponse.data.cuenta.id_cuenta;
+
+      // Paso 2: Registrar el pago contra esa cuenta
+      const pagoData = {
+        metodo_pago:
+          formData.metodo_pago === "efectivo"
+            ? "Efectivo"
+            : formData.metodo_pago === "transferencia"
+            ? "Transferencia"
+            : formData.metodo_pago === "tarjeta"
+            ? "Tarjeta"
+            : "Cheque",
+        monto_total_recibido: montoFinal,
+        referencia: formData.numero_referencia || null,
+        observaciones: formData.observaciones || null,
+        cuentas_a_pagar: [
+          {
+            id_cuenta: id_cuenta,
+            monto_a_pagar: montoFinal,
+          },
+        ],
       };
 
       const response = await api.post(services.finanzasPagos, pagoData, {
@@ -168,6 +307,10 @@ const RegistrarPagoTab = () => {
       // Resetear formulario
       setEstudianteSeleccionado(null);
       setBusquedaEstudiante("");
+      setFiltros({
+        id_grado: "",
+        id_seccion: "",
+      });
       setFormData({
         id_concepto: "",
         monto_original: "",
@@ -181,11 +324,14 @@ const RegistrarPagoTab = () => {
 
       showToast("Pago registrado exitosamente", "success");
     } catch (error) {
-      console.error("Error registrando pago:", error);
-      showToast(
-        error.response?.data?.message || "Error al registrar el pago",
-        "error"
-      );
+      console.error("❌ Error registrando pago:", error);
+      console.error("❌ Respuesta del servidor:", error.response?.data);
+      const errorMsg =
+        error.response?.data?.error ||
+        error.response?.data?.message ||
+        error.message ||
+        "Error al registrar el pago";
+      showToast(errorMsg, "error");
     } finally {
       setLoading(false);
     }
@@ -215,6 +361,77 @@ const RegistrarPagoTab = () => {
           </h3>
 
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Filtros Avanzados */}
+            <div className="bg-gray-900/30 border border-gray-700/50 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-gray-300 mb-3">
+                Filtros de Búsqueda
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Filtro por Grado */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Filtrar por Grado
+                  </label>
+                  <select
+                    value={filtros.id_grado}
+                    onChange={(e) =>
+                      setFiltros({...filtros, id_grado: e.target.value})
+                    }
+                    className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Todos los grados</option>
+                    {grados.map((grado) => (
+                      <option key={grado.id_grado} value={grado.id_grado}>
+                        {grado.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtro por Sección */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">
+                    Filtrar por Sección
+                  </label>
+                  <select
+                    value={filtros.id_seccion}
+                    onChange={(e) =>
+                      setFiltros({...filtros, id_seccion: e.target.value})
+                    }
+                    disabled={!filtros.id_grado}
+                    className="w-full px-3 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {!filtros.id_grado
+                        ? "Selecciona un grado primero"
+                        : secciones.length === 0
+                        ? "No hay secciones disponibles"
+                        : "Todas las secciones"}
+                    </option>
+                    {secciones.map((seccion) => (
+                      <option
+                        key={seccion.id_seccion}
+                        value={seccion.id_seccion}
+                      >
+                        Sección{" "}
+                        {seccion.nombre || seccion.letra || seccion.id_seccion}
+                        {seccion.cupo_maximo
+                          ? ` (Cupo: ${seccion.cupo_maximo})`
+                          : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {filtros.id_grado && secciones.length > 0 && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      {secciones.length} sección
+                      {secciones.length !== 1 ? "es" : ""} disponible
+                      {secciones.length !== 1 ? "s" : ""}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
             {/* Búsqueda de Estudiante */}
             <div>
               <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -227,7 +444,7 @@ const RegistrarPagoTab = () => {
                   required
                   value={busquedaEstudiante}
                   onChange={(e) => setBusquedaEstudiante(e.target.value)}
-                  placeholder="Nombre, apellido o número de identificación..."
+                  placeholder="Nombre, apellido o código MINED..."
                   className="w-full pl-10 pr-10 py-2 bg-gray-900/50 border border-gray-600 rounded-lg text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 {estudianteSeleccionado && (
@@ -244,25 +461,59 @@ const RegistrarPagoTab = () => {
                 )}
               </div>
 
+              {/* Contador de resultados */}
+              {(busquedaEstudiante.length >= 2 || filtros.id_grado) && (
+                <div className="mt-2 text-sm text-gray-400">
+                  {estudiantes.length} estudiante
+                  {estudiantes.length !== 1 ? "s" : ""} encontrado
+                  {estudiantes.length !== 1 ? "s" : ""}
+                </div>
+              )}
+
               {/* Resultados de búsqueda */}
               {mostrarResultados && estudiantes.length > 0 && (
-                <div className="mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  {estudiantes.map((est) => (
+                <div className="mt-2 bg-gray-700 border border-gray-600 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                  {estudiantes.slice(0, 50).map((est) => (
                     <button
                       key={est.id_estudiante}
                       type="button"
                       onClick={() => seleccionarEstudiante(est)}
-                      className="w-full text-left px-4 py-3 hover:bg-gray-600 border-b border-gray-600 last:border-0"
+                      className="w-full text-left px-4 py-3 hover:bg-gray-600 border-b border-gray-600 last:border-0 transition-colors"
                     >
-                      <div className="font-medium text-gray-100">
-                        {est.nombre} {est.apellido}
-                      </div>
-                      <div className="text-sm text-gray-400">
-                        {est.codigo_mined || "Sin código"} - Grado{" "}
-                        {est.gradoid || "N/A"}
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-100">
+                            {est.nombre} {est.apellido}
+                          </div>
+                          <div className="text-sm text-gray-400 mt-1">
+                            <span className="inline-flex items-center gap-2 flex-wrap">
+                              {est.codigo_mined && (
+                                <span className="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-xs font-mono">
+                                  {est.codigo_mined}
+                                </span>
+                              )}
+                              {est.matricula_actual?.seccion_nombre && (
+                                <span className="bg-gray-600 px-2 py-0.5 rounded text-xs">
+                                  {est.matricula_actual.seccion_nombre}
+                                </span>
+                              )}
+                              {!est.matricula_actual && (
+                                <span className="text-yellow-400 text-xs italic">
+                                  Sin matrícula activa
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </button>
                   ))}
+                  {estudiantes.length > 50 && (
+                    <div className="px-4 py-3 text-sm text-gray-400 text-center bg-gray-800">
+                      Mostrando 50 de {estudiantes.length} resultados. Refina tu
+                      búsqueda.
+                    </div>
+                  )}
                 </div>
               )}
             </div>

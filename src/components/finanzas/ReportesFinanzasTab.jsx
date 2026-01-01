@@ -42,7 +42,8 @@ const ReportesFinanzasTab = () => {
         }),
       ]);
 
-      setMorosidad(morosidadRes.data);
+      // El backend devuelve { morosidad: [...] }
+      setMorosidad(morosidadRes.data.morosidad || []);
       setEstadisticas(estadisticasRes.data);
     } catch (error) {
       console.error("Error cargando datos:", error);

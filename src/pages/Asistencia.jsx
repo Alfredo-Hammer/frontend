@@ -1,5 +1,6 @@
 import React, {useState, useEffect} from "react";
 import axios from "axios";
+import PageHeader from "../components/PageHeader";
 import {
   ClockIcon,
   UserGroupIcon,
@@ -193,6 +194,8 @@ function Asistencia() {
   );
   const [mesActual, setMesActual] = useState(new Date());
   const [asistenciasPorFecha, setAsistenciasPorFecha] = useState({});
+  const [cargasAcademicas, setCargasAcademicas] = useState([]);
+  const [cargaSeleccionadaId, setCargaSeleccionadaId] = useState("");
   const [filtros, setFiltros] = useState({
     grado: "",
     materia: "",
@@ -225,18 +228,114 @@ function Asistencia() {
     setToast({show: true, message, type});
   };
 
+  const mapEstadoBackendToUi = (estado) => {
+    const map = {
+      P: "presente",
+      A: "ausente",
+      T: "tarde",
+      J: "justificado",
+    };
+    return map[estado] || estado;
+  };
+
+  const mapEstadoUiToBackend = (estado) => {
+    const map = {
+      presente: "P",
+      ausente: "A",
+      tarde: "T",
+      justificado: "J",
+    };
+    return map[estado] || estado;
+  };
+
+  const cargaSeleccionada =
+    cargasAcademicas.find(
+      (c) => String(c.id_carga) === String(cargaSeleccionadaId)
+    ) || null;
+
+  // Para el selector de "Grado y sección" queremos una opción única por sección,
+  // aunque internamente sigamos usando una carga académica (id_carga) como clave.
+  const seccionesUnicas = [];
+  const seccionesVistas = new Set();
+  for (const carga of cargasAcademicas) {
+    if (!carga.id_seccion) continue;
+    if (seccionesVistas.has(carga.id_seccion)) continue;
+    seccionesVistas.add(carga.id_seccion);
+    seccionesUnicas.push(carga);
+  }
+
+  const buildLabelCarga = (carga) => {
+    if (!carga) return "";
+    // Mostrar principalmente Grado + Sección (sin resaltar la materia)
+    const partes = [];
+    if (carga.grado_nombre) partes.push(carga.grado_nombre);
+    if (carga.seccion_nombre) partes.push(carga.seccion_nombre);
+    return partes.join(" ");
+  };
+
+  // Cargar lista de clases (carga académica) al montar
+  useEffect(() => {
+    const cargarCargasAcademicas = async () => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await axios.get(
+          `${API_BASE_URL}/api/carga-academica`,
+          {
+            headers: {Authorization: `Bearer ${token}`},
+          }
+        );
+        const data = response.data?.data || response.data || [];
+        if (Array.isArray(data)) {
+          setCargasAcademicas(data);
+          // Si solo hay una clase, seleccionarla automáticamente
+          if (data.length === 1) {
+            setCargaSeleccionadaId(String(data[0].id_carga));
+          }
+        }
+      } catch (error) {
+        console.error("Error al cargar clases (carga académica):", error);
+        showToast("No se pudieron cargar las clases para asistencia.", "error");
+      }
+    };
+
+    cargarCargasAcademicas();
+  }, []);
+
   // Cargar asistencias del día
   const cargarAsistencias = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
+      const params = new URLSearchParams({fecha: fechaSeleccionada});
+      if (cargaSeleccionadaId) {
+        params.append("id_carga", cargaSeleccionadaId);
+      }
       const response = await axios.get(
-        `${API_BASE_URL}/api/asistencia?fecha=${fechaSeleccionada}`,
+        `${API_BASE_URL}/api/asistencia?${params.toString()}`,
         {
           headers: {Authorization: `Bearer ${token}`},
         }
       );
-      setAsistencias(response.data);
+      const normalizadas = (response.data || []).map((a) => {
+        const nombreCompleto = a.est_nombre
+          ? `${a.est_nombre} ${a.est_apellido || ""}`.trim()
+          : a.estudiante || "";
+
+        return {
+          ...a,
+          // Normalizar estado a clave de UI
+          estado: mapEstadoBackendToUi(a.estado),
+          // ID y datos de estudiante para las vistas de tarjetas/tablas
+          id: a.id_asistencia,
+          estudianteId: a.id_matricula || a.id_estudiante,
+          estudiante: nombreCompleto,
+          grado: a.seccion_nombre || a.grado,
+          materia: a.materia_nombre || a.materia,
+          hora: a.hora_registro || a.hora,
+          observaciones: a.observacion ?? a.observaciones ?? a.observaciones,
+        };
+      });
+      setAsistencias(normalizadas);
     } catch (error) {
       console.error("Error al cargar asistencias:", error);
     } finally {
@@ -246,10 +345,14 @@ function Asistencia() {
 
   // Cargar todos los estudiantes del profesor
   const cargarTodosEstudiantes = async () => {
+    if (!cargaSeleccionada) {
+      setTodosEstudiantes([]);
+      return;
+    }
     try {
       const token = localStorage.getItem("token");
       const response = await axios.get(
-        `${API_BASE_URL}/api/calificaciones/alumnos-lista`,
+        `${API_BASE_URL}/api/calificaciones/alumnos-lista?id_seccion=${cargaSeleccionada.id_seccion}`,
         {
           headers: {Authorization: `Bearer ${token}`},
         }
@@ -289,13 +392,31 @@ function Asistencia() {
 
   // Registrar asistencia
   const registrarAsistenciaEstudiante = async (
-    id_estudiante,
+    estudiante,
     estado,
     observaciones = ""
   ) => {
+    if (!cargaSeleccionada) {
+      showToast(
+        "Debe seleccionar una clase (carga académica) para tomar asistencia.",
+        "warning"
+      );
+      return;
+    }
+    if (!estudiante || !estudiante.id_matricula) {
+      showToast(
+        "No se encontró la matrícula activa del estudiante en esta clase.",
+        "error"
+      );
+      return;
+    }
+
+    const estadoBackend = mapEstadoUiToBackend(estado);
+
     console.log("📝 Registrando asistencia:", {
-      id_estudiante,
-      estado,
+      id_carga: cargaSeleccionada.id_carga,
+      id_matricula: estudiante.id_matricula,
+      estado: estadoBackend,
       fecha: fechaSeleccionada,
     });
     try {
@@ -303,10 +424,11 @@ function Asistencia() {
       const response = await axios.post(
         `${API_BASE_URL}/api/asistencia`,
         {
-          id_estudiante,
+          id_carga: cargaSeleccionada.id_carga,
+          id_matricula: estudiante.id_matricula,
           fecha: fechaSeleccionada,
-          estado,
-          observaciones,
+          estado: estadoBackend,
+          observacion: observaciones,
         },
         {
           headers: {Authorization: `Bearer ${token}`},
@@ -418,7 +540,7 @@ function Asistencia() {
     }
   };
 
-  // Cargar datos al montar y cuando cambie la fecha
+  // Cargar datos al montar, cuando cambie la fecha, la vista o la clase seleccionada
   useEffect(() => {
     cargarAsistencias();
     cargarTodosEstudiantes();
@@ -428,7 +550,7 @@ function Asistencia() {
     if (vistaActual === "calendario") {
       cargarAsistenciasMes();
     }
-  }, [fechaSeleccionada, vistaActual]);
+  }, [fechaSeleccionada, vistaActual, cargaSeleccionadaId]);
 
   // Funciones para el calendario
   const cargarAsistenciasMes = async () => {
@@ -445,10 +567,16 @@ function Asistencia() {
         0
       );
 
+      const params = new URLSearchParams({
+        fecha_inicio: primerDia.toISOString().split("T")[0],
+        fecha_fin: ultimoDia.toISOString().split("T")[0],
+      });
+      if (cargaSeleccionadaId) {
+        params.append("id_carga", cargaSeleccionadaId);
+      }
+
       const response = await axios.get(
-        `${API_BASE_URL}/api/asistencia/mes?fecha_inicio=${
-          primerDia.toISOString().split("T")[0]
-        }&fecha_fin=${ultimoDia.toISOString().split("T")[0]}`,
+        `${API_BASE_URL}/api/asistencia/mes?${params.toString()}`,
         {
           headers: {Authorization: `Bearer ${token}`},
         }
@@ -456,7 +584,11 @@ function Asistencia() {
 
       // Organizar asistencias por fecha
       const asistenciasPorFecha = {};
-      response.data.forEach((asistencia) => {
+      (response.data || []).forEach((asistenciaRaw) => {
+        const asistencia = {
+          ...asistenciaRaw,
+          estado: mapEstadoBackendToUi(asistenciaRaw.estado),
+        };
         const fecha = asistencia.fecha.split("T")[0];
         if (!asistenciasPorFecha[fecha]) {
           asistenciasPorFecha[fecha] = {
@@ -567,7 +699,7 @@ function Asistencia() {
 
   // Para compatibilidad con código legacy que busca estudiantes por ID
   const estudiantes = asistencias.map((a) => ({
-    id: a.id_estudiante,
+    id: a.estudianteId,
     nombre: a.estudiante,
     codigo: a.codigo_estudiante,
     grado: a.grado,
@@ -596,11 +728,11 @@ function Asistencia() {
             <Icono className="h-6 w-6" style={{color}} />
           </div>
           <div>
-            <p className="text-sm font-medium text-gray-600">{titulo}</p>
+            <p className="text-sm font-medium text-gray-300">{titulo}</p>
             <div className="flex items-center space-x-2">
-              <p className="text-2xl font-bold text-gray-900">{valor}</p>
+              <p className="text-2xl font-bold text-white">{valor}</p>
               {porcentaje !== undefined && (
-                <span className="text-sm text-gray-500">({porcentaje}%)</span>
+                <span className="text-sm text-gray-400">({porcentaje}%)</span>
               )}
             </div>
           </div>
@@ -643,10 +775,8 @@ function Asistencia() {
               </span>
             </div>
             <div>
-              <h4 className="font-semibold text-gray-900">
-                {estudiante.nombre}
-              </h4>
-              <p className="text-sm text-gray-500">
+              <h4 className="font-semibold text-white">{estudiante.nombre}</h4>
+              <p className="text-sm text-gray-400">
                 {estudiante.codigo} - {estudiante.grado}
               </p>
               <p className="text-xs text-gray-400">{asistencia.materia}</p>
@@ -754,7 +884,7 @@ function Asistencia() {
             const estudiante = obtenerEstudiante(asistencia.estudianteId);
             return estudiante ? (
               <AsistenciaCard
-                key={asistencia.id}
+                key={asistencia.id || asistencia.id_asistencia}
                 asistencia={asistencia}
                 estudiante={estudiante}
               />
@@ -765,10 +895,10 @@ function Asistencia() {
         {asistenciasHoy.length === 0 && (
           <div className="text-center py-12">
             <ClipboardDocumentCheckIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+            <h3 className="text-lg font-semibold text-white mb-2">
               No hay registros de asistencia
             </h3>
-            <p className="text-gray-600">
+            <p className="text-gray-400">
               No se han registrado asistencias para esta fecha.
             </p>
           </div>
@@ -814,7 +944,7 @@ function Asistencia() {
 
               return estudiante ? (
                 <tr
-                  key={asistencia.id}
+                  key={asistencia.id || asistencia.id_asistencia}
                   className="hover:bg-gray-700 transition-colors"
                 >
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -883,7 +1013,7 @@ function Asistencia() {
                             className="text-red-400 hover:text-red-300 p-2 hover:bg-gray-700 rounded-lg transition-all"
                             onClick={() =>
                               eliminarAsistencia(
-                                asistencia.id,
+                                asistencia.id_asistencia || asistencia.id,
                                 asistencia.fecha
                               )
                             }
@@ -984,78 +1114,88 @@ function Asistencia() {
     );
   }
 
+  const headerStats = [
+    {
+      label: "Tasa de Asistencia",
+      value: `${estadisticas.porcentajeAsistencia}%`,
+      color: "from-emerald-500 to-teal-600",
+      icon: ChartBarIcon,
+    },
+    {
+      label: "Estudiantes Presentes",
+      value: estadisticas.totalPresentes,
+      color: "from-blue-500 to-indigo-600",
+      icon: CheckCircleIcon,
+    },
+    {
+      label: "Ausencias Totales",
+      value: estadisticas.totalAusentes,
+      color: "from-red-500 to-rose-600",
+      icon: XCircleIcon,
+    },
+    {
+      label: "Llegadas Tardías",
+      value: estadisticas.totalTardes,
+      color: "from-amber-500 to-orange-600",
+      icon: ExclamationTriangleIcon,
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
-      {/* Hero Section */}
-      <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-700 text-white relative overflow-hidden">
-        <div className="absolute inset-0">
-          <div className="absolute top-20 left-20 w-64 h-64 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
-          <div className="absolute bottom-32 right-16 w-80 h-80 bg-emerald-300/10 rounded-full blur-3xl animate-pulse delay-1000"></div>
-        </div>
-
-        <div className="relative z-10 max-w-7xl mx-auto px-6 py-12">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center space-x-4">
-              <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-sm">
-                <ClockIcon className="h-12 w-12" />
-              </div>
-              <div>
-                <h1 className="text-4xl font-bold mb-2">
-                  Control de Asistencia
-                </h1>
-                <p className="text-xl text-emerald-100">
-                  Sistema de registro y seguimiento estudiantil
-                </p>
-              </div>
-            </div>
-
+    <div className="min-h-screen bg-gray-900">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <PageHeader
+          title="Control de Asistencia"
+          subtitle="Sistema de registro y seguimiento estudiantil"
+          icon={ClockIcon}
+          stats={headerStats}
+          actions={
             <div className="flex items-center space-x-3">
+              <div className="hidden md:flex flex-col mr-2">
+                <span className="text-xs text-gray-400 mb-1">
+                  Grado y sección seleccionados
+                </span>
+                <select
+                  value={cargaSeleccionadaId}
+                  onChange={(e) => setCargaSeleccionadaId(e.target.value)}
+                  className="bg-gray-700 border border-gray-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Todos los grados y secciones</option>
+                  {seccionesUnicas.map((carga) => (
+                    <option key={carga.id_carga} value={carga.id_carga}>
+                      {buildLabelCarga(carga)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <button
-                onClick={() => setModalAsistencia(true)}
-                className="bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 flex items-center space-x-2 border border-white/20"
+                onClick={() => {
+                  if (!cargaSeleccionada) {
+                    showToast(
+                      "Debe seleccionar una clase (grado/sección/materia) para tomar lista.",
+                      "warning"
+                    );
+                    return;
+                  }
+                  setModalAsistencia(true);
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 flex items-center space-x-2 shadow-lg shadow-emerald-500/30"
               >
                 <PlusIcon className="h-5 w-5" />
-                <span>Registrar Asistencia</span>
+                <span>Registrar</span>
               </button>
 
-              <button className="bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white p-3 rounded-xl transition-all duration-200 border border-white/20">
+              <button className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition-all duration-200 border border-gray-600">
                 <PrinterIcon className="h-5 w-5" />
               </button>
 
-              <button className="bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white p-3 rounded-xl transition-all duration-200 border border-white/20">
+              <button className="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition-all duration-200 border border-gray-600">
                 <DocumentArrowDownIcon className="h-5 w-5" />
               </button>
             </div>
-          </div>
-
-          {/* Quick stats en hero */}
-          <div className="mt-8 grid grid-cols-2 md:grid-cols-5 gap-4">
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center border border-white/20">
-              <p className="text-2xl font-bold">
-                {estadisticas.porcentajeAsistencia}%
-              </p>
-              <p className="text-emerald-100 text-sm">Asistencia General</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center border border-white/20">
-              <p className="text-2xl font-bold">
-                {estadisticas.totalPresentes}
-              </p>
-              <p className="text-emerald-100 text-sm">Presentes Hoy</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center border border-white/20">
-              <p className="text-2xl font-bold">{estadisticas.totalAusentes}</p>
-              <p className="text-emerald-100 text-sm">Ausentes</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center border border-white/20">
-              <p className="text-2xl font-bold">{estadisticas.totalTardes}</p>
-              <p className="text-emerald-100 text-sm">Tardanzas</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 text-center border border-white/20">
-              <p className="text-2xl font-bold">{estudiantes.length}</p>
-              <p className="text-emerald-100 text-sm">Total Estudiantes</p>
-            </div>
-          </div>
-        </div>
+          }
+        />
       </div>
 
       {/* Controles y Filtros */}
@@ -1648,10 +1788,10 @@ function Asistencia() {
         {asistenciasFiltradas.length === 0 && (
           <div className="bg-gray-800 rounded-2xl shadow-lg p-12 text-center border border-gray-700">
             <ExclamationTriangleIcon className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
+            <h3 className="text-xl font-semibold text-white mb-2">
               No se encontraron registros
             </h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-gray-400 mb-6">
               No hay registros de asistencia que coincidan con los filtros
               seleccionados.
             </p>
@@ -1879,7 +2019,7 @@ function Asistencia() {
                   </p>
                   {todosEstudiantes.map((estudiante) => {
                     const asistenciaHoy = asistencias.find(
-                      (a) => a.id_estudiante === estudiante.id_alumno
+                      (a) => a.id_matricula === estudiante.id_matricula
                     );
 
                     return (
@@ -1946,7 +2086,7 @@ function Asistencia() {
                               <button
                                 onClick={() =>
                                   registrarAsistenciaEstudiante(
-                                    estudiante.id_alumno,
+                                    estudiante,
                                     "presente"
                                   )
                                 }
@@ -1958,7 +2098,7 @@ function Asistencia() {
                               <button
                                 onClick={() =>
                                   registrarAsistenciaEstudiante(
-                                    estudiante.id_alumno,
+                                    estudiante,
                                     "tarde"
                                   )
                                 }
@@ -1970,7 +2110,7 @@ function Asistencia() {
                               <button
                                 onClick={() =>
                                   registrarAsistenciaEstudiante(
-                                    estudiante.id_alumno,
+                                    estudiante,
                                     "ausente"
                                   )
                                 }
@@ -1982,7 +2122,7 @@ function Asistencia() {
                               <button
                                 onClick={() =>
                                   registrarAsistenciaEstudiante(
-                                    estudiante.id_alumno,
+                                    estudiante,
                                     "justificado"
                                   )
                                 }

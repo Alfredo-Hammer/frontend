@@ -60,9 +60,11 @@ const ConceptosPagoTab = () => {
       const response = await api.get(services.finanzasConceptos, {
         headers: {Authorization: `Bearer ${token}`},
       });
-      setConceptos(response.data);
+      // El backend devuelve { conceptos: [...] }
+      setConceptos(response.data.conceptos || []);
     } catch (error) {
       console.error("Error cargando conceptos:", error);
+      setConceptos([]); // Asegurar que siempre sea un array
     } finally {
       setLoading(false);
     }

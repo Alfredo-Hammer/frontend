@@ -8,13 +8,10 @@ import {
   Target,
   Star,
   CheckCircle,
-  AlertCircle,
   Activity,
-  FileText,
-  Users,
   Trophy,
   Zap,
-  Brain,
+  Users,
 } from "lucide-react";
 import {
   AreaChart,
@@ -31,29 +28,28 @@ import {
   PolarAngleAxis,
   PolarRadiusAxis,
   Radar,
-  Legend,
   Cell,
 } from "recharts";
 
+import api from "../api/axiosConfig";
+import {useNavigate} from "react-router-dom";
+import services from "../api/services";
+//JkWzR#PnEx
 function DashboardEstudiante({user}) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [nextExam, setNextExam] = useState(null);
   const [promedio, setPromedio] = useState(0);
-  const [escuela, setEscuela] = useState(null);
+  const [proximaClase, setProximaClase] = useState(null);
+  const [stats, setStats] = useState({
+    totalMaterias: 0,
+    asistenciaPromedio: 0,
+    proximasEvaluaciones: 0,
+  });
   const token = localStorage.getItem("token");
-  const asistencia = 92;
-  const tareasCompletadas = 15;
-  const tareasPendientes = 3;
 
-  // Datos de progreso por materia
-  const materiasData = [
-    {materia: "Matemáticas", calificacion: 85, color: "#3b82f6"},
-    {materia: "Español", calificacion: 92, color: "#10b981"},
-    {materia: "Ciencias", calificacion: 88, color: "#f59e0b"},
-    {materia: "Historia", calificacion: 78, color: "#ef4444"},
-    {materia: "Inglés", calificacion: 90, color: "#8b5cf6"},
-    {materia: "Educación Física", calificacion: 95, color: "#06b6d4"},
-  ];
-
+  // Calificaciones reales del alumno para gráficos y conteos
+  const [calificacionesAlumno, setCalificacionesAlumno] = useState([]);
   // Datos de rendimiento mensual
   const rendimientoMensual = [
     {mes: "Ene", promedio: 82},
@@ -64,49 +60,10 @@ function DashboardEstudiante({user}) {
     {mes: "Jun", promedio: 87},
   ];
 
-  // Datos de habilidades (para gráfico radar)
-  const habilidadesData = [
-    {habilidad: "Matemáticas", valor: 85},
-    {habilidad: "Comunicación", valor: 90},
-    {habilidad: "Ciencias", valor: 88},
-    {habilidad: "Creatividad", valor: 92},
-    {habilidad: "Trabajo en Equipo", valor: 95},
-    {habilidad: "Liderazgo", valor: 80},
-  ];
+  // Habilidades derivadas de datos reales (calificaciones y asistencia)
 
   // Próximas tareas y exámenes
-  const proximosEventos = [
-    {
-      tipo: "examen",
-      titulo: "Examen de Matemáticas",
-      fecha: "2025-11-28",
-      hora: "10:00 AM",
-      materia: "Matemáticas",
-      icon: FileText,
-      color: "text-red-400",
-      bgColor: "bg-red-500/10",
-    },
-    {
-      tipo: "tarea",
-      titulo: "Ensayo de Historia",
-      fecha: "2025-11-26",
-      hora: "Antes de clase",
-      materia: "Historia",
-      icon: BookOpen,
-      color: "text-blue-400",
-      bgColor: "bg-blue-500/10",
-    },
-    {
-      tipo: "proyecto",
-      titulo: "Proyecto de Ciencias",
-      fecha: "2025-11-30",
-      hora: "Todo el día",
-      materia: "Ciencias",
-      icon: Brain,
-      color: "text-green-400",
-      bgColor: "bg-green-500/10",
-    },
-  ];
+  const proximosEventos = [];
 
   // Logros recientes
   const logros = [
@@ -120,7 +77,6 @@ function DashboardEstudiante({user}) {
     },
     {
       titulo: "100% Asistencia",
-      descripcion: "No faltaste ningún día este mes",
       icon: CheckCircle,
       color: "text-green-400",
       bgColor: "bg-green-500/10",
@@ -136,32 +92,380 @@ function DashboardEstudiante({user}) {
     },
   ];
 
-  useEffect(() => {
-    // Simular carga de datos
-    setTimeout(() => {
-      setPromedio(87.3);
-      setLoading(false);
-    }, 500);
-    cargarEscuela();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const cargarEscuela = async () => {
+  const cargarDatosEstudiante = async () => {
     try {
-      if (user?.id_escuela) {
-        const res = await fetch(
-          `http://localhost:4000/api/escuelas/${user.id_escuela}`,
-          {
-            headers: {Authorization: `Bearer ${token}`},
-          }
-        );
-        const data = await res.json();
-        setEscuela(data);
-      }
+      // Cargar estadísticas del estudiante
+      const statsRes = await api.get(services.dashboardEstudiante, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+
+      setStats({
+        totalMaterias: statsRes.data.totalMaterias || 0,
+        asistenciaPromedio: parseFloat(statsRes.data.asistenciaPromedio) || 0,
+        proximasEvaluaciones: statsRes.data.proximasEvaluaciones || 0,
+      });
+      // El promedio general se calculará desde las calificaciones del alumno
     } catch (error) {
-      console.error("Error al cargar escuela:", error);
+      console.error("Error al cargar estadísticas del estudiante:", error);
+      setStats({
+        totalMaterias: 6,
+        asistenciaPromedio: 92,
+        proximasEvaluaciones: 2,
+      });
+    } finally {
+      setLoading(false);
     }
   };
+
+  const cargarPromedioDesdeCalificaciones = async () => {
+    try {
+      const perfilRes = await api.get("/api/usuarios/perfil", {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const perfil = perfilRes.data?.usuario || perfilRes.data || {};
+      const alumnoId = perfil.id_usuario || perfilRes.data?.id_usuario;
+
+      if (!alumnoId) {
+        setPromedio(0);
+        return;
+      }
+
+      const calRes = await api.get(
+        `${services.calificacionesMateriasAlumno}/${alumnoId}`,
+        {headers: {Authorization: `Bearer ${token}`}}
+      );
+
+      const calificaciones = Array.isArray(calRes.data) ? calRes.data : [];
+      setCalificacionesAlumno(calificaciones);
+      if (calificaciones.length === 0) {
+        setPromedio(0);
+        return;
+      }
+
+      const acumulado = calificaciones.reduce(
+        (acc, cal) => {
+          const b1 = parseFloat(cal.bimestre_1) || 0;
+          const b2 = parseFloat(cal.bimestre_2) || 0;
+          const b3 = parseFloat(cal.bimestre_3) || 0;
+          const b4 = parseFloat(cal.bimestre_4) || 0;
+          const final = (b1 + b2 + b3 + b4) / 4;
+          if (final > 0) {
+            acc.suma += final;
+            acc.count += 1;
+          }
+          return acc;
+        },
+        {suma: 0, count: 0}
+      );
+
+      const promedioCalc =
+        acumulado.count > 0 ? acumulado.suma / acumulado.count : 0;
+      setPromedio(promedioCalc);
+    } catch (e) {
+      console.error("No se pudo calcular el promedio desde calificaciones:", e);
+      setPromedio(0);
+    }
+  };
+
+  const cargarProximoExamen = async () => {
+    try {
+      // Obtener perfil y contexto del alumno
+      const perfilRes = await api.get("/api/usuarios/perfil", {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const usuario = perfilRes.data?.usuario || perfilRes.data || {};
+      if (String(usuario?.rol).toLowerCase() !== "alumno") {
+        setNextExam(null);
+        return;
+      }
+      const infoRes = await api.get(
+        `/api/calificaciones/alumno-info/${usuario.id_usuario}`,
+        {headers: {Authorization: `Bearer ${token}`}}
+      );
+      const info = infoRes.data || null;
+
+      // Cargar exámenes y filtrar por grado/sección del alumno
+      const exRes = await api.get("/api/examenes", {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const lista = Array.isArray(exRes.data)
+        ? exRes.data
+        : exRes.data?.data || [];
+
+      const gradeIds = [];
+      const sectionIds = [];
+      if (info?.id_grado) gradeIds.push(String(info.id_grado));
+      if (Array.isArray(info?.grados)) {
+        info.grados.forEach((g) => gradeIds.push(String(g.id_grado || g)));
+      }
+      if (info?.id_seccion) sectionIds.push(String(info.id_seccion));
+      if (Array.isArray(info?.secciones)) {
+        info.secciones.forEach((s) =>
+          sectionIds.push(String(s.id_seccion || s))
+        );
+      }
+      const uniqueGrades = [...new Set(gradeIds)].filter(Boolean);
+      const uniqueSections = [...new Set(sectionIds)].filter(Boolean);
+
+      const coincideGrado = (e) =>
+        uniqueGrades.length === 0 || uniqueGrades.includes(String(e.id_grado));
+      const coincideSeccion = (e) =>
+        uniqueSections.length === 0 ||
+        uniqueSections.includes(String(e.id_seccion));
+
+      const ahora = new Date();
+      const proximosActivos = lista
+        .filter(
+          (e) =>
+            coincideGrado(e) &&
+            coincideSeccion(e) &&
+            String(e.estado).toLowerCase() === "activo" &&
+            new Date(e.fecha_examen) >= ahora
+        )
+        .sort((a, b) => new Date(a.fecha_examen) - new Date(b.fecha_examen));
+
+      setNextExam(proximosActivos[0] || null);
+    } catch (error) {
+      console.error("Error al cargar próximo examen:", error);
+      setNextExam(null);
+    }
+  };
+
+  // Utilidades para mostrar estado y hora con zona horaria
+  const isNextExamSoon = (exam) => {
+    if (!exam) return false;
+    const fecha = new Date(exam.fecha_examen);
+    const ahora = new Date();
+    const diff = fecha - ahora;
+    return (
+      String(exam.estado).toLowerCase() === "activo" &&
+      diff >= 0 &&
+      diff <= 24 * 60 * 60 * 1000
+    );
+  };
+
+  const getNextExamBadgeClass = (exam) => {
+    if (!exam) return "bg-gray-500/10 text-gray-300 border-gray-500/20";
+    if (isNextExamSoon(exam))
+      return "bg-orange-500/10 text-orange-300 border-orange-500/20";
+    const estado = String(exam.estado).toLowerCase();
+    if (estado === "activo")
+      return "bg-green-500/10 text-green-400 border-green-500/20";
+    if (estado === "finalizado")
+      return "bg-gray-500/10 text-gray-300 border-gray-500/20";
+    return "bg-yellow-500/10 text-yellow-400 border-yellow-500/20";
+  };
+
+  const formatTimeAMPM = (dateStr) =>
+    new Date(dateStr).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+  // Próxima clase del alumno desde horarios
+  const DIAS_SEMANA = [
+    {id: 1, short: "LUN", label: "Lunes"},
+    {id: 2, short: "MAR", label: "Martes"},
+    {id: 3, short: "MIE", label: "Miércoles"},
+    {id: 4, short: "JUE", label: "Jueves"},
+    {id: 5, short: "VIE", label: "Viernes"},
+    {id: 6, short: "SAB", label: "Sábado"},
+  ];
+
+  const toMinutes = (h) => {
+    if (!h) return 0;
+    const hhmm = h.substring(0, 5);
+    const [hh, mm] = hhmm.split(":");
+    return parseInt(hh || "0", 10) * 60 + parseInt(mm || "0", 10);
+  };
+
+  const formatHourLabel = (h) => {
+    if (!h) return "--:--";
+    const hhmm = h.substring(0, 5);
+    const [hh, mm] = hhmm.split(":");
+    const hour = parseInt(hh, 10);
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+    return `${hour12.toString().padStart(2, "0")}:${mm} ${ampm}`;
+  };
+
+  const cargarProximaClase = async () => {
+    try {
+      const perfilRes = await api.get("/api/usuarios/perfil", {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const usuario = perfilRes.data?.usuario || perfilRes.data || {};
+      if (String(usuario?.rol).toLowerCase() !== "alumno") {
+        setProximaClase(null);
+        return;
+      }
+
+      const infoRes = await api.get(
+        `/api/calificaciones/alumno-info/${usuario.id_usuario}`,
+        {headers: {Authorization: `Bearer ${token}`}}
+      );
+      const info = infoRes.data || null;
+
+      // Usar carga académica por sección para asegurar clases del alumno
+      if (!info?.id_seccion) {
+        setProximaClase(null);
+        return;
+      }
+      const caRes = await api.get(
+        services.cargaAcademicaSeccion(info.id_seccion),
+        {headers: {Authorization: `Bearer ${token}`}}
+      );
+      const cargas = Array.isArray(caRes.data?.data)
+        ? caRes.data.data
+        : Array.isArray(caRes.data)
+        ? caRes.data
+        : [];
+
+      // Filtrar solo las asignaciones con horario
+      const relevantes = cargas
+        .filter((c) => c.dia_semana && c.hora_inicio && c.hora_fin)
+        .map((c) => ({
+          dia_semana: Number(c.dia_semana),
+          hora_inicio: c.hora_inicio,
+          hora_fin: c.hora_fin,
+          materia_nombre: c.materia_nombre || c.materia,
+          profesor_nombre: c.profesor_nombre || c.profesor,
+        }))
+        .sort((a, b) => {
+          if (a.dia_semana === b.dia_semana)
+            return toMinutes(a.hora_inicio) - toMinutes(b.hora_inicio);
+          return a.dia_semana - b.dia_semana;
+        });
+
+      if (relevantes.length === 0) {
+        setProximaClase(null);
+        return;
+      }
+
+      const now = new Date();
+      const jsDay = now.getDay(); // 0..6 (Domingo=0)
+      const hoyId = jsDay === 0 ? 7 : jsDay; // Mapear domingo a 7 para ordenar
+      const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+      // Buscar próxima clase hoy
+      let candidata = null;
+      candidata = relevantes.find(
+        (h) => h.dia_semana === hoyId && toMinutes(h.hora_inicio) > nowMinutes
+      );
+
+      // Si no hay hoy, buscar la primera del siguiente día disponible
+      if (!candidata) {
+        const siguientesDias = relevantes
+          .map((h) => h.dia_semana)
+          .filter((d) => d > hoyId);
+        const proximoDia = siguientesDias.length
+          ? Math.min(...siguientesDias)
+          : Math.min(...relevantes.map((h) => h.dia_semana));
+        candidata = relevantes.find((h) => h.dia_semana === proximoDia);
+      }
+
+      setProximaClase(candidata || relevantes[0] || null);
+    } catch (error) {
+      console.error("Error al cargar próxima clase:", error);
+      setProximaClase(null);
+    }
+  };
+
+  // Preparar datos para gráfico de barras desde calificaciones reales
+  const colorPalette = [
+    "#3b82f6",
+    "#10b981",
+    "#f59e0b",
+    "#ef4444",
+    "#8b5cf6",
+    "#06b6d4",
+    "#22c55e",
+    "#eab308",
+  ];
+  const materiasChartData = calificacionesAlumno.map((cal, idx) => {
+    const b1 = parseFloat(cal.bimestre_1) || 0;
+    const b2 = parseFloat(cal.bimestre_2) || 0;
+    const b3 = parseFloat(cal.bimestre_3) || 0;
+    const b4 = parseFloat(cal.bimestre_4) || 0;
+    const final = (b1 + b2 + b3 + b4) / 4;
+    return {
+      materia: cal.materia,
+      calificacion: final,
+      color: colorPalette[idx % colorPalette.length],
+    };
+  });
+
+  // Calcular perfil de habilidades desde materias y asistencia
+  const normalizar = (txt) =>
+    (txt || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  const habilidadDefs = [
+    {nombre: "Matemáticas", keywords: ["matematica"]},
+    {nombre: "Comunicación", keywords: ["espanol", "lengua", "comunicacion"]},
+    {
+      nombre: "Ciencias",
+      keywords: ["ciencia", "biologia", "fisica", "quimica"],
+    },
+    {nombre: "Idiomas", keywords: ["ingles", "frances"]},
+    {nombre: "Creatividad", keywords: ["arte", "musica", "artistica"]},
+    {nombre: "Educación Física", keywords: ["educacion fisica", "deporte"]},
+    {
+      nombre: "Tecnología",
+      keywords: ["tecnologia", "informatica", "computacion", "tic"],
+    },
+    {
+      nombre: "Valores",
+      keywords: ["valores", "formacion", "civica", "orientacion"],
+    },
+    {nombre: "Proyecto", keywords: ["proyecto", "investigacion", "seminario"]},
+  ];
+
+  const habilidadesChartData = (() => {
+    const data = [];
+    // Derivar desde calificaciones por materia
+    habilidadDefs.forEach((hab) => {
+      const finales = calificacionesAlumno
+        .filter((cal) => {
+          const m = normalizar(cal.materia);
+          return hab.keywords.some((kw) => m.includes(kw));
+        })
+        .map((cal) => {
+          const b1 = parseFloat(cal.bimestre_1) || 0;
+          const b2 = parseFloat(cal.bimestre_2) || 0;
+          const b3 = parseFloat(cal.bimestre_3) || 0;
+          const b4 = parseFloat(cal.bimestre_4) || 0;
+          return (b1 + b2 + b3 + b4) / 4;
+        })
+        .filter((v) => v > 0);
+
+      if (finales.length > 0) {
+        const avg = finales.reduce((a, b) => a + b, 0) / finales.length;
+        data.push({habilidad: hab.nombre, valor: avg});
+      }
+    });
+
+    // Añadir responsabilidad desde asistencia si disponible
+    if (stats?.asistenciaPromedio) {
+      data.push({
+        habilidad: "Responsabilidad",
+        valor: stats.asistenciaPromedio,
+      });
+    }
+
+    return data;
+  })();
+
+  useEffect(() => {
+    cargarDatosEstudiante();
+    cargarPromedioDesdeCalificaciones();
+    cargarProximoExamen();
+    cargarProximaClase();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (loading) {
     return (
@@ -194,26 +498,26 @@ function DashboardEstudiante({user}) {
                 </p>
               </div>
 
-              <div className="mt-4 md:mt-0 flex items-center gap-4">
-                <div className="bg-white/20 backdrop-blur-md rounded-xl p-4 text-center">
-                  <div className="text-3xl font-bold text-white">
+              <div className="mt-4 md:mt-0 grid grid-cols-2 gap-3 sm:gap-4 md:flex md:items-center md:gap-4">
+                <div className="bg-white/20 backdrop-blur-md rounded-xl p-4 text-center w-full md:w-36 h-24 flex flex-col justify-center">
+                  <div className="text-3xl md:text-4xl font-bold text-white leading-none">
                     {promedio.toFixed(1)}
                   </div>
                   <div className="text-cyan-100 text-sm">Promedio General</div>
+                  <div
+                    className={`mt-1 text-xs font-medium ${
+                      promedio >= 70 ? "text-green-300" : "text-red-300"
+                    }`}
+                  >
+                    Estado: {promedio >= 70 ? "Aprobado" : "Reprobado"}
+                  </div>
                 </div>
-                <div className="bg-white/20 backdrop-blur-md rounded-xl p-4 text-center">
-                  <div className="text-3xl font-bold text-white">
-                    {asistencia}%
+                <div className="bg-white/20 backdrop-blur-md rounded-xl p-4 text-center w-full md:w-36 h-24 flex flex-col justify-center">
+                  <div className="text-3xl md:text-4xl font-bold text-white leading-none">
+                    {stats.asistenciaPromedio.toFixed(1)}%
                   </div>
                   <div className="text-cyan-100 text-sm">Asistencia</div>
                 </div>
-                {escuela?.logo && (
-                  <img
-                    src={`http://localhost:4000${escuela.logo}`}
-                    alt={escuela.nombre}
-                    className="w-20 h-20 rounded-lg object-cover border-4 border-white shadow-lg"
-                  />
-                )}
               </div>
             </div>
           </div>
@@ -230,7 +534,7 @@ function DashboardEstudiante({user}) {
               <TrendingUp className="h-5 w-5 text-green-400" />
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {materiasData.length}
+              {stats.totalMaterias || calificacionesAlumno.length}
             </h3>
             <p className="text-blue-200 text-sm">Materias Activas</p>
             <div className="mt-2 text-xs text-green-300 flex items-center gap-1">
@@ -239,57 +543,111 @@ function DashboardEstudiante({user}) {
             </div>
           </div>
 
-          {/* Tareas Completadas */}
-          <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 backdrop-blur-md border border-green-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300">
+          {/* Próxima Clase del Alumno */}
+          <div
+            onClick={() => navigate("/horario-clases")}
+            className="cursor-pointer bg-gradient-to-br from-emerald-500/20 to-teal-600/20 backdrop-blur-md border border-emerald-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300"
+          >
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-green-500/30 rounded-lg">
-                <CheckCircle className="h-6 w-6 text-green-300" />
+              <div className="p-3 bg-emerald-500/30 rounded-lg">
+                <Clock className="h-6 w-6 text-emerald-300" />
               </div>
-              <Trophy className="h-5 w-5 text-yellow-400" />
+              {proximaClase && (
+                <span className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide border bg-emerald-500/10 text-emerald-300 border-emerald-500/20">
+                  {DIAS_SEMANA.find((d) => d.id === proximaClase.dia_semana)
+                    ?.short || ""}
+                </span>
+              )}
             </div>
-            <h3 className="text-2xl font-bold text-white mb-1">
-              {tareasCompletadas}
+            <h3 className="text-2xl font-bold text-white mb-1 truncate">
+              {proximaClase
+                ? proximaClase.materia_nombre || proximaClase.materia
+                : "Sin clase próxima"}
             </h3>
-            <p className="text-green-200 text-sm">Tareas Completadas</p>
-            <div className="mt-2 text-xs text-yellow-300 flex items-center gap-1">
-              <Star className="h-3 w-3" />
-              <span>¡Excelente trabajo!</span>
+            <p className="text-emerald-200 text-sm">Próxima Clase</p>
+            <div className="mt-2 text-xs text-emerald-300 flex flex-wrap items-center gap-3">
+              {proximaClase && (
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  <span>
+                    {formatHourLabel(proximaClase.hora_inicio)} -{" "}
+                    {formatHourLabel(proximaClase.hora_fin)}
+                  </span>
+                </span>
+              )}
+              {proximaClase &&
+                (proximaClase.profesor_nombre || proximaClase.profesor) && (
+                  <span className="flex items-center gap-1">
+                    <Users className="h-3 w-3" />
+                    <span>
+                      {proximaClase.profesor_nombre || proximaClase.profesor}
+                    </span>
+                  </span>
+                )}
             </div>
           </div>
 
-          {/* Tareas Pendientes */}
-          <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 backdrop-blur-md border border-orange-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300">
+          {/* Ver mis Calificaciones */}
+          <div
+            onClick={() => navigate("/mis-calificaciones")}
+            className="cursor-pointer bg-gradient-to-br from-indigo-500/20 to-blue-600/20 backdrop-blur-md border border-indigo-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300"
+          >
             <div className="flex items-center justify-between mb-4">
-              <div className="p-3 bg-orange-500/30 rounded-lg">
-                <Clock className="h-6 w-6 text-orange-300" />
+              <div className="p-3 bg-indigo-500/30 rounded-lg">
+                <Award className="h-6 w-6 text-indigo-300" />
               </div>
-              <AlertCircle className="h-5 w-5 text-orange-400" />
+              <TrendingUp className="h-5 w-5 text-green-400" />
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {tareasPendientes}
+              Ver mis calificaciones
             </h3>
-            <p className="text-orange-200 text-sm">Tareas Pendientes</p>
-            <div className="mt-2 text-xs text-orange-300 flex items-center gap-1">
-              <Clock className="h-3 w-3" />
-              <span>Por completar pronto</span>
+            <p className="text-indigo-200 text-sm">
+              Consulta tu detalle por materia y notas finales
+            </p>
+            <div className="mt-3 text-sm text-white/80">
+              Promedio actual:{" "}
+              <span className="font-bold text-white">
+                {promedio.toFixed(1)}
+              </span>
             </div>
           </div>
 
-          {/* Próximo Evento */}
-          <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 backdrop-blur-md border border-purple-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300">
+          {/* Próximo Examen (real) */}
+          <div
+            onClick={() => navigate("/examenes")}
+            className="cursor-pointer bg-gradient-to-br from-purple-500/20 to-purple-600/20 backdrop-blur-md border border-purple-500/30 rounded-xl p-6 hover:scale-105 transition-transform duration-300"
+          >
             <div className="flex items-center justify-between mb-4">
               <div className="p-3 bg-purple-500/30 rounded-lg">
                 <Calendar className="h-6 w-6 text-purple-300" />
               </div>
-              <Zap className="h-5 w-5 text-yellow-400" />
+              {nextExam && (
+                <span
+                  className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wide border ${getNextExamBadgeClass(
+                    nextExam
+                  )}`}
+                >
+                  {nextExam.estado}
+                </span>
+              )}
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {new Date(proximosEventos[0].fecha).getDate()}
+              {nextExam ? new Date(nextExam.fecha_examen).getDate() : "-"}
             </h3>
             <p className="text-purple-200 text-sm">Próximo Examen</p>
-            <div className="mt-2 text-xs text-purple-300 flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              <span>{proximosEventos[0].titulo}</span>
+            <div className="mt-2 text-xs text-purple-300 flex items-center gap-2">
+              <span className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                <span>
+                  {nextExam ? nextExam.titulo : "Sin exámenes próximos"}
+                </span>
+              </span>
+              {nextExam && (
+                <span className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  <span>{formatTimeAMPM(nextExam.fecha_examen)}</span>
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -305,7 +663,7 @@ function DashboardEstudiante({user}) {
               </h2>
             </div>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={materiasData}>
+              <BarChart data={materiasChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="materia"
@@ -325,14 +683,13 @@ function DashboardEstudiante({user}) {
                   }}
                 />
                 <Bar dataKey="calificacion" radius={[8, 8, 0, 0]}>
-                  {materiasData.map((entry, index) => (
+                  {materiasChartData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-
           {/* Gráfico de Radar - Habilidades */}
           <div className="bg-gray-800/50 backdrop-blur-md border border-gray-700 rounded-xl p-6">
             <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-6">
@@ -340,7 +697,7 @@ function DashboardEstudiante({user}) {
               Perfil de Habilidades
             </h2>
             <ResponsiveContainer width="100%" height={300}>
-              <RadarChart data={habilidadesData}>
+              <RadarChart data={habilidadesChartData}>
                 <PolarGrid stroke="#374151" />
                 <PolarAngleAxis
                   dataKey="habilidad"

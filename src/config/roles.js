@@ -52,11 +52,27 @@ export const PERMISSIONS = {
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
   },
 
+  // Gestión de Carga Académica
+  carga_academica: {
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
+  },
+
   // Gestión de Estudiantes
   alumnos: {
     ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
     verPropio: [ROLES.ALUMNO], // Ver solo su propia información
     verPropias: [ROLES.ALUMNO], // Alternativa para compatibilidad
+    crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
+  },
+
+  // Gestión de Estudiantes (alias moderno)
+  estudiantes: {
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
     crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
@@ -177,9 +193,14 @@ export const PERMISSIONS = {
 
   // Comunicación
   mensajes: {
-    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE, ROLES.SECRETARIADO],
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.PADRE, ROLES.SECRETARIADO],
     enviar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.PADRE, ROLES.SECRETARIADO],
     eliminar: [ROLES.ADMIN],
+  },
+
+  // Soporte
+  soporte: {
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE, ROLES.SECRETARIADO],
   },
 
   // Notificaciones
@@ -251,9 +272,10 @@ export const canAccessRoute = (userRole, path) => {
     '/materias': 'materias',
     '/grados': 'grados',
     '/secciones': 'secciones',
+    '/carga-academica': 'carga_academica',
     '/alumnos': 'alumnos',
-    '/alumnos/registro': 'alumnos',
     '/alumnos/detalle': 'alumnos',
+    '/estudiantes': 'estudiantes', // Ruta moderna para estudiantes
     '/profesores': 'profesores',
     '/usuarios': 'usuarios',
     '/padres': 'alumnos', // Los padres usan el mismo módulo
@@ -272,8 +294,10 @@ export const canAccessRoute = (userRole, path) => {
     '/mensajes': 'mensajes',
     '/notificaciones': 'notificaciones',
     '/configuracion': 'configuracion',
+    '/soporte': 'soporte',
     '/perfil': 'dashboard', // Todos pueden ver su perfil
     '/registro': 'configuracion',
+    '/ciclosescolares': 'configuracion', // Permitir acceso a admin/director
   };
 
   let module = routeModuleMap[path];

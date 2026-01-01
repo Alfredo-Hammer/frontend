@@ -1,4 +1,5 @@
 import React, {useState, useEffect} from "react";
+import ciclosApi from "../api/ciclosMatricula";
 import api from "../api/axiosConfig";
 import services from "../api/services";
 import {useNavigate} from "react-router-dom";
@@ -15,6 +16,9 @@ function RegistroAlumno() {
   const [mensaje, setMensaje] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Ciclo escolar para matrícula
+  const [ciclos, setCiclos] = useState([]);
+  const [cicloId, setCicloId] = useState("");
 
   // Estados para datos de Nicaragua
   const [departamentos, setDepartamentos] = useState([]);
@@ -116,16 +120,21 @@ function RegistroAlumno() {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [gradRes, secRes] = await Promise.all([
+        const [gradRes, secRes, ciclosRes] = await Promise.all([
           api.get("http://localhost:4000/api/grados", {
             headers: {Authorization: `Bearer ${token}`},
           }),
           api.get("http://localhost:4000/api/secciones", {
             headers: {Authorization: `Bearer ${token}`},
           }),
+          ciclosApi.getCiclosMatricula(token),
         ]);
-        setGrados(gradRes.data);
-        setSecciones(secRes.data);
+        const gradosData = gradRes.data?.data || gradRes.data || [];
+        const seccionesData = secRes.data?.data || secRes.data || [];
+        setGrados(Array.isArray(gradosData) ? gradosData : []);
+        setSecciones(Array.isArray(seccionesData) ? seccionesData : []);
+        setCiclos(ciclosRes.data.ciclos || []);
+        setCicloId(ciclosRes.data.matricula || "");
       } catch (err) {
         setMensaje("Error al cargar datos.");
       } finally {
@@ -145,9 +154,9 @@ function RegistroAlumno() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!nombre || !apellido || !gradoId || !seccionId) {
+    if (!nombre || !apellido || !gradoId || !seccionId || !cicloId) {
       setMensaje(
-        "Complete todos los campos obligatorios (Nombre, Apellido, Grado y Sección)."
+        "Complete todos los campos obligatorios (Nombre, Apellido, Grado, Sección y Ciclo Escolar)."
       );
       return;
     }
@@ -182,6 +191,7 @@ function RegistroAlumno() {
         formData.append("nivel_educativo", nivel_educativo);
         formData.append("gradoId", gradoId);
         formData.append("seccionId", seccionId);
+        formData.append("cicloId", cicloId);
         formData.append("imagen", imagen);
 
         dataToSend = formData;
@@ -210,6 +220,7 @@ function RegistroAlumno() {
           nivel_educativo,
           gradoId,
           seccionId,
+          cicloId,
         };
       }
 
@@ -249,10 +260,10 @@ function RegistroAlumno() {
   };
 
   // En sistema multi-tenant, todos los grados ya pertenecen a la escuela del usuario
-  const gradosFiltrados = grados;
+  const gradosFiltrados = Array.isArray(grados) ? grados : [];
 
   // Obtener secciones filtradas por grado seleccionado
-  const seccionesFiltradas = secciones.filter(
+  const seccionesFiltradas = (Array.isArray(secciones) ? secciones : []).filter(
     (s) => String(s.id_grado) === String(gradoId)
   );
 
@@ -392,6 +403,43 @@ function RegistroAlumno() {
           </div>
 
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
+            {/* Ciclo Escolar para Matrícula */}
+            <section>
+              <div className="flex items-center mb-6">
+                <div className="w-10 h-10 bg-cyan-500/20 rounded-full flex items-center justify-center mr-3">
+                  <AcademicCapIcon className="w-5 h-5 text-cyan-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white">
+                  Ciclo Escolar de Matrícula
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Ciclo Escolar *
+                  </label>
+                  <select
+                    className="w-full px-4 py-3 bg-gray-700 border border-cyan-600 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all duration-200"
+                    value={cicloId}
+                    onChange={(e) => setCicloId(e.target.value)}
+                    required
+                  >
+                    <option value="">Seleccione un ciclo escolar</option>
+                    {ciclos.map((c) => (
+                      <option key={c.id_ciclo} value={c.id_ciclo}>
+                        {c.nombre}{" "}
+                        {c.matricula_abierta ? "(Matrícula Abierta)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    El ciclo con <strong>(Matrícula Abierta)</strong> es el
+                    sugerido por el sistema, pero puedes corregir manualmente
+                    para casos excepcionales.
+                  </p>
+                </div>
+              </div>
+            </section>
             {/* Información Personal */}
             <section>
               <div className="flex items-center mb-6">

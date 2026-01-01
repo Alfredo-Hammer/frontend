@@ -1,0 +1,145 @@
+/* Estilos personalizados para HorarioPage */
+
+.horario-container {
+  min-height: 100vh;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f0f1e 100%);
+}
+
+.horario-card {
+  background: rgba(31, 41, 55, 0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(75, 85, 99, 0.3);
+  transition: all 0.3s ease;
+}
+
+.horario-card:hover {
+  border-color: rgba(6, 182, 212, 0.5);
+  box-shadow: 0 10px 30px rgba(6, 182, 212, 0.1);
+  transform: translateY(-2px);
+}
+
+.clase-cell {
+  background: linear-gradient(
+    135deg,
+    rgba(8, 145, 178, 0.2) 0%,
+    rgba(37, 99, 235, 0.2) 100%
+  );
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 8px;
+  padding: 12px;
+  transition: all 0.3s ease;
+}
+
+.clase-cell:hover {
+  border-color: rgba(6, 182, 212, 0.6);
+  background: linear-gradient(
+    135deg,
+    rgba(8, 145, 178, 0.3) 0%,
+    rgba(37, 99, 235, 0.3) 100%
+  );
+  transform: scale(1.02);
+}
+
+.table-header {
+  background: rgba(17, 24, 39, 0.8);
+  backdrop-filter: blur(10px);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.stat-card {
+  background: linear-gradient(
+    135deg,
+    rgba(8, 145, 178, 0.3) 0%,
+    rgba(37, 99, 235, 0.3) 100%
+  );
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 12px;
+  padding: 16px;
+  transition: all 0.3s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(6, 182, 212, 0.2);
+}
+
+.filter-section {
+  background: rgba(31, 41, 55, 0.5);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(75, 85, 99, 0.5);
+  border-radius: 16px;
+  padding: 24px;
+}
+
+.view-toggle-btn {
+  transition: all 0.3s ease;
+}
+
+.view-toggle-btn:hover {
+  transform: scale(1.05);
+}
+
+.empty-state {
+  padding: 64px 24px;
+  text-align: center;
+}
+
+.empty-state-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  color: rgba(75, 85, 99, 0.5);
+}
+
+/* Animaciones */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Scrollbar personalizado */
+.horario-container ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.horario-container ::-webkit-scrollbar-track {
+  background: rgba(17, 24, 39, 0.5);
+  border-radius: 4px;
+}
+
+.horario-container ::-webkit-scrollbar-thumb {
+  background: rgba(6, 182, 212, 0.5);
+  border-radius: 4px;
+}
+
+.horario-container ::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.7);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .horario-container {
+    padding: 16px;
+  }
+
+  .stat-card {
+    padding: 12px;
+  }
+
+  .filter-section {
+    padding: 16px;
+  }
+}

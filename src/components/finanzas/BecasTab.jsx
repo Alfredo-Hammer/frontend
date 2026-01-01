@@ -58,8 +58,9 @@ const BecasTab = () => {
         }),
       ]);
 
-      setBecas(becasRes.data);
-      setConceptos(conceptosRes.data.filter((c) => c.activo));
+      // El backend devuelve { becas: [...] } y { conceptos: [...] }
+      setBecas(becasRes.data.becas || []);
+      setConceptos((conceptosRes.data.conceptos || []).filter((c) => c.activo));
     } catch (error) {
       console.error("Error cargando datos:", error);
     } finally {
@@ -72,12 +73,14 @@ const BecasTab = () => {
     try {
       const token = localStorage.getItem("token");
 
+      // El backend espera: nombre, descripcion, tipo, valor, activo
       const becaData = {
-        ...formData,
-        valor_descuento: parseFloat(formData.valor_descuento),
-        conceptos_aplicables: formData.conceptos_aplicables.map((id) =>
-          parseInt(id)
-        ),
+        nombre: formData.nombre,
+        descripcion: formData.descripcion,
+        tipo:
+          formData.tipo_descuento === "porcentaje" ? "Porcentaje" : "MontoFijo",
+        valor: parseFloat(formData.valor_descuento),
+        activo: formData.activo,
       };
 
       if (editingBeca) {

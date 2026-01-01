@@ -3,10 +3,11 @@
 const API_BASE = "http://localhost:4000/api";
 
 const services = {
+  ciclosEscolares: `${API_BASE}/ciclos-escolares`,
   API_BASE,
   // Rutas de la API
-  login: `${API_BASE}/usuarios/login`,
-  register: `${API_BASE}/usuarios/register`,
+  login: `${API_BASE}/auth/login`,
+  register: `${API_BASE}/auth/register`,
   grados: `${API_BASE}/grados`,
   gradosOrdenar: `${API_BASE}/grados/ordenar`,
   escuelas: `${API_BASE}/escuelas`,
@@ -21,6 +22,7 @@ const services = {
   calificaciones: `${API_BASE}/calificaciones`,
   calificacionesAlumnosLista: `${API_BASE}/calificaciones/alumnos-lista`,
   calificacionesMateriasAlumno: `${API_BASE}/calificaciones/materias-alumno`,
+  calificacionesAlumnoInfo: `${API_BASE}/calificaciones/alumno-info`,
   reportes: `${API_BASE}/reportes`,
   reportesConsolidado: `${API_BASE}/reportes/consolidado`,
   // Datos de Nicaragua
@@ -42,6 +44,25 @@ const services = {
   finanzasBeca: (id) => `${API_BASE}/finanzas/becas/${id}`,
   finanzasEstadisticas: `${API_BASE}/finanzas/estadisticas`,
   finanzasMorosidad: `${API_BASE}/finanzas/morosidad`,
+
+  // Dashboard
+  dashboardAdmin: `${API_BASE}/dashboard/admin`,
+  dashboardProfesor: `${API_BASE}/dashboard/profesor`,
+  dashboardEstudiante: `${API_BASE}/dashboard/estudiante`,
+
+  // Carga Académica
+  cargaAcademica: `${API_BASE}/carga-academica`,
+  cargaAcademicaSeccion: (idSeccion) => `${API_BASE}/carga-academica/seccion/${idSeccion}`,
+  cargaAcademicaProfesor: (idProfesor) => `${API_BASE}/carga-academica/profesor/${idProfesor}`,
+  cargaAcademicaMateria: (idMateria) => `${API_BASE}/carga-academica/materia/${idMateria}`,
+  cargaAcademicaGrado: (idGrado) => `${API_BASE}/carga-academica/grado/${idGrado}`,
+  cargaAcademicaPorId: (id) => `${API_BASE}/carga-academica/${id}`,
+  cargaAcademicaEstadisticas: `${API_BASE}/carga-academica/estadisticas`,
+
+  // Horarios
+  horarios: `${API_BASE}/horarios`,
+  horariosPorId: (id) => `${API_BASE}/horarios/${id}`,
+  horariosEstadisticas: `${API_BASE}/horarios/estadisticas`,
 };
 
 export default services;

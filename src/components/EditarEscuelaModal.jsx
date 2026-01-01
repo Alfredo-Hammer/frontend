@@ -11,7 +11,17 @@ import {
   PhotoIcon,
   CheckCircleIcon,
   ExclamationTriangleIcon,
+  AcademicCapIcon,
+  EnvelopeIcon,
 } from "@heroicons/react/24/solid";
+
+const NIVELES = [
+  "Primaria",
+  "Secundaria",
+  "Preescolar",
+  "Sabatino",
+  "Universidad",
+];
 
 export default function EditarEscuelaModal({
   open,
@@ -33,9 +43,7 @@ export default function EditarEscuelaModal({
       setForm(escuela);
       // Si hay logo existente, establecer preview
       if (escuela.logo) {
-        setPreviewImage(
-          `${api.defaults.baseURL}/uploads/logos/${escuela.logo}`
-        );
+        setPreviewImage(`${api.defaults.baseURL}${escuela.logo}`);
       }
     }
   }, [escuela]);
@@ -134,6 +142,23 @@ export default function EditarEscuelaModal({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Validar campos obligatorios
+    if (
+      !form.nombre ||
+      !form.direccion ||
+      !form.codigo_escuela ||
+      !form.codigo_establecimiento ||
+      !form.nivel_educativo ||
+      !form.nombre_director ||
+      !form.municipio
+    ) {
+      setError(
+        "Por favor completa todos los campos obligatorios marcados con (*), incluyendo los códigos oficiales de la escuela."
+      );
+      return;
+    }
+
     setLoading(true);
     setError("");
     try {
@@ -147,7 +172,11 @@ export default function EditarEscuelaModal({
       onSuccess && onSuccess();
       handleClose();
     } catch (err) {
-      setError(err.response?.data?.message || "Error al editar escuela");
+      setError(
+        err.response?.data?.error ||
+          err.response?.data?.message ||
+          "Error al editar escuela"
+      );
     } finally {
       setLoading(false);
     }
@@ -165,29 +194,29 @@ export default function EditarEscuelaModal({
 
       {/* Modal */}
       <div
-        className={`relative bg-white rounded-3xl shadow-2xl max-w-2xl w-full mx-4 transform transition-all duration-300 ${
+        className={`relative bg-gray-900 border border-gray-700 rounded-3xl shadow-2xl max-w-2xl w-full mx-4 transform transition-all duration-300 ${
           isClosing
             ? "scale-95 opacity-0 translate-y-4"
             : "scale-100 opacity-100 translate-y-0"
         }`}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 rounded-t-3xl p-6 relative overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-900 via-blue-800 to-indigo-900 rounded-t-3xl p-6 relative overflow-hidden border-b border-gray-700">
           {/* Background Effects */}
-          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/90 to-indigo-700/90"></div>
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-900/90 to-indigo-900/90"></div>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16"></div>
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-12 -mb-12"></div>
 
           <div className="relative flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <div className="p-3 bg-white/10 rounded-2xl backdrop-blur-sm">
-                <BuildingLibraryIcon className="h-8 w-8 text-white" />
+              <div className="p-3 bg-white/5 rounded-2xl backdrop-blur-sm border border-white/10">
+                <BuildingLibraryIcon className="h-8 w-8 text-blue-200" />
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-white">
                   Editar Escuela
                 </h2>
-                <p className="text-blue-100 text-sm">
+                <p className="text-blue-200 text-sm">
                   Actualizar información de la institución
                 </p>
               </div>
@@ -198,20 +227,20 @@ export default function EditarEscuelaModal({
               disabled={loading}
               className="p-2 hover:bg-white/10 rounded-xl transition-all duration-200 group disabled:opacity-50"
             >
-              <XMarkIcon className="h-6 w-6 text-white group-hover:text-red-200 transition-colors" />
+              <XMarkIcon className="h-6 w-6 text-gray-400 group-hover:text-white transition-colors" />
             </button>
           </div>
         </div>
 
         {/* Content */}
-        <div className="p-6 max-h-[70vh] overflow-y-auto">
+        <div className="p-6 max-h-[70vh] overflow-y-auto custom-scrollbar">
           {/* Error Message */}
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start space-x-3">
-              <ExclamationTriangleIcon className="h-5 w-5 text-red-600 mt-0.5 flex-shrink-0" />
+            <div className="mb-6 p-4 bg-red-900/30 border border-red-500/50 rounded-xl flex items-start space-x-3">
+              <ExclamationTriangleIcon className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
               <div>
-                <p className="text-red-800 font-medium">Error</p>
-                <p className="text-red-600 text-sm">{error}</p>
+                <p className="text-red-200 font-medium">Error</p>
+                <p className="text-red-300 text-sm">{error}</p>
               </div>
             </div>
           )}
@@ -223,14 +252,14 @@ export default function EditarEscuelaModal({
           >
             {/* Logo Upload Section */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
+              <label className="block text-sm font-medium text-gray-300 mb-3">
                 Logo de la Escuela
               </label>
               <div
                 className={`relative border-2 border-dashed rounded-2xl p-6 text-center transition-all duration-300 ${
                   dragActive
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-300 hover:border-blue-400 hover:bg-blue-50/50"
+                    ? "border-blue-500 bg-blue-900/20"
+                    : "border-gray-700 hover:border-blue-400 hover:bg-gray-800"
                 }`}
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
@@ -243,14 +272,14 @@ export default function EditarEscuelaModal({
                       <img
                         src={previewImage}
                         alt="Preview del logo"
-                        className="w-24 h-24 rounded-2xl object-cover border-4 border-blue-200 shadow-lg"
+                        className="w-24 h-24 rounded-2xl object-cover border-4 border-blue-500/30 shadow-lg"
                       />
                       <div className="absolute -top-2 -right-2 p-1 bg-green-500 rounded-full">
                         <CheckCircleIcon className="h-4 w-4 text-white" />
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="text-sm font-medium text-gray-200">
                         Logo cargado
                       </p>
                       <button
@@ -259,7 +288,7 @@ export default function EditarEscuelaModal({
                           setPreviewImage(null);
                           setForm((prev) => ({...prev, logo: null}));
                         }}
-                        className="text-sm text-red-600 hover:text-red-700 font-medium mt-1"
+                        className="text-sm text-red-400 hover:text-red-300 font-medium mt-1"
                       >
                         Eliminar imagen
                       </button>
@@ -267,13 +296,13 @@ export default function EditarEscuelaModal({
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <PhotoIcon className="mx-auto h-12 w-12 text-gray-400" />
+                    <PhotoIcon className="mx-auto h-12 w-12 text-gray-500" />
                     <div>
                       <label className="cursor-pointer">
-                        <span className="text-blue-600 font-medium hover:text-blue-700">
+                        <span className="text-blue-400 font-medium hover:text-blue-300">
                           Sube el logo de la escuela
                         </span>
-                        <span className="text-gray-500"> o arrastra aquí</span>
+                        <span className="text-gray-400"> o arrastra aquí</span>
                         <input
                           type="file"
                           name="logo"
@@ -295,18 +324,18 @@ export default function EditarEscuelaModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Nombre */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Nombre de la Escuela *
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <BuildingLibraryIcon className="h-5 w-5 text-gray-400" />
+                    <BuildingLibraryIcon className="h-5 w-5 text-gray-500" />
                   </div>
                   <input
                     name="nombre"
                     type="text"
                     required
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                    className="w-full pl-12 pr-4 py-3 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-800 text-white placeholder-gray-500 hover:bg-gray-750"
                     placeholder="Ingresa el nombre de la escuela"
                     value={form.nombre || ""}
                     onChange={handleChange}
@@ -316,18 +345,18 @@ export default function EditarEscuelaModal({
 
               {/* Código de Escuela */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Código de Escuela *
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <DocumentTextIcon className="h-5 w-5 text-gray-400" />
+                    <DocumentTextIcon className="h-5 w-5 text-gray-500" />
                   </div>
                   <input
                     name="codigo_escuela"
                     type="text"
                     required
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                    className="w-full pl-12 pr-4 py-3 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-800 text-white placeholder-gray-500 hover:bg-gray-750"
                     placeholder="Código único de la escuela"
                     value={form.codigo_escuela || ""}
                     onChange={handleChange}
@@ -337,18 +366,18 @@ export default function EditarEscuelaModal({
 
               {/* Código de Establecimiento */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Código de Establecimiento *
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <DocumentTextIcon className="h-5 w-5 text-gray-400" />
+                    <DocumentTextIcon className="h-5 w-5 text-gray-500" />
                   </div>
                   <input
                     name="codigo_establecimiento"
                     type="text"
                     required
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                    className="w-full pl-12 pr-4 py-3 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-800 text-white placeholder-gray-500 hover:bg-gray-750"
                     placeholder="Código del establecimiento"
                     value={form.codigo_establecimiento || ""}
                     onChange={handleChange}
@@ -358,18 +387,18 @@ export default function EditarEscuelaModal({
 
               {/* Nombre del Director */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Nombre del Director *
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <UserIcon className="h-5 w-5 text-gray-400" />
+                    <UserIcon className="h-5 w-5 text-gray-500" />
                   </div>
                   <input
                     name="nombre_director"
                     type="text"
                     required
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                    className="w-full pl-12 pr-4 py-3 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-800 text-white placeholder-gray-500 hover:bg-gray-750"
                     placeholder="Nombre completo del director"
                     value={form.nombre_director || ""}
                     onChange={handleChange}
@@ -379,17 +408,17 @@ export default function EditarEscuelaModal({
 
               {/* Teléfono */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
                   Teléfono
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <PhoneIcon className="h-5 w-5 text-gray-400" />
+                    <PhoneIcon className="h-5 w-5 text-gray-500" />
                   </div>
                   <input
                     name="telefono"
                     type="text"
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                    className="w-full pl-12 pr-4 py-3 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-800 text-white placeholder-gray-500 hover:bg-gray-750"
                     placeholder="Número de teléfono"
                     value={form.telefono || ""}
                     onChange={handleChange}
@@ -397,19 +426,72 @@ export default function EditarEscuelaModal({
                 </div>
               </div>
 
-              {/* Municipio */}
+              {/* Email */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Municipio
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Correo Electrónico
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <MapPinIcon className="h-5 w-5 text-gray-400" />
+                    <EnvelopeIcon className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <input
+                    name="email"
+                    type="email"
+                    className="w-full pl-12 pr-4 py-3 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-800 text-white placeholder-gray-500 hover:bg-gray-750"
+                    placeholder="correo@escuela.edu"
+                    value={form.email || ""}
+                    onChange={handleChange}
+                  />
+                </div>
+              </div>
+
+              {/* Nivel Educativo */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Nivel Educativo *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <AcademicCapIcon className="h-5 w-5 text-gray-500" />
+                  </div>
+                  <select
+                    name="nivel_educativo"
+                    required
+                    className="w-full pl-12 pr-4 py-3 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-800 text-white hover:bg-gray-750"
+                    value={form.nivel_educativo || ""}
+                    onChange={handleChange}
+                  >
+                    <option value="" disabled className="text-gray-500">
+                      Selecciona el nivel educativo
+                    </option>
+                    {NIVELES.map((nivel) => (
+                      <option
+                        key={nivel}
+                        value={nivel}
+                        className="text-gray-900"
+                      >
+                        {nivel}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Municipio */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Municipio *
+                </label>
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                    <MapPinIcon className="h-5 w-5 text-gray-500" />
                   </div>
                   <input
                     name="municipio"
                     type="text"
-                    className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                    required
+                    className="w-full pl-12 pr-4 py-3 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-800 text-white placeholder-gray-500 hover:bg-gray-750"
                     placeholder="Municipio donde se ubica"
                     value={form.municipio || ""}
                     onChange={handleChange}
@@ -420,17 +502,18 @@ export default function EditarEscuelaModal({
 
             {/* Dirección - Full Width */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Dirección Completa
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Dirección Completa *
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <MapPinIcon className="h-5 w-5 text-gray-400" />
+                  <MapPinIcon className="h-5 w-5 text-gray-500" />
                 </div>
                 <input
                   name="direccion"
                   type="text"
-                  className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-50 hover:bg-white"
+                  required
+                  className="w-full pl-12 pr-4 py-3 border border-gray-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 bg-gray-800 text-white placeholder-gray-500 hover:bg-gray-750"
                   placeholder="Dirección completa de la escuela"
                   value={form.direccion || ""}
                   onChange={handleChange}
@@ -441,12 +524,12 @@ export default function EditarEscuelaModal({
         </div>
 
         {/* Footer */}
-        <div className="bg-gray-50 rounded-b-3xl px-6 py-4 flex justify-end space-x-3">
+        <div className="bg-gray-800 rounded-b-3xl px-6 py-4 flex justify-end space-x-3 border-t border-gray-700">
           <button
             type="button"
             onClick={handleClose}
             disabled={loading}
-            className="px-6 py-3 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-100 font-medium transition-colors duration-200 disabled:opacity-50"
+            className="px-6 py-3 border border-gray-600 text-gray-300 rounded-xl hover:bg-gray-700 font-medium transition-colors duration-200 disabled:opacity-50"
           >
             Cancelar
           </button>

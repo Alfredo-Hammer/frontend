@@ -59,11 +59,19 @@ function DashboardProfesor({user}) {
         try {
           // Cargar asignaciones (grados y secciones)
           const asignacionesRes = await api.get(
-            `/api/profesores/${user.id_profesor}/asignaciones`,
+            `/api/profesores/${user.id_profesor}/carga`,
             {headers: {Authorization: `Bearer ${token}`}}
           );
 
-          const asignacionesData = asignacionesRes.data.asignaciones || [];
+          const rawData = asignacionesRes.data.data || [];
+
+          // Mapear datos del backend al formato esperado por el frontend
+          const asignacionesData = rawData.map((item) => ({
+            ...item,
+            nombre_grado: item.grado_nombre,
+            nombre_seccion: item.seccion_nombre,
+          }));
+
           setAsignaciones(asignacionesData);
 
           const gradosUnicos = [
@@ -74,71 +82,173 @@ function DashboardProfesor({user}) {
                   id_grado: a.id_grado,
                   nombre_grado: a.nombre_grado,
                   nivel: a.nivel,
-                  secciones: asignacionesData
-                    .filter(
-                      (asig) => asig.id_grado === a.id_grado && asig.id_seccion
-                    )
-                    .map((asig) => asig.nombre_seccion),
+                  secciones: [
+                    ...new Set(
+                      asignacionesData
+                        .filter((asig) => asig.id_grado === a.id_grado)
+                        .map((asig) => asig.nombre_seccion)
+                    ),
+                  ],
                 },
               ])
             ).values(),
           ];
           setMisGrados(gradosUnicos);
 
-          // Cargar materias de los grados asignados
-          const gradosIds = [
-            ...new Set(asignacionesData.map((a) => a.id_grado)),
-          ];
-          const seccionesIds = asignacionesData
-            .filter((a) => a.id_seccion)
-            .map((a) => a.id_seccion);
-
-          console.log("🎓 Grados IDs:", gradosIds);
-          console.log("📋 Secciones IDs:", seccionesIds);
-
-          // Cargar todas las materias de la escuela
-          const materiasRes = await api.get("/api/materias", {
-            headers: {Authorization: `Bearer ${token}`},
-          });
-
-          console.log("📚 Todas las materias:", materiasRes.data);
-
-          // Filtrar materias que pertenecen a los grados asignados
-          const materiasAsignadas = materiasRes.data.filter(
-            (materia) =>
-              materia.grados_ids &&
-              materia.grados_ids.some((gradoId) => gradosIds.includes(gradoId))
-          );
-          console.log("📚 Materias cargadas:", materiasAsignadas);
-          console.log("📊 Cantidad de materias:", materiasAsignadas.length);
-          setMisMaterias(materiasAsignadas);
-
-          // Cargar alumnos para las estadísticas
-          const alumnosRes = await api.get("/api/alumnos", {
-            headers: {Authorization: `Bearer ${token}`},
-          });
-
-          const alumnosAsignados =
-            seccionesIds.length > 0
-              ? alumnosRes.data.filter((alumno) =>
-                  seccionesIds.includes(alumno.seccionid)
-                )
-              : alumnosRes.data.filter((alumno) =>
-                  gradosIds.includes(alumno.gradoid)
-                );
-
-          console.log("👥 Alumnos filtrados:", alumnosAsignados);
-          console.log("📊 Cantidad de alumnos:", alumnosAsignados.length);
-
-          // Actualizar estadísticas
-          const newStats = {
-            materiasAsignadas: materiasAsignadas.length,
-            totalEstudiantes: alumnosAsignados.length,
-            tareasCreadas: 0,
-            calificacionesPendientes: 0,
+          // Procesar materias únicas desde la carga académica
+          const materiasMap = new Map();
+          const mapDia = (n) => {
+            const d = Number(n);
+            return (
+              {
+                1: "Lunes",
+                2: "Martes",
+                3: "Miércoles",
+                4: "Jueves",
+                5: "Viernes",
+                6: "Sábado",
+                7: "Domingo",
+              }[d] || ""
+            );
           };
-          console.log("📈 Stats a actualizar:", newStats);
-          setStats(newStats);
+          const toMinutes = (hhmm) => {
+            if (!hhmm) return Number.POSITIVE_INFINITY;
+            const parts = hhmm.toString().split(":");
+            const h = parseInt(parts[0] || "0", 10);
+            const m = parseInt(parts[1] || "0", 10);
+            return h * 60 + m;
+          };
+          asignacionesData.forEach((item) => {
+            if (!materiasMap.has(item.id_materia)) {
+              materiasMap.set(item.id_materia, {
+                id_materia: item.id_materia,
+                nombre: item.materia_nombre,
+                grados: new Set(),
+                horarios: new Set(),
+                minDia: Number.POSITIVE_INFINITY,
+                minHora: Number.POSITIVE_INFINITY,
+              });
+            }
+            const materia = materiasMap.get(item.id_materia);
+            materia.grados.add(`${item.nombre_grado} ${item.nombre_seccion}`);
+            // Agregar día y hora si existen en la asignación
+            if (item.dia_semana && (item.hora_inicio || item.hora_fin)) {
+              const dia = mapDia(item.dia_semana);
+              const hi = (item.hora_inicio || "").toString().slice(0, 5);
+              const hf = (item.hora_fin || "").toString().slice(0, 5);
+              const franja = hi && hf ? `${hi}-${hf}` : hi || hf || "";
+              if (dia || franja) {
+                materia.horarios.add(
+                  `${dia}${dia && franja ? " " : ""}${franja}`.trim()
+                );
+              }
+              // Actualizar mínimos para ordenamiento por semana
+              const diaNum = parseInt(item.dia_semana, 10);
+              if (Number.isFinite(diaNum)) {
+                materia.minDia = Math.min(materia.minDia, diaNum);
+              }
+              const minH = toMinutes(hi);
+              materia.minHora = Math.min(materia.minHora, minH);
+            }
+          });
+
+          const materiasUnicas = Array.from(materiasMap.values())
+            .map((m) => ({
+              ...m,
+              descripcion: Array.from(m.grados).join(", "),
+              horariosResumen: Array.from(m.horarios).slice(0, 3),
+            }))
+            .sort((a, b) => {
+              const d = (a.minDia || 99) - (b.minDia || 99);
+              if (d !== 0) return d;
+              const h =
+                (a.minHora || Number.POSITIVE_INFINITY) -
+                (b.minHora || Number.POSITIVE_INFINITY);
+              if (h !== 0) return h;
+              return (a.nombre || "").localeCompare(b.nombre || "");
+            });
+          setMisMaterias(materiasUnicas);
+
+          // Calcular próximas clases (hoy)
+          const fechaHoy = new Date();
+          const diaSemanaHoy = fechaHoy.getDay(); // 0-6 (Dom-Sab)
+          const diaBackend = diaSemanaHoy === 0 ? 7 : diaSemanaHoy; // 1-7 (Lun-Dom)
+
+          // Hora actual en minutos para filtrar clases pasadas
+          const minutosActuales =
+            fechaHoy.getHours() * 60 + fechaHoy.getMinutes();
+
+          const clasesHoy = asignacionesData
+            .filter((a) => {
+              // Filtrar por día (asegurar comparación numérica)
+              const diaAsignacion = parseInt(a.dia_semana);
+              if (diaAsignacion !== diaBackend) return false;
+
+              // Si no tiene hora fin definida, la mostramos por si acaso
+              if (!a.hora_fin) return true;
+
+              // Parsear hora fin (formato HH:MM:SS o HH:MM)
+              const [horas, minutos] = a.hora_fin
+                .toString()
+                .split(":")
+                .map(Number);
+              const minutosFin = horas * 60 + minutos;
+
+              // Mostrar solo si la clase termina después de ahora (futura o en curso)
+              return minutosFin > minutosActuales;
+            })
+            .sort((a, b) => {
+              if (!a.hora_inicio) return 1;
+              if (!b.hora_inicio) return -1;
+              return a.hora_inicio.localeCompare(b.hora_inicio);
+            })
+            .map((a) => ({
+              materia: a.materia_nombre,
+              grado: `${a.nombre_grado} ${a.nombre_seccion}`,
+              hora: a.horario_formato || "Hora no definida",
+              salon: "Aula asignada",
+            }));
+
+          setProximasClases(clasesHoy);
+
+          // Calcular total de estudiantes (suma de matriculados por sección única)
+          const seccionesUnicas = new Map();
+          asignacionesData.forEach((a) => {
+            if (a.id_seccion && !seccionesUnicas.has(a.id_seccion)) {
+              seccionesUnicas.set(
+                a.id_seccion,
+                parseInt(a.estudiantes_matriculados || 0)
+              );
+            }
+          });
+          const totalEstudiantes = Array.from(seccionesUnicas.values()).reduce(
+            (a, b) => a + b,
+            0
+          );
+
+          // Cargar estadísticas adicionales del profesor
+          try {
+            const statsRes = await api.get(services.dashboardProfesor, {
+              headers: {Authorization: `Bearer ${token}`},
+            });
+
+            setStats({
+              materiasAsignadas: materiasUnicas.length,
+              totalEstudiantes: totalEstudiantes,
+              tareasCreadas: statsRes.data.totalCursos || 0,
+              calificacionesPendientes: 0,
+            });
+            console.log("📈 Stats del profesor cargadas:", statsRes.data);
+          } catch (error) {
+            console.error("Error al cargar estadísticas del profesor:", error);
+
+            setStats({
+              materiasAsignadas: materiasUnicas.length,
+              totalEstudiantes: totalEstudiantes,
+              tareasCreadas: 0,
+              calificacionesPendientes: 0,
+            });
+          }
         } catch (error) {
           console.error(
             "Error al cargar datos del profesor (asignaciones/materias):",
@@ -146,27 +256,6 @@ function DashboardProfesor({user}) {
           );
         }
       }
-
-      setProximasClases([
-        {
-          materia: "Matemáticas",
-          grado: "10°A",
-          hora: "08:00 AM",
-          salon: "Aula 101",
-        },
-        {
-          materia: "Física",
-          grado: "11°B",
-          hora: "10:00 AM",
-          salon: "Lab. Ciencias",
-        },
-        {
-          materia: "Matemáticas",
-          grado: "9°C",
-          hora: "02:00 PM",
-          salon: "Aula 205",
-        },
-      ]);
     } catch (error) {
       console.error("Error al cargar datos del profesor:", error);
     } finally {
@@ -318,7 +407,7 @@ function DashboardProfesor({user}) {
               <div
                 key={grado.id_grado || idx}
                 className="p-6 bg-gradient-to-br from-cyan-600/10 to-blue-600/10 border border-cyan-500/20 rounded-xl hover:scale-105 transition-transform cursor-pointer"
-                onClick={() => navigate(`/alumnos?grado=${grado.id_grado}`)}
+                onClick={() => navigate(`/estudiantes?grado=${grado.id_grado}`)}
               >
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-cyan-500/20 rounded-lg">
@@ -419,7 +508,7 @@ function DashboardProfesor({user}) {
               </button>
 
               <button
-                onClick={() => navigate("/alumnos")}
+                onClick={() => navigate("/estudiantes")}
                 className="w-full p-4 bg-gradient-to-r from-yellow-600/20 to-orange-600/20 border border-yellow-500/30 rounded-lg hover:scale-105 transition-transform text-left"
               >
                 <div className="flex items-center justify-between">
@@ -496,9 +585,20 @@ function DashboardProfesor({user}) {
                 <h3 className="text-white font-semibold mb-1">
                   {materia.nombre || materia.materia}
                 </h3>
-                <p className="text-gray-400 text-sm">
+                <p className="text-gray-400 text-sm mb-2">
                   {materia.descripcion || "Ver detalles →"}
                 </p>
+                {Array.isArray(materia.horariosResumen) &&
+                  materia.horariosResumen.length > 0 && (
+                    <div className="text-xs text-purple-300 flex flex-col gap-1">
+                      {materia.horariosResumen.map((h, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <ClockIcon className="w-4 h-4 text-purple-400" />
+                          <span>{h}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
               </div>
             ))}
 

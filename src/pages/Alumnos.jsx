@@ -19,6 +19,9 @@ import {hasPermission} from "../config/roles";
 const API_BASE_URL = "http://localhost:4000";
 
 function Alumnos() {
+  // Ciclos escolares
+  const [ciclos, setCiclos] = useState([]);
+  const [cicloSeleccionado, setCicloSeleccionado] = useState("");
   const [alumnos, setAlumnos] = useState([]);
   const [escuelas, setEscuelas] = useState([]);
   const [grados, setGrados] = useState([]);
@@ -93,6 +96,22 @@ function Alumnos() {
   useEffect(() => {
     fetchUser();
     fetchDatosNicaragua();
+    fetchCiclosEscolares();
+    // Cargar ciclos escolares
+    const fetchCiclosEscolares = async () => {
+      try {
+        const res = await api.get(services.ciclosEscolares, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+        setCiclos(res.data?.data || res.data || []);
+        // Seleccionar ciclo activo por defecto
+        const activo = (res.data?.data || res.data || []).find((c) => c.activo);
+        if (activo) setCicloSeleccionado(activo.id);
+      } catch (error) {
+        setCiclos([]);
+        console.error("Error al cargar ciclos escolares:", error);
+      }
+    };
     // eslint-disable-next-line
   }, []);
 
@@ -130,7 +149,7 @@ function Alumnos() {
       fetchAlumnos();
     }
     // eslint-disable-next-line
-  }, [user]);
+  }, [user, cicloSeleccionado]);
 
   // Efecto para filtrar municipios cuando cambia el departamento
   useEffect(() => {
@@ -257,7 +276,11 @@ function Alumnos() {
     }
 
     try {
-      const res = await api.get("/api/alumnos", {
+      let url = "/api/alumnos";
+      const params = [];
+      if (cicloSeleccionado) params.push(`id_ciclo=${cicloSeleccionado}`);
+      if (params.length) url += "?" + params.join("&");
+      const res = await api.get(url, {
         headers: {Authorization: `Bearer ${token}`},
       });
 
@@ -832,7 +855,7 @@ function Alumnos() {
             <>
               {user && hasPermission(user.rol, "alumnos", "crear") && (
                 <button
-                  onClick={() => navigate("/alumnos/registro")}
+                  onClick={() => navigate("/estudiantes")}
                   className="px-4 py-2 bg-white text-blue-600 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                 >
                   <PlusIcon className="w-5 h-5" />
@@ -855,8 +878,27 @@ function Alumnos() {
           </div>
         )}
 
-        {/* Barra de búsqueda y filtros */}
+        {/* Barra de búsqueda, filtros y ciclo escolar */}
         <div className="bg-gray-800 rounded-2xl shadow-lg p-6 mb-8 border border-gray-700">
+          {/* Selector de Ciclo Escolar */}
+          <div className="mb-4 max-w-xs">
+            <label className="text-xs text-gray-400 mb-1 block">
+              Ciclo Escolar
+            </label>
+            <select
+              value={cicloSeleccionado}
+              onChange={(e) => setCicloSeleccionado(e.target.value)}
+              className="w-full bg-gray-900 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:border-indigo-500 outline-none"
+            >
+              <option value="">Todos</option>
+              {ciclos.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nombre} ({c.fecha_inicio?.slice(0, 4)} -{" "}
+                  {c.fecha_fin?.slice(0, 4)}){c.activo ? " (Activo)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="flex flex-col lg:flex-row gap-4 items-center">
             <div className="flex-1 relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -959,7 +1001,7 @@ function Alumnos() {
               </p>
               {user && hasPermission(user.rol, "alumnos", "crear") && (
                 <button
-                  onClick={() => navigate("/alumnos/registro")}
+                  onClick={() => navigate("/estudiantes")}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg transform hover:scale-105 transition-all duration-200"
                 >
                   <PlusIcon className="w-5 h-5 mr-2 inline" />

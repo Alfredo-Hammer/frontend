@@ -6,8 +6,25 @@ import {
   ArrowRightOnRectangleIcon,
 } from "@heroicons/react/24/solid";
 
-function SessionWarningDialog({isOpen, countdown, onContinue, onLogout}) {
+const formatTime = (totalSeconds) => {
+  const seconds = Math.max(0, Number(totalSeconds) || 0);
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return m > 0 ? `${m}:${String(s).padStart(2, "0")}` : `${s}`;
+};
+
+function SessionWarningDialog({
+  isOpen,
+  countdown,
+  maxCountdown = 30,
+  onContinue,
+  onLogout,
+}) {
   if (!isOpen) return null;
+
+  const safeMax = Math.max(1, Number(maxCountdown) || 30);
+  const safeCurrent = Math.max(0, Number(countdown) || 0);
+  const progress = Math.min(100, Math.max(0, (safeCurrent / safeMax) * 100));
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -40,14 +57,15 @@ function SessionWarningDialog({isOpen, countdown, onContinue, onLogout}) {
               <div className="inline-flex items-center justify-center gap-3 mb-4">
                 <ClockIcon className="h-16 w-16 text-orange-500" />
                 <div className="text-6xl font-bold text-orange-600 tabular-nums">
-                  {countdown}
+                  {formatTime(countdown)}
                 </div>
               </div>
 
               <p className="text-gray-700 text-lg mb-2">
                 Tu sesión expirará en{" "}
-                <span className="font-bold text-orange-600">{countdown}</span>{" "}
-                segundos
+                <span className="font-bold text-orange-600">
+                  {formatTime(countdown)}
+                </span>
               </p>
 
               <p className="text-gray-600 text-sm">
@@ -61,7 +79,7 @@ function SessionWarningDialog({isOpen, countdown, onContinue, onLogout}) {
               <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-1000 ease-linear"
-                  style={{width: `${(countdown / 30) * 100}%`}}
+                  style={{width: `${progress}%`}}
                 />
               </div>
             </div>

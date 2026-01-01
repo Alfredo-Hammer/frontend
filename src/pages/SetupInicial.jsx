@@ -129,9 +129,13 @@ function SetupInicial({setToken, setNecesitaSetup}) {
     if (
       !escuelaData.nombre ||
       !escuelaData.direccion ||
-      !escuelaData.municipio
+      !escuelaData.municipio ||
+      !escuelaData.codigo_escuela ||
+      !escuelaData.codigo_establecimiento
     ) {
-      setError("Por favor completa todos los campos obligatorios");
+      setError(
+        "Por favor completa todos los campos obligatorios incluyendo los códigos"
+      );
       return false;
     }
     return true;
@@ -419,7 +423,7 @@ function SetupInicial({setToken, setNecesitaSetup}) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-gray-300 mb-2 font-semibold">
-                    Código de Escuela
+                    Código de Escuela <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -430,13 +434,15 @@ function SetupInicial({setToken, setNecesitaSetup}) {
                       onChange={handleEscuelaChange}
                       className="w-full bg-gray-900/50 border border-gray-600 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                       placeholder="ESC-001"
+                      required
                     />
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-gray-300 mb-2 font-semibold">
-                    Código Establecimiento (MINED)
+                    Código Establecimiento (MINED){" "}
+                    <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <FileText className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
@@ -447,6 +453,7 @@ function SetupInicial({setToken, setNecesitaSetup}) {
                       onChange={handleEscuelaChange}
                       className="w-full bg-gray-900/50 border border-gray-600 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
                       placeholder="0001-00000-0"
+                      required
                     />
                   </div>
                 </div>
