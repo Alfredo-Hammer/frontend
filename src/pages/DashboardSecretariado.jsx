@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, {useState, useEffect} from "react";
 import api from "../api/axiosConfig";
 import {
   Users,
@@ -29,7 +29,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 
-function DashboardSecretariado({ user }) {
+function DashboardSecretariado({user}) {
   const [loading, setLoading] = useState(true);
   const [escuela, setEscuela] = useState(null);
   const [estadisticas, setEstadisticas] = useState({
@@ -128,7 +128,13 @@ function DashboardSecretariado({ user }) {
   const cargarDatos = async () => {
     try {
       setLoading(true);
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = {Authorization: `Bearer ${token}`};
+
+      const normalizeArray = (value) => {
+        if (Array.isArray(value)) return value;
+        if (Array.isArray(value?.data)) return value.data;
+        return [];
+      };
 
       // Cargar datos en paralelo
       const [
@@ -138,16 +144,16 @@ function DashboardSecretariado({ user }) {
         gradosRes, // Necesario para el gráfico
       ] = await Promise.all([
         user?.id_escuela
-          ? api.get(`/api/escuelas/${user.id_escuela}`, { headers })
-          : Promise.resolve({ data: null }),
-        api.get("/api/dashboard/admin", { headers }),
-        api.get("/api/alumnos", { headers }),
-        api.get("/api/grados", { headers }),
+          ? api.get(`/api/escuelas/${user.id_escuela}`, {headers})
+          : Promise.resolve({data: null}),
+        api.get("/api/dashboard/admin", {headers}),
+        api.get("/api/alumnos", {headers}),
+        api.get("/api/grados", {headers}),
       ]);
 
       setEscuela(escuelaRes.data);
       setAlumnos(alumnosRes.data);
-      setGrados(gradosRes.data);
+      setGrados(normalizeArray(gradosRes.data));
 
       // Calcular nuevas inscripciones del lado del cliente
       const nuevasInscripciones = alumnosRes.data.filter((a) => {
@@ -157,8 +163,7 @@ function DashboardSecretariado({ user }) {
         return fechaRegistro > hace30dias;
       }).length;
 
-      setEstadisticas({ ...dashboardRes.data, nuevasInscripciones });
-
+      setEstadisticas({...dashboardRes.data, nuevasInscripciones});
     } catch (error) {
       console.error("Error al cargar datos:", error);
     } finally {

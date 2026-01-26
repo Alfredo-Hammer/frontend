@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from "react";
+import React, {useEffect, useRef, useState} from "react";
 import {useParams, useNavigate} from "react-router-dom";
 import api from "../api/axiosConfig";
 import {
@@ -11,8 +11,6 @@ import {
   AcademicCapIcon,
   DocumentTextIcon,
   ArrowLeftIcon,
-  PrinterIcon,
-  EyeIcon,
   ClockIcon,
   IdentificationIcon,
   HomeIcon,
@@ -24,10 +22,12 @@ const API_BASE_URL = "http://localhost:4000";
 const DetalleAlumno = () => {
   const {id} = useParams();
   const navigate = useNavigate();
+  const pdfRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [alumno, setAlumno] = useState(null);
   const [error, setError] = useState("");
   const [showPreview, setShowPreview] = useState(false);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   const token = localStorage.getItem("token");
 
@@ -209,47 +209,76 @@ const DetalleAlumno = () => {
     }
   }, [id, token]);
 
-  const imprimirPDF = () => {
-    // Ocultar elementos innecesarios antes de imprimir
-    const elementsToHide = [
-      "header",
-      "nav",
-      ".sidebar",
-      ".header",
-      '[data-testid="sidebar"]',
-      '[role="navigation"]',
-    ];
+  const exportarPDF = async () => {
+    if (!alumno || generatingPDF) return;
 
-    elementsToHide.forEach((selector) => {
-      const elements = document.querySelectorAll(selector);
-      elements.forEach((el) => {
-        el.style.display = "none";
+    setGeneratingPDF(true);
+    const prevPreview = showPreview;
+
+    try {
+      // Activar modo "preview" (layout blanco + header institucional) para capturar un PDF limpio.
+      setShowPreview(true);
+
+      // Esperar a que React pinte el DOM antes de capturar
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      const element = pdfRef.current;
+      if (!element)
+        throw new Error("No se encontró el contenido para exportar");
+
+      const jsPDF = (await import("jspdf")).default;
+      const html2canvas = (await import("html2canvas")).default;
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: "#ffffff",
+        scrollY: -window.scrollY,
       });
-    });
 
-    // Aplicar estilos específicos para impresión
-    document.body.style.margin = "0";
-    document.body.style.padding = "0";
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "p",
+        unit: "mm",
+        format: "a4",
+      });
 
-    setTimeout(() => {
-      window.print();
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
 
-      // Restaurar elementos después de imprimir
-      setTimeout(() => {
-        elementsToHide.forEach((selector) => {
-          const elements = document.querySelectorAll(selector);
-          elements.forEach((el) => {
-            el.style.display = "";
-          });
-        });
-        document.body.style.margin = "";
-        document.body.style.padding = "";
-      }, 1000);
-    }, 500);
-  };
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-  const togglePreview = () => {
-    setShowPreview(!showPreview);
+      let position = 0;
+      let heightLeft = imgHeight;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      const nombreArchivo = `Ficha_${(alumno.nombre || "Estudiante")
+        .toString()
+        .trim()}
+        _${(alumno.apellido || "").toString().trim()}`
+        .replace(/\s+/g, "_")
+        .replace(/_+$/g, "")
+        .concat(`_${new Date().toISOString().slice(0, 10)}.pdf`);
+
+      pdf.save(nombreArchivo);
+    } catch (e) {
+      console.error("Error al exportar PDF:", e);
+      setError("Error al exportar el PDF. Por favor, intente nuevamente.");
+    } finally {
+      setShowPreview(prevPreview);
+      setGeneratingPDF(false);
+    }
   };
 
   if (loading) {
@@ -319,9 +348,9 @@ const DetalleAlumno = () => {
             <div className="absolute bottom-10 right-10 w-60 h-60 bg-purple-400/20 rounded-full blur-2xl animate-pulse delay-1000"></div>
           </div>
 
-          <div className="relative max-w-7xl mx-auto px-6 py-16">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-6">
+          <div className="relative max-w-7xl mx-auto px-6 py-14">
+            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-8">
+              <div className="flex items-start gap-6">
                 <button
                   onClick={() => navigate("/alumnos")}
                   className="p-3 bg-white/10 rounded-xl text-white hover:bg-white/20 backdrop-blur-sm transition-colors"
@@ -329,57 +358,95 @@ const DetalleAlumno = () => {
                   <ArrowLeftIcon className="w-6 h-6" />
                 </button>
 
-                <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-lg">
-                  <img
-                    src={
-                      alumno.imagen
-                        ? `${API_BASE_URL}${alumno.imagen}`
-                        : `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                            alumno.nombre + " " + alumno.apellido
-                          )}&background=0D8ABC&color=fff`
-                    }
-                    alt="Alumno"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
+                <div className="flex items-start gap-6">
+                  <div className="w-20 h-20 rounded-2xl overflow-hidden border-4 border-white/90 shadow-lg bg-white/10 backdrop-blur-sm">
+                    <img
+                      src={
+                        alumno.imagen
+                          ? `${API_BASE_URL}${alumno.imagen}`
+                          : `https://ui-avatars.com/api/?name=${encodeURIComponent(
+                              alumno.nombre + " " + alumno.apellido
+                            )}&background=0D8ABC&color=fff`
+                      }
+                      alt="Alumno"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
 
-                <div>
-                  <h1 className="text-4xl font-bold text-white">
-                    {alumno.nombre} {alumno.apellido}
-                  </h1>
-                  <p className="text-indigo-100 text-lg">
-                    Ficha Completa del Estudiante
-                  </p>
-                  <div className="flex items-center mt-2 space-x-4">
-                    {alumno.codigo_mined && (
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm text-white">
-                        MINED: {alumno.codigo_mined}
-                      </span>
-                    )}
-                    {alumno.grado && (
-                      <span className="px-3 py-1 bg-white/20 rounded-full text-sm text-white">
-                        {alumno.grado} - {alumno.seccion || "Sin sección"}
-                      </span>
+                  <div className="min-w-0">
+                    <h1 className="text-3xl sm:text-4xl font-bold text-white leading-tight">
+                      {alumno.nombre} {alumno.apellido}
+                    </h1>
+                    <p className="text-indigo-100/90 text-base sm:text-lg mt-1">
+                      Perfil del Estudiante
+                    </p>
+
+                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                      {alumno.codigo_mined && (
+                        <span className="px-3 py-1 bg-white/15 rounded-full text-sm text-white backdrop-blur-sm">
+                          MINED: {alumno.codigo_mined}
+                        </span>
+                      )}
+                      {alumno.grado && (
+                        <span className="px-3 py-1 bg-white/15 rounded-full text-sm text-white backdrop-blur-sm">
+                          {alumno.grado} - {alumno.seccion || "Sin sección"}
+                        </span>
+                      )}
+                      {alumno.escuela && (
+                        <span className="px-3 py-1 bg-white/15 rounded-full text-sm text-white backdrop-blur-sm">
+                          {alumno.escuela}
+                        </span>
+                      )}
+                    </div>
+
+                    {(alumno.direccion_escuela ||
+                      alumno.telefono_escuela ||
+                      alumno.email_escuela) && (
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {alumno.direccion_escuela && (
+                          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 text-white/90 backdrop-blur-sm">
+                            <MapPinIcon className="w-4 h-4 flex-shrink-0" />
+                            <span className="text-sm truncate">
+                              {alumno.direccion_escuela}
+                            </span>
+                          </div>
+                        )}
+                        {alumno.telefono_escuela && (
+                          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 text-white/90 backdrop-blur-sm">
+                            <PhoneIcon className="w-4 h-4 flex-shrink-0" />
+                            <span className="text-sm truncate">
+                              {alumno.telefono_escuela}
+                            </span>
+                          </div>
+                        )}
+                        {alumno.email_escuela && (
+                          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white/10 text-white/90 backdrop-blur-sm">
+                            <EnvelopeIcon className="w-4 h-4 flex-shrink-0" />
+                            <span className="text-sm truncate">
+                              {alumno.email_escuela}
+                            </span>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center justify-end gap-3">
                 <button
-                  onClick={togglePreview}
-                  className="px-6 py-3 bg-white/10 text-white rounded-xl font-semibold backdrop-blur-sm hover:bg-white/20 transition-all duration-300 flex items-center space-x-2"
+                  onClick={exportarPDF}
+                  disabled={generatingPDF}
+                  className={`px-6 py-3 rounded-xl font-semibold shadow-lg transition-all duration-300 flex items-center gap-2 ${
+                    generatingPDF
+                      ? "bg-white/70 text-indigo-700 cursor-not-allowed"
+                      : "bg-white text-indigo-700 hover:scale-105 transform"
+                  }`}
                 >
-                  <EyeIcon className="w-5 h-5" />
-                  <span>Vista Previa</span>
-                </button>
-
-                <button
-                  onClick={imprimirPDF}
-                  className="px-6 py-3 bg-white text-indigo-600 rounded-xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center space-x-2"
-                >
-                  <PrinterIcon className="w-5 h-5" />
-                  <span>Imprimir PDF</span>
+                  <DocumentTextIcon className="w-5 h-5" />
+                  <span>
+                    {generatingPDF ? "Generando PDF..." : "Exportar PDF"}
+                  </span>
                 </button>
               </div>
             </div>
@@ -389,6 +456,7 @@ const DetalleAlumno = () => {
 
       {/* Contenido Principal */}
       <div
+        ref={pdfRef}
         className={`max-w-7xl mx-auto px-6 py-8 print:px-0 print:py-0 print:max-w-none print:mx-0 ${
           showPreview ? "pt-8 preview-content" : ""
         }`}
@@ -1131,7 +1199,11 @@ const DetalleAlumno = () => {
         </div>
 
         {/* Botones de acción - Hidden on print */}
-        <div className="flex justify-center space-x-4 mt-8 print:hidden no-print">
+        <div
+          className={`${
+            showPreview ? "hidden" : "flex"
+          } justify-center space-x-4 mt-8 print:hidden no-print`}
+        >
           <button
             onClick={() => navigate("/alumnos")}
             className="px-8 py-4 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center space-x-2"
@@ -1141,21 +1213,16 @@ const DetalleAlumno = () => {
           </button>
 
           <button
-            onClick={togglePreview}
-            className="px-8 py-4 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center space-x-2"
+            onClick={exportarPDF}
+            disabled={generatingPDF}
+            className={`px-8 py-4 text-white rounded-2xl font-semibold shadow-lg transition-all duration-300 flex items-center space-x-2 ${
+              generatingPDF
+                ? "bg-gradient-to-r from-indigo-400 to-indigo-500 cursor-not-allowed"
+                : "bg-gradient-to-r from-indigo-500 to-purple-600 hover:scale-105 transform"
+            }`}
           >
-            <EyeIcon className="w-5 h-5" />
-            <span>
-              {showPreview ? "Vista Normal" : "Vista Previa de Impresión"}
-            </span>
-          </button>
-
-          <button
-            onClick={imprimirPDF}
-            className="px-8 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-2xl font-semibold shadow-lg hover:scale-105 transform transition-all duration-300 flex items-center space-x-2"
-          >
-            <PrinterIcon className="w-5 h-5" />
-            <span>Imprimir Ficha PDF</span>
+            <DocumentTextIcon className="w-5 h-5" />
+            <span>{generatingPDF ? "Generando PDF..." : "Exportar a PDF"}</span>
           </button>
         </div>
       </div>

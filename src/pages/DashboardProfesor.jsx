@@ -28,7 +28,6 @@ function DashboardProfesor({user}) {
   const [misMaterias, setMisMaterias] = useState([]);
   const [proximasClases, setProximasClases] = useState([]);
   const [escuela, setEscuela] = useState(null);
-  const [asignaciones, setAsignaciones] = useState([]);
   const [misGrados, setMisGrados] = useState([]);
   const [loading, setLoading] = useState(true);
   const token = localStorage.getItem("token");
@@ -71,8 +70,6 @@ function DashboardProfesor({user}) {
             nombre_grado: item.grado_nombre,
             nombre_seccion: item.seccion_nombre,
           }));
-
-          setAsignaciones(asignacionesData);
 
           const gradosUnicos = [
             ...new Map(
@@ -170,48 +167,113 @@ function DashboardProfesor({user}) {
           setMisMaterias(materiasUnicas);
 
           // Calcular próximas clases (hoy)
-          const fechaHoy = new Date();
-          const diaSemanaHoy = fechaHoy.getDay(); // 0-6 (Dom-Sab)
-          const diaBackend = diaSemanaHoy === 0 ? 7 : diaSemanaHoy; // 1-7 (Lun-Dom)
+          // Calcular próximas clases (siguiente en el horario semanal)
+          const ahora = new Date();
+          const diaSemanaHoy = ahora.getDay(); // 0-6 (Dom-Sab)
+          const diaHoy = diaSemanaHoy === 0 ? 7 : diaSemanaHoy; // 1-7 (Lun-Dom)
+          const minutosActuales = ahora.getHours() * 60 + ahora.getMinutes();
 
-          // Hora actual en minutos para filtrar clases pasadas
-          const minutosActuales =
-            fechaHoy.getHours() * 60 + fechaHoy.getMinutes();
+          const parseMinutes = (t) => {
+            if (!t) return null;
+            const parts = t.toString().split(":");
+            const h = parseInt(parts[0] || "0", 10);
+            const m = parseInt(parts[1] || "0", 10);
+            if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+            return h * 60 + m;
+          };
 
-          const clasesHoy = asignacionesData
-            .filter((a) => {
-              // Filtrar por día (asegurar comparación numérica)
-              const diaAsignacion = parseInt(a.dia_semana);
-              if (diaAsignacion !== diaBackend) return false;
+          const formatTimeAmPm = (hhmm) => {
+            if (!hhmm) return "";
+            const parts = hhmm.toString().split(":");
+            const h = parseInt(parts[0] || "0", 10);
+            const m = parseInt(parts[1] || "0", 10);
+            if (!Number.isFinite(h) || !Number.isFinite(m)) return "";
+            const dt = new Date();
+            dt.setHours(h, m, 0, 0);
+            return dt.toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            });
+          };
 
-              // Si no tiene hora fin definida, la mostramos por si acaso
-              if (!a.hora_fin) return true;
+          const formatRangoHora = (inicio, fin) => {
+            const hi = (inicio || "").toString().slice(0, 5);
+            const hf = (fin || "").toString().slice(0, 5);
+            const hiFmt = formatTimeAmPm(hi);
+            const hfFmt = formatTimeAmPm(hf);
+            if (hiFmt && hfFmt) return `${hiFmt} - ${hfFmt}`;
+            return hiFmt || hfFmt || "Hora no definida";
+          };
 
-              // Parsear hora fin (formato HH:MM:SS o HH:MM)
-              const [horas, minutos] = a.hora_fin
-                .toString()
-                .split(":")
-                .map(Number);
-              const minutosFin = horas * 60 + minutos;
+          const clasesOrdenadas = asignacionesData
+            .map((a) => {
+              const diaAsignacion = Number.parseInt(a.dia_semana, 10);
+              const inicioMin = parseMinutes(a.hora_inicio);
+              const finMin = parseMinutes(a.hora_fin);
 
-              // Mostrar solo si la clase termina después de ahora (futura o en curso)
-              return minutosFin > minutosActuales;
+              // Si no hay día u hora, no podemos calcular cercanía real.
+              if (!Number.isFinite(diaAsignacion) || inicioMin === null) {
+                return {raw: a, offsetMin: Number.POSITIVE_INFINITY};
+              }
+
+              let daysUntil = (diaAsignacion - diaHoy + 7) % 7;
+
+              // Si es hoy y ya terminó, empujar a la próxima semana.
+              if (
+                daysUntil === 0 &&
+                finMin !== null &&
+                finMin <= minutosActuales
+              ) {
+                daysUntil = 7;
+              }
+
+              // Si es hoy y empezó pero no hay hora fin, asumimos que ya no es la próxima.
+              if (
+                daysUntil === 0 &&
+                finMin === null &&
+                inicioMin < minutosActuales
+              ) {
+                daysUntil = 7;
+              }
+
+              // Si está en curso: es la más cercana (offset 0)
+              if (
+                daysUntil === 0 &&
+                finMin !== null &&
+                inicioMin <= minutosActuales &&
+                minutosActuales < finMin
+              ) {
+                return {raw: a, offsetMin: 0};
+              }
+
+              // Tiempo restante hasta el inicio
+              const offsetMin =
+                daysUntil * 24 * 60 +
+                (inicioMin - (daysUntil === 0 ? minutosActuales : 0));
+              return {raw: a, offsetMin};
             })
-            .sort((a, b) => {
-              if (!a.hora_inicio) return 1;
-              if (!b.hora_inicio) return -1;
-              return a.hora_inicio.localeCompare(b.hora_inicio);
-            })
-            .map((a) => ({
-              materia: a.materia_nombre,
-              grado: `${a.nombre_grado} ${a.nombre_seccion}`,
-              hora: a.horario_formato || "Hora no definida",
-              salon: "Aula asignada",
-            }));
+            .sort((x, y) => x.offsetMin - y.offsetMin);
 
-          setProximasClases(clasesHoy);
+          const firstFinite = clasesOrdenadas.find((c) =>
+            Number.isFinite(c.offsetMin)
+          );
+          const fallback = clasesOrdenadas[0];
+          const nextRaw = (firstFinite || fallback)?.raw;
 
-          // Calcular total de estudiantes (suma de matriculados por sección única)
+          const nextClase = nextRaw
+            ? {
+                materia: nextRaw.materia_nombre,
+                grado: `${nextRaw.nombre_grado} ${nextRaw.nombre_seccion}`,
+                dia: mapDia(nextRaw.dia_semana) || "Día no definido",
+                hora: formatRangoHora(nextRaw.hora_inicio, nextRaw.hora_fin),
+                salon: "Aula asignada",
+              }
+            : null;
+
+          setProximasClases(nextClase ? [nextClase] : []);
+
+          // Fallback local: suma de matriculados por sección única (si el backend no trae total)
           const seccionesUnicas = new Map();
           asignacionesData.forEach((a) => {
             if (a.id_seccion && !seccionesUnicas.has(a.id_seccion)) {
@@ -221,10 +283,9 @@ function DashboardProfesor({user}) {
               );
             }
           });
-          const totalEstudiantes = Array.from(seccionesUnicas.values()).reduce(
-            (a, b) => a + b,
-            0
-          );
+          const totalEstudiantesLocal = Array.from(
+            seccionesUnicas.values()
+          ).reduce((a, b) => a + b, 0);
 
           // Cargar estadísticas adicionales del profesor
           try {
@@ -234,7 +295,9 @@ function DashboardProfesor({user}) {
 
             setStats({
               materiasAsignadas: materiasUnicas.length,
-              totalEstudiantes: totalEstudiantes,
+              totalEstudiantes:
+                Number(statsRes.data?.totalEstudiantes) ||
+                totalEstudiantesLocal,
               tareasCreadas: statsRes.data.totalCursos || 0,
               calificacionesPendientes: 0,
             });
@@ -244,7 +307,7 @@ function DashboardProfesor({user}) {
 
             setStats({
               materiasAsignadas: materiasUnicas.length,
-              totalEstudiantes: totalEstudiantes,
+              totalEstudiantes: totalEstudiantesLocal,
               tareasCreadas: 0,
               calificacionesPendientes: 0,
             });
@@ -528,16 +591,16 @@ function DashboardProfesor({user}) {
           </div>
 
           {/* Próximas Clases */}
-          <div className="bg-gray-800 border border-gray-700 rounded-xl p-6">
+          <div className="bg-gradient-to-br from-gray-900/80 via-gray-800/80 to-gray-900/80 border border-gray-700/60 rounded-2xl p-6 shadow-xl">
             <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               <CalendarDaysIcon className="w-6 h-6 text-cyan-400" />
-              Próximas Clases de Hoy
+              Próximas Clases
             </h2>
             <div className="space-y-3">
               {proximasClases.map((clase, idx) => (
                 <div
                   key={idx}
-                  className="p-4 bg-gradient-to-r from-gray-700/50 to-gray-600/50 rounded-lg border border-gray-600 hover:border-cyan-500/50 transition-colors"
+                  className="p-4 bg-gradient-to-r from-gray-800/60 to-gray-700/60 rounded-xl border border-white/10 hover:border-cyan-400/40 transition-colors"
                 >
                   <div className="flex items-start justify-between">
                     <div>
@@ -547,7 +610,8 @@ function DashboardProfesor({user}) {
                       <p className="text-gray-400 text-sm">{clase.grado}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-cyan-400 font-semibold">
+                      <p className="text-gray-400 text-sm">{clase.dia}</p>
+                      <p className="text-cyan-300 font-semibold">
                         {clase.hora}
                       </p>
                       <p className="text-gray-400 text-sm">{clase.salon}</p>
@@ -559,9 +623,7 @@ function DashboardProfesor({user}) {
               {proximasClases.length === 0 && (
                 <div className="text-center py-8">
                   <CalendarDaysIcon className="w-12 h-12 text-gray-600 mx-auto mb-2" />
-                  <p className="text-gray-400">
-                    No hay clases programadas para hoy
-                  </p>
+                  <p className="text-gray-400">No hay clases programadas</p>
                 </div>
               )}
             </div>

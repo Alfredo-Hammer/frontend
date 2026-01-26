@@ -124,7 +124,10 @@ const EstadoCuentaTab = () => {
       setEstadoCuenta(response.data);
     } catch (error) {
       console.error("Error cargando estado de cuenta:", error);
-      showToast("Error al cargar el estado de cuenta", "error");
+      showToast(
+        error?.response?.data?.error || "Error al cargar el estado de cuenta",
+        "error"
+      );
     } finally {
       setLoading(false);
     }

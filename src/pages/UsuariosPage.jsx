@@ -54,6 +54,10 @@ function UsuariosPage() {
     type: "success",
   });
 
+  const [showCredencialesModal, setShowCredencialesModal] = useState(false);
+  const [credencialesTemp, setCredencialesTemp] = useState(null); // {email, password, expira?}
+  const [credencialesLoading, setCredencialesLoading] = useState(false);
+
   // Formulario
   const [formData, setFormData] = useState({
     nombre: "",
@@ -132,18 +136,56 @@ function UsuariosPage() {
         showToast("Usuario actualizado correctamente", "success");
       } else {
         // En creación NO enviamos password, el backend la genera
-        await api.post("/api/usuarios/register", formData, {
+        const res = await api.post("/api/usuarios/register", formData, {
           headers: {Authorization: `Bearer ${token}`},
         });
-        showToast(
-          "Usuario creado. Credenciales enviadas al correo.",
-          "success"
-        );
+
+        const emailEnviado = res.data?.emailEnviado;
+        const credenciales = res.data?.credencialesTemporales;
+
+        if (emailEnviado) {
+          showToast(
+            "Usuario creado. Credenciales enviadas al correo.",
+            "success"
+          );
+        } else {
+          showToast(
+            "Usuario creado, pero NO se pudo enviar el email. Puedes ver las credenciales temporales.",
+            "error"
+          );
+        }
+
+        if (credenciales?.email && credenciales?.password) {
+          setCredencialesTemp(credenciales);
+          setShowCredencialesModal(true);
+        }
       }
       cargarDatos();
       cerrarModal();
     } catch (error) {
       showToast(error.response?.data?.message || "Error al guardar", "error");
+    }
+  };
+
+  const handleVerCredencialesTemporales = async (idUsuario) => {
+    try {
+      setCredencialesLoading(true);
+      const res = await api.get(
+        `/api/usuarios/${idUsuario}/credenciales-temporales`,
+        {
+          headers: {Authorization: `Bearer ${token}`},
+        }
+      );
+      setCredencialesTemp(res.data);
+      setShowCredencialesModal(true);
+    } catch (error) {
+      showToast(
+        error.response?.data?.message ||
+          "No se pudieron obtener las credenciales temporales",
+        "error"
+      );
+    } finally {
+      setCredencialesLoading(false);
     }
   };
 
@@ -435,6 +477,17 @@ function UsuariosPage() {
 
                     {/* 5. Acciones */}
                     <td className="px-6 py-4 text-right">
+                      {!usuario.email_verificado && (
+                        <button
+                          onClick={() =>
+                            handleVerCredencialesTemporales(usuario.id_usuario)
+                          }
+                          disabled={credencialesLoading}
+                          className="text-xs text-amber-400 hover:text-amber-300 px-2 py-1 mr-2 rounded-lg border border-amber-500/20 hover:bg-amber-500/10 transition-colors disabled:opacity-50"
+                        >
+                          Credenciales
+                        </button>
+                      )}
                       <button
                         onClick={() => abrirModal(usuario)}
                         className="text-gray-400 hover:text-white p-2 hover:bg-gray-700 rounded-lg transition-colors"
@@ -590,6 +643,63 @@ function UsuariosPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* --- MODAL: CREDENCIALES TEMPORALES --- */}
+      {showCredencialesModal && credencialesTemp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="bg-gray-800 rounded-2xl shadow-2xl w-full max-w-lg border border-gray-700 overflow-hidden">
+            <div className="px-6 py-5 border-b border-gray-700 bg-gray-900/50 flex items-center justify-between">
+              <h3 className="text-xl font-bold text-white">
+                Credenciales temporales
+              </h3>
+              <button
+                onClick={() => {
+                  setShowCredencialesModal(false);
+                  setCredencialesTemp(null);
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                <p className="text-sm text-gray-400 mb-1">Usuario (email)</p>
+                <p className="text-white break-all">{credencialesTemp.email}</p>
+              </div>
+
+              <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                <p className="text-sm text-gray-400 mb-1">
+                  Contraseña temporal
+                </p>
+                <p className="text-white break-all font-mono">
+                  {credencialesTemp.password}
+                </p>
+              </div>
+
+              <div className="bg-amber-500/10 p-4 rounded-lg border border-amber-500/20">
+                <p className="text-sm text-amber-300">
+                  Estas credenciales son temporales. Se recomienda cambiar la
+                  contraseña tras el primer acceso.
+                </p>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  onClick={() => {
+                    setShowCredencialesModal(false);
+                    setCredencialesTemp(null);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

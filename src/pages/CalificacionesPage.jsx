@@ -3,7 +3,7 @@ import api from "../api/axiosConfig";
 import services from "../api/services";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import TablaCalificacionesAlumno from "../components/TablaCalificacionesAlumno"; // Asegúrate de actualizar este componente también después
+import TablaCalificaciones from "../components/TablaCalificaciones";
 import PageHeader from "../components/PageHeader";
 import {
   MagnifyingGlassIcon,
@@ -48,6 +48,24 @@ function CalificacionesPage() {
 
   const token = localStorage.getItem("token");
 
+  // ==================== FUNCIONES DE CARGA ====================
+  const fetchCiclosEscolares = async () => {
+    try {
+      const res = await api.get("/api/ciclos/setup", {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const ciclosData = res.data?.ciclos || [];
+      setCiclos(ciclosData);
+      // Seleccionar ciclo activo por defecto
+      if (res.data?.actual) {
+        setCicloSeleccionado(res.data.actual);
+      }
+    } catch (error) {
+      setCiclos([]);
+      console.error("Error al cargar ciclos escolares:", error);
+    }
+  };
+
   // ==================== EFECTOS Y CARGA DE DATOS ====================
   useEffect(() => {
     const initializePage = async () => {
@@ -58,31 +76,17 @@ function CalificacionesPage() {
           fetchGrados(),
           fetchSecciones(),
           fetchMaterias(),
-          fetchAlumnosLista(),
           fetchCiclosEscolares(),
+          fetchAlumnosLista(),
         ]);
       } catch (error) {
+        console.error("Error al cargar datos iniciales:", error);
         setMensaje("Error al cargar datos iniciales");
       } finally {
         setIsLoading(false);
       }
     };
     initializePage();
-    // Cargar ciclos escolares
-    const fetchCiclosEscolares = async () => {
-      try {
-        const res = await api.get(services.API_BASE + "/ciclos-escolares", {
-          headers: {Authorization: `Bearer ${token}`},
-        });
-        setCiclos(res.data?.data || res.data || []);
-        // Seleccionar ciclo activo por defecto
-        const activo = (res.data?.data || res.data || []).find((c) => c.activo);
-        if (activo) setCicloSeleccionado(activo.id);
-      } catch (error) {
-        setCiclos([]);
-        console.error("Error al cargar ciclos escolares:", error);
-      }
-    };
   }, []);
 
   useEffect(() => {
@@ -369,7 +373,7 @@ function CalificacionesPage() {
   // ==================== VISTA DE DETALLE (HIJO) ====================
   if (vistaAlumno) {
     return (
-      <TablaCalificacionesAlumno
+      <TablaCalificaciones
         alumnoId={vistaAlumno}
         nombreAlumno={nombreAlumno}
         onVolver={() => setVistaAlumno(null)}
@@ -432,9 +436,9 @@ function CalificacionesPage() {
             >
               <option value="">Todos</option>
               {ciclos.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nombre} ({c.fecha_inicio?.slice(0, 4)} -{" "}
-                  {c.fecha_fin?.slice(0, 4)}){c.activo ? " (Activo)" : ""}
+                <option key={c.id_ciclo} value={c.id_ciclo}>
+                  {c.nombre}
+                  {c.es_activo_academico ? " (Activo)" : ""}
                 </option>
               ))}
             </select>

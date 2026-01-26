@@ -8,9 +8,9 @@ import {
   UserGroupIcon,
 } from "@heroicons/react/24/solid";
 import api from "../api/axiosConfig";
-import ciclosApi from "../api/ciclos";
 import PageHeader from "../components/PageHeader";
 import EditarEscuelaModal from "../components/EditarEscuelaModal";
+import {Link} from "react-router-dom";
 
 function Configuracion() {
   const [escuela, setEscuela] = useState(null);
@@ -18,13 +18,6 @@ function Configuracion() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [showEditModal, setShowEditModal] = useState(false);
-
-  // Ciclos escolares (setup)
-  const [ciclos, setCiclos] = useState([]);
-  const [cicloAcademico, setCicloAcademico] = useState("");
-  const [cicloMatricula, setCicloMatricula] = useState("");
-  const [guardandoCiclos, setGuardandoCiclos] = useState(false);
-  const [msgCiclos, setMsgCiclos] = useState("");
 
   const token = localStorage.getItem("token");
 
@@ -64,15 +57,6 @@ function Configuracion() {
 
     if (token) {
       fetchPerfilYEscuela();
-      // Cargar ciclos escolares para selects maestros
-      ciclosApi
-        .getCiclosSetup(token)
-        .then((res) => {
-          setCiclos(res.data.ciclos);
-          setCicloAcademico(res.data.actual || "");
-          setCicloMatricula(res.data.matricula || "");
-        })
-        .catch(() => setCiclos([]));
     }
   }, [token]);
 
@@ -271,139 +255,24 @@ function Configuracion() {
 
             {/* Columna lateral: Ciclos escolares (primera card), Seguridad SaaS y contexto */}
             <div className="space-y-6">
-              {/* Card de Configuración de Ciclos Escolares (PRIMERA en la columna lateral) */}
-              <div className="bg-gradient-to-br from-cyan-700/80 via-blue-900/70 to-slate-900/80 border border-cyan-400/40 shadow-2xl rounded-3xl p-8 backdrop-blur-xl">
-                <div className="flex items-center gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 flex items-center justify-center shadow-lg">
-                    <ClockIcon className="w-7 h-7 text-cyan-300" />
-                  </div>
+              {/* Ciclos escolares: solo un enlace (sin card grande) */}
+              <div className="bg-gray-900/70 border border-gray-700/80 rounded-2xl shadow-lg p-5 backdrop-blur-sm">
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <h2 className="text-2xl font-bold text-cyan-100 tracking-tight">
+                    <h2 className="text-sm font-semibold text-white">
                       Ciclos Escolares
                     </h2>
-                    <p className="text-cyan-200 text-sm mt-1">
-                      Gestiona el ciclo académico activo y el habilitado para
-                      matrícula. Solo puede haber uno activo de cada tipo.
+                    <p className="text-xs text-gray-300/80">
+                      Ir a la página de gestión.
                     </p>
                   </div>
+                  <Link
+                    to="/ciclosescolares"
+                    className="px-4 py-2 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-semibold text-sm"
+                  >
+                    Abrir
+                  </Link>
                 </div>
-                {ciclos.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-8">
-                    <div className="text-cyan-300 text-lg font-semibold mb-4">
-                      No hay ciclos registrados.
-                    </div>
-                    <a
-                      href="/ciclosescolares"
-                      className="px-8 py-4 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl font-bold text-lg shadow-lg mt-2"
-                    >
-                      Crear Ciclo Escolar
-                    </a>
-                  </div>
-                ) : (
-                  <>
-                    <form
-                      className="grid grid-cols-1 md:grid-cols-2 gap-6"
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        setGuardandoCiclos(true);
-                        setMsgCiclos("");
-                        try {
-                          await ciclosApi.setCiclosMaestros(token, {
-                            id_ciclo_academico: cicloAcademico,
-                            id_ciclo_matricula: cicloMatricula,
-                          });
-                          setMsgCiclos(
-                            "¡Ciclos maestros actualizados correctamente!"
-                          );
-                          // Refrescar ciclos
-                          const res = await ciclosApi.getCiclosSetup(token);
-                          setCiclos(res.data.ciclos);
-                          setCicloAcademico(res.data.actual || "");
-                          setCicloMatricula(res.data.matricula || "");
-                        } catch (err) {
-                          setMsgCiclos(
-                            "Error al guardar: " +
-                              (err.response?.data?.error || err.message)
-                          );
-                        } finally {
-                          setGuardandoCiclos(false);
-                        }
-                      }}
-                    >
-                      <div>
-                        <label className="block text-cyan-300 mb-2 text-xs font-semibold">
-                          Ciclo Académico Actual
-                        </label>
-                        <select
-                          className="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-gray-100 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400 shadow-sm transition-all duration-150 max-h-40 overflow-y-auto"
-                          value={cicloAcademico}
-                          onChange={(e) => setCicloAcademico(e.target.value)}
-                          required
-                        >
-                          <option value="">-- Selecciona un ciclo --</option>
-                          {ciclos.map((c) => (
-                            <option
-                              key={c.id_ciclo}
-                              value={c.id_ciclo}
-                              className="text-xs"
-                            >
-                              {c.nombre}{" "}
-                              {c.es_activo_academico ? "(Activo)" : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-cyan-300 mb-2 text-xs font-semibold">
-                          Ciclo Habilitado para Matrícula
-                        </label>
-                        <select
-                          className="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-gray-100 text-xs focus:outline-none focus:ring-2 focus:ring-cyan-400 shadow-sm transition-all duration-150 max-h-40 overflow-y-auto"
-                          value={cicloMatricula}
-                          onChange={(e) => setCicloMatricula(e.target.value)}
-                          required
-                        >
-                          <option value="">-- Selecciona un ciclo --</option>
-                          {ciclos.map((c) => (
-                            <option
-                              key={c.id_ciclo}
-                              value={c.id_ciclo}
-                              className="text-xs"
-                            >
-                              {c.nombre}{" "}
-                              {c.matricula_abierta ? "(Matrícula Abierta)" : ""}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="md:col-span-2 flex items-center gap-4 mt-2 justify-center">
-                        <button
-                          type="submit"
-                          className="px-7 py-3 bg-cyan-600 hover:bg-cyan-700 text-white font-bold rounded-md shadow-lg disabled:opacity-50 disabled:cursor-not-allowed text-md"
-                          disabled={guardandoCiclos}
-                        >
-                          {guardandoCiclos ? "Guardando..." : "Guardar Cambios"}
-                        </button>
-                        {msgCiclos && (
-                          <span
-                            className={`text-base ${
-                              msgCiclos.startsWith("¡")
-                                ? "text-green-400"
-                                : "text-red-400"
-                            }`}
-                          >
-                            {msgCiclos}
-                          </span>
-                        )}
-                      </div>
-                    </form>
-                    <p className="mt-4 text-xs text-cyan-300">
-                      <strong>Regla de integridad:</strong> Solo puede haber un
-                      ciclo académico activo y uno habilitado para matrícula a
-                      la vez. Esta acción es atómica y segura.
-                    </p>
-                  </>
-                )}
               </div>
               {/* ...resto de las cards laterales... */}
               <div className="bg-gradient-to-br from-gray-900 via-gray-900 to-indigo-900/20 border border-indigo-500/20 rounded-2xl shadow-lg p-6 backdrop-blur-sm">

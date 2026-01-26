@@ -1,4 +1,4 @@
-import React, {useState} from "react";
+import React, {useEffect, useState} from "react";
 import {useNavigate} from "react-router-dom";
 import Toast from "../components/Toast";
 import {
@@ -24,9 +24,12 @@ function SetupInicial({setToken, setNecesitaSetup}) {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [loadingUbicaciones, setLoadingUbicaciones] = useState(false);
   const [error, setError] = useState("");
   const [logoPreview, setLogoPreview] = useState(null);
   const [logoFile, setLogoFile] = useState(null);
+  const [departamentos, setDepartamentos] = useState([]);
+  const [municipios, setMunicipios] = useState([]);
   const [toast, setToast] = useState({
     show: false,
     message: "",
@@ -53,10 +56,41 @@ function SetupInicial({setToken, setNecesitaSetup}) {
     codigo_escuela: "",
     telefono: "",
     nivel_educativo: "Primaria",
+    departamento: "",
     municipio: "",
     nombre_director: "",
     codigo_establecimiento: "",
   });
+
+  // Cargar departamentos al entrar al paso 2
+  useEffect(() => {
+    const cargarDepartamentos = async () => {
+      setLoadingUbicaciones(true);
+      try {
+        const resp = await api.get("/api/nicaragua/departamentos");
+        const list = Array.isArray(resp.data) ? resp.data : [];
+        const normalizados = list
+          .map((d) => {
+            if (typeof d === "string") return d;
+            if (d && typeof d === "object") return d.value || d.label || "";
+            return "";
+          })
+          .filter(Boolean);
+        setDepartamentos(normalizados);
+      } catch (err) {
+        console.error("Error al cargar departamentos:", err);
+        setDepartamentos([]);
+        // No bloqueamos el setup si falla; el usuario verá selects vacíos.
+      } finally {
+        setLoadingUbicaciones(false);
+      }
+    };
+
+    if (step === 2 && departamentos.length === 0 && !loadingUbicaciones) {
+      cargarDepartamentos();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const handleAdminChange = (e) => {
     setAdminData({...adminData, [e.target.name]: e.target.value});
@@ -66,6 +100,40 @@ function SetupInicial({setToken, setNecesitaSetup}) {
   const handleEscuelaChange = (e) => {
     setEscuelaData({...escuelaData, [e.target.name]: e.target.value});
     setError("");
+  };
+
+  const handleDepartamentoChange = async (e) => {
+    const departamento = e.target.value;
+    setEscuelaData((prev) => ({
+      ...prev,
+      departamento,
+      municipio: "", // Reset municipio al cambiar el departamento
+    }));
+    setError("");
+    setMunicipios([]);
+
+    if (!departamento) return;
+
+    setLoadingUbicaciones(true);
+    try {
+      const resp = await api.get(
+        `/api/nicaragua/municipios/${encodeURIComponent(departamento)}`
+      );
+      const list = Array.isArray(resp.data) ? resp.data : [];
+      const normalizados = list
+        .map((m) => {
+          if (typeof m === "string") return m;
+          if (m && typeof m === "object") return m.value || m.label || "";
+          return "";
+        })
+        .filter(Boolean);
+      setMunicipios(normalizados);
+    } catch (err) {
+      console.error("Error al cargar municipios:", err);
+      setMunicipios([]);
+    } finally {
+      setLoadingUbicaciones(false);
+    }
   };
 
   const handleLogoChange = (e) => {
@@ -129,12 +197,13 @@ function SetupInicial({setToken, setNecesitaSetup}) {
     if (
       !escuelaData.nombre ||
       !escuelaData.direccion ||
+      !escuelaData.departamento ||
       !escuelaData.municipio ||
       !escuelaData.codigo_escuela ||
       !escuelaData.codigo_establecimiento
     ) {
       setError(
-        "Por favor completa todos los campos obligatorios incluyendo los códigos"
+        "Por favor completa todos los campos obligatorios incluyendo departamento, municipio y los códigos"
       );
       return false;
     }
@@ -479,18 +548,57 @@ function SetupInicial({setToken, setNecesitaSetup}) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-gray-300 mb-2 font-semibold">
+                    Departamento <span className="text-red-400">*</span>
+                  </label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                    <select
+                      name="departamento"
+                      value={escuelaData.departamento}
+                      onChange={handleDepartamentoChange}
+                      className="w-full bg-gray-900/50 border border-gray-600 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      required
+                    >
+                      <option value="">Selecciona un departamento</option>
+                      {departamentos.map((d) => (
+                        <option key={d} value={d}>
+                          {d}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {loadingUbicaciones && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Cargando ubicaciones...
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-gray-300 mb-2 font-semibold">
                     Municipio <span className="text-red-400">*</span>
                   </label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <input
-                      type="text"
+                    <select
                       name="municipio"
                       value={escuelaData.municipio}
                       onChange={handleEscuelaChange}
-                      className="w-full bg-gray-900/50 border border-gray-600 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
-                      placeholder="Managua"
-                    />
+                      disabled={!escuelaData.departamento || loadingUbicaciones}
+                      className="w-full bg-gray-900/50 border border-gray-600 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50"
+                      required
+                    >
+                      <option value="">
+                        {escuelaData.departamento
+                          ? "Selecciona un municipio"
+                          : "Primero selecciona un departamento"}
+                      </option>
+                      {municipios.map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 

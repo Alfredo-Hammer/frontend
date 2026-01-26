@@ -34,6 +34,10 @@ const DIAS_SEMANA = [
 
 function HorarioClases() {
   // Estados
+  const [usuarioActual, setUsuarioActual] = useState(null);
+  const [modoFamilia, setModoFamilia] = useState(false);
+  const [hijos, setHijos] = useState([]);
+  const [hijoSeleccionado, setHijoSeleccionado] = useState("");
   const [horarios, setHorarios] = useState([]);
   const [grados, setGrados] = useState([]);
   const [profesores, setProfesores] = useState([]);
@@ -65,27 +69,100 @@ function HorarioClases() {
     setToast({show: true, message, type});
   };
 
+  const rolNormalizado = String(usuarioActual?.rol || "").toLowerCase();
+  const esFamilia =
+    modoFamilia || rolNormalizado === "padre" || rolNormalizado === "familiar";
+
   // Cargar datos iniciales
   useEffect(() => {
+    const userStr = localStorage.getItem("user");
+    if (userStr) {
+      try {
+        const parsed = JSON.parse(userStr);
+        setUsuarioActual(parsed);
+        const rol = String(parsed?.rol || "").toLowerCase();
+        if (rol === "padre" || rol === "familiar") {
+          setModoFamilia(true);
+        }
+      } catch (e) {
+        console.error("Error al parsear usuario:", e);
+      }
+    }
+
+    // Importante: NO depender de localStorage.user.
+    // Con solo el token debe cargar para admin/profesor/alumno.
     cargarHorarios();
+    cargarEstadisticas();
     cargarGrados();
     cargarProfesores();
     cargarMaterias();
-    cargarEstadisticas();
   }, []);
 
+  useEffect(() => {
+    if (!esFamilia) return;
+    if (!hijoSeleccionado) {
+      setHorarios([]);
+      setEstadisticas({
+        total_clases: 0,
+        profesores_activos: 0,
+        materias_activas: 0,
+        grados_con_horario: 0,
+      });
+      // Si es familia y aún no cargamos hijos, cargarlos.
+      if (hijos.length === 0) {
+        cargarHijos();
+      }
+      return;
+    }
+
+    cargarHorarios(hijoSeleccionado);
+    cargarEstadisticas(hijoSeleccionado);
+  }, [esFamilia, hijoSeleccionado]);
+
+  const cargarHijos = async () => {
+    try {
+      setModoFamilia(true);
+      const token = localStorage.getItem("token");
+      const response = await axios.get(`${API_BASE_URL}/api/padres/mis-hijos`, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const lista = response.data?.hijos || [];
+      setHijos(lista);
+
+      if (lista.length === 1) {
+        setHijoSeleccionado(String(lista[0].id_usuario_alumno));
+      }
+    } catch (error) {
+      console.error("Error al cargar mis hijos:", error);
+      showToast("No se pudieron cargar los estudiantes vinculados", "error");
+    }
+  };
+
   // Cargar horarios desde el backend
-  const cargarHorarios = async () => {
+  const cargarHorarios = async (idUsuarioAlumno) => {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
       const response = await axios.get(`${API_BASE_URL}/api/horarios`, {
         headers: {Authorization: `Bearer ${token}`},
+        params: idUsuarioAlumno
+          ? {id_usuario_alumno: idUsuarioAlumno}
+          : undefined,
       });
       setHorarios(response.data.data || []);
     } catch (error) {
       console.error("Error al cargar horarios:", error);
-      showToast("Error al cargar horarios", "error");
+      const backendMsg =
+        error?.response?.data?.message || error?.response?.data?.error || "";
+      if (
+        error?.response?.status === 400 &&
+        String(backendMsg).toLowerCase().includes("seleccion")
+      ) {
+        setModoFamilia(true);
+        cargarHijos();
+      } else {
+        showToast("Error al cargar horarios", "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -131,13 +208,16 @@ function HorarioClases() {
   };
 
   // Cargar estadísticas
-  const cargarEstadisticas = async () => {
+  const cargarEstadisticas = async (idUsuarioAlumno) => {
     try {
       const token = localStorage.getItem("token");
       const response = await axios.get(
         `${API_BASE_URL}/api/horarios/estadisticas`,
         {
           headers: {Authorization: `Bearer ${token}`},
+          params: idUsuarioAlumno
+            ? {id_usuario_alumno: idUsuarioAlumno}
+            : undefined,
         }
       );
       setEstadisticas(
@@ -150,6 +230,15 @@ function HorarioClases() {
       );
     } catch (error) {
       console.error("Error al cargar estadísticas:", error);
+      const backendMsg =
+        error?.response?.data?.message || error?.response?.data?.error || "";
+      if (
+        error?.response?.status === 400 &&
+        String(backendMsg).toLowerCase().includes("seleccion")
+      ) {
+        setModoFamilia(true);
+        cargarHijos();
+      }
     }
   };
 
@@ -476,6 +565,28 @@ function HorarioClases() {
               />
             </div>
 
+            {esFamilia && (
+              <div className="w-full lg:w-80">
+                <select
+                  value={hijoSeleccionado}
+                  onChange={(e) => setHijoSeleccionado(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-700 text-white border border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent transition-all"
+                >
+                  <option value="">Seleccionar estudiante</option>
+                  {hijos.map((h) => (
+                    <option
+                      key={h.id_usuario_alumno}
+                      value={String(h.id_usuario_alumno)}
+                    >
+                      {h.nombre} {h.apellido}
+                      {h.grado ? ` - ${h.grado}` : ""}
+                      {h.seccion ? ` ${h.seccion}` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div className="flex bg-gray-700 p-1 rounded-xl">
               <button
                 onClick={() => setVistaActual("semanal")}
@@ -512,20 +623,22 @@ function HorarioClases() {
               </button>
             </div>
 
-            <button
-              onClick={() => setMostrarFiltros(!mostrarFiltros)}
-              className={`px-4 py-3 rounded-xl font-medium transition-all flex items-center space-x-2 ${
-                mostrarFiltros
-                  ? "bg-cyan-600 text-white border border-cyan-500"
-                  : "bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600"
-              }`}
-            >
-              <FunnelIcon className="h-4 w-4" />
-              <span>Filtros</span>
-            </button>
+            {!esFamilia && (
+              <button
+                onClick={() => setMostrarFiltros(!mostrarFiltros)}
+                className={`px-4 py-3 rounded-xl font-medium transition-all flex items-center space-x-2 ${
+                  mostrarFiltros
+                    ? "bg-cyan-600 text-white border border-cyan-500"
+                    : "bg-gray-700 text-gray-200 hover:bg-gray-600 border border-gray-600"
+                }`}
+              >
+                <FunnelIcon className="h-4 w-4" />
+                <span>Filtros</span>
+              </button>
+            )}
           </div>
 
-          {mostrarFiltros && (
+          {mostrarFiltros && !esFamilia && (
             <div className="mt-6 pt-6 border-t border-gray-700 grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -624,7 +737,9 @@ function HorarioClases() {
               No se encontraron horarios
             </h3>
             <p className="text-gray-400 mb-6">
-              No hay horarios que coincidan con los filtros seleccionados.
+              {esFamilia && !hijoSeleccionado
+                ? "Selecciona un estudiante para ver su horario."
+                : "No hay horarios que coincidan con los filtros seleccionados."}
             </p>
             <button
               onClick={() => {
@@ -633,7 +748,9 @@ function HorarioClases() {
               }}
               className="bg-cyan-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-cyan-700 transition-colors"
             >
-              Limpiar filtros
+              {esFamilia && !hijoSeleccionado
+                ? "Limpiar búsqueda"
+                : "Limpiar filtros"}
             </button>
           </div>
         )}

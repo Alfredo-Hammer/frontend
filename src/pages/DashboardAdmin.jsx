@@ -24,19 +24,96 @@ import {
  * Muestra estadísticas generales del sistema
  */
 function DashboardAdmin({user}) {
+  const formatearTiempoRelativo = (fechaISO) => {
+    if (!fechaISO) return "";
+    const fecha = new Date(fechaISO);
+    if (Number.isNaN(fecha.getTime())) return "";
+
+    const ahora = Date.now();
+    const diffMs = Math.max(0, ahora - fecha.getTime());
+    const diffMin = Math.floor(diffMs / 60000);
+
+    if (diffMin < 1) return "unos segundos";
+    if (diffMin < 60) return `${diffMin} min`;
+
+    const diffHoras = Math.floor(diffMin / 60);
+    if (diffHoras < 24)
+      return diffHoras === 1 ? "1 hora" : `${diffHoras} horas`;
+
+    const diffDias = Math.floor(diffHoras / 24);
+    return diffDias === 1 ? "1 día" : `${diffDias} días`;
+  };
+
+  const mapearTipoActividad = (tablaNombre) => {
+    const tabla = String(tablaNombre || "").toLowerCase();
+    if (tabla.includes("calificacion")) return "calificacion";
+    if (tabla.includes("pago")) return "pago";
+    if (tabla.includes("usuario")) return "usuario";
+    if (
+      tabla.includes("alumno") ||
+      tabla.includes("estudiante") ||
+      tabla.includes("matricula")
+    )
+      return "alumno";
+    if (tabla.includes("profesor")) return "profesor";
+    return "sistema";
+  };
+
+  const construirMensajeActividad = ({usuario, operacion, tabla_nombre}) => {
+    const tablaRaw = tabla_nombre ? String(tabla_nombre) : "registro";
+    const tablaLower = tablaRaw.toLowerCase();
+    const tabla = (() => {
+      if (tablaLower === "estudiantes") return "estudiantes";
+      if (tablaLower === "pagos") return "pagos";
+      if (tablaLower === "calificaciones") return "calificaciones";
+      if (tablaLower === "usuarios") return "usuarios";
+      return tablaRaw;
+    })();
+    const actor = usuario ? String(usuario) : "Sistema";
+    const op = String(operacion || "").toUpperCase();
+
+    const verbos = {
+      INSERT: "registró",
+      UPDATE: "actualizó",
+      DELETE: "eliminó",
+    };
+
+    const verbo = verbos[op] || "realizó un cambio en";
+    return `${actor} ${verbo} ${tabla}`;
+  };
+
   const cargarCicloActual = async () => {
     try {
       const res = await ciclosApi.getCiclosSetup(token);
+      if (res.data && Array.isArray(res.data.ciclos)) {
+        setSinCiclosEscolares(res.data.ciclos.length === 0);
+      } else {
+        setSinCiclosEscolares(false);
+      }
+
       if (res.data && res.data.ciclos && res.data.actual) {
         const ciclo = res.data.ciclos.find(
-          (c) => c.id_ciclo === res.data.actual
+          (c) => String(c.id_ciclo) === String(res.data.actual)
         );
-        setCicloActual(ciclo ? ciclo.nombre : null);
+        if (ciclo) {
+          setCicloActual(ciclo.nombre);
+          setCicloActualInfo({
+            nombre: ciclo.nombre,
+            fecha_fin: ciclo.fecha_fin || null,
+            es_activo_academico: Boolean(ciclo.es_activo_academico),
+          });
+        } else {
+          setCicloActual(null);
+          setCicloActualInfo(null);
+        }
       } else {
         setCicloActual(null);
+        setCicloActualInfo(null);
       }
     } catch (error) {
       setCicloActual(null);
+      setCicloActualInfo(null);
+      setSinCiclosEscolares(false);
     }
   };
   const navigate = useNavigate();
@@ -51,10 +128,44 @@ function DashboardAdmin({user}) {
     alumnosExcelentes: 0,
   });
   const [cicloActual, setCicloActual] = useState(null);
+  const [cicloActualInfo, setCicloActualInfo] = useState(null);
+  const [sinCiclosEscolares, setSinCiclosEscolares] = useState(false);
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
   const [escuela, setEscuela] = useState(null);
   const token = localStorage.getItem("token");
+
+  const cicloVencido = (() => {
+    if (!cicloActualInfo?.es_activo_academico) return false;
+    if (!cicloActualInfo?.fecha_fin) return false;
+    const fin = new Date(cicloActualInfo.fecha_fin);
+    if (Number.isNaN(fin.getTime())) return false;
+
+    const hoy = new Date();
+    // Comparación por fecha (sin hora) para evitar falsos positivos por zona horaria.
+    const finMid = new Date(
+      fin.getFullYear(),
+      fin.getMonth(),
+      fin.getDate()
+    ).getTime();
+    const hoyMid = new Date(
+      hoy.getFullYear(),
+      hoy.getMonth(),
+      hoy.getDate()
+    ).getTime();
+    return finMid < hoyMid;
+  })();
+
+  const cicloFinFormateado = (() => {
+    if (!cicloActualInfo?.fecha_fin) return "";
+    const fin = new Date(cicloActualInfo.fecha_fin);
+    if (Number.isNaN(fin.getTime())) return String(cicloActualInfo.fecha_fin);
+    return fin.toLocaleDateString("es-ES", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  })();
 
   useEffect(() => {
     cargarEstadisticas();
@@ -80,37 +191,41 @@ function DashboardAdmin({user}) {
     try {
       setLoading(true);
 
-      // Usar el nuevo endpoint de estadísticas del dashboard
-      const res = await api.get(services.dashboardAdmin, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
+      const [statsRes, actividadRes] = await Promise.all([
+        api.get(services.dashboardAdmin, {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+        api.get(`${services.dashboardActividadReciente}?limit=5`, {
+          headers: {Authorization: `Bearer ${token}`},
+        }),
+      ]);
 
       setStats({
-        totalAlumnos: res.data.totalAlumnos || 0,
-        totalProfesores: res.data.totalProfesores || 0,
-        totalGrados: res.data.totalGrados || 0,
-        totalSecciones: res.data.totalSecciones || 0,
-        totalMaterias: res.data.totalMaterias || 0,
-        promedioGeneral: parseFloat(res.data.promedioGeneral) || 0,
-        asistenciaPromedio: parseFloat(res.data.asistenciaPromedio) || 0,
+        totalAlumnos: statsRes.data.totalAlumnos || 0,
+        totalProfesores: statsRes.data.totalProfesores || 0,
+        totalGrados: statsRes.data.totalGrados || 0,
+        totalSecciones: statsRes.data.totalSecciones || 0,
+        totalMaterias: statsRes.data.totalMaterias || 0,
+        promedioGeneral: parseFloat(statsRes.data.promedioGeneral) || 0,
+        asistenciaPromedio: parseFloat(statsRes.data.asistenciaPromedio) || 0,
         alumnosExcelentes: 0, // TODO: Implementar en el backend
       });
 
-      setRecentActivity([
-        {
-          tipo: "calificacion",
-          mensaje: "Nuevas calificaciones registradas",
-          tiempo: "5 min",
-        },
-        {
-          tipo: "alumno",
-          mensaje: "3 nuevos estudiantes registrados",
-          tiempo: "1 hora",
-        },
-        {tipo: "profesor", mensaje: "Profesor actualizado", tiempo: "2 horas"},
-      ]);
+      const actividad = Array.isArray(actividadRes?.data?.actividad)
+        ? actividadRes.data.actividad
+        : [];
+
+      setRecentActivity(
+        actividad.map((item) => ({
+          tipo: mapearTipoActividad(item.tabla_nombre),
+          mensaje: construirMensajeActividad(item),
+          tiempo: formatearTiempoRelativo(item.fecha_hora),
+          raw: item,
+        }))
+      );
     } catch (error) {
       console.error("Error al cargar estadísticas:", error);
+      setRecentActivity([]);
     } finally {
       setLoading(false);
     }
@@ -160,6 +275,51 @@ function DashboardAdmin({user}) {
             )
           }
         />
+
+        {user?.rol === "admin" && sinCiclosEscolares && (
+          <div className="bg-gradient-to-r from-yellow-900/40 via-amber-900/30 to-yellow-900/40 border border-yellow-500/40 rounded-2xl p-5 shadow-lg">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-yellow-500/15 flex items-center justify-center border border-yellow-500/30">
+                <ExclamationTriangleIcon className="w-6 h-6 text-yellow-300" />
+              </div>
+              <div className="flex-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <p className="text-yellow-100 font-semibold">
+                  Es necesario crear el ciclo escolar para poder usar el
+                  sistema.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/ciclosescolares")}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-yellow-500/15 border border-yellow-500/30 text-yellow-100 font-semibold hover:bg-yellow-500/20 sm:ml-4"
+                >
+                  Ir a Ciclos Escolares
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {cicloVencido && (
+          <div className="bg-gradient-to-r from-yellow-900/40 via-amber-900/30 to-yellow-900/40 border border-yellow-500/40 rounded-2xl p-5 shadow-lg">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-yellow-500/15 flex items-center justify-center border border-yellow-500/30">
+                <ExclamationTriangleIcon className="w-6 h-6 text-yellow-300" />
+              </div>
+              <div className="flex-1">
+                <p className="text-yellow-100 font-semibold">
+                  ⚠️ ATENCIÓN: El Ciclo Escolar actual (
+                  {cicloActualInfo?.nombre}) finalizó el {cicloFinFormateado}.
+                  Recuerda realizar el Cierre de Ciclo y activar el siguiente
+                  periodo.
+                </p>
+                <p className="text-yellow-200/80 text-sm mt-1">
+                  Esta es una validación visual (soft) para evitar
+                  inconsistencias.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Estadísticas Principales */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -294,7 +454,7 @@ function DashboardAdmin({user}) {
               </button>
 
               <button
-                onClick={() => navigate("/estudiantes")}
+                onClick={() => navigate("/estudiantes/nuevo")}
                 className="w-full p-4 bg-gradient-to-r from-green-900/40 to-emerald-900/40 border border-green-700/40 rounded-lg hover:scale-105 transition-transform text-left"
               >
                 <div className="flex items-center justify-between">
@@ -356,11 +516,20 @@ function DashboardAdmin({user}) {
                         {activity.tipo === "calificacion" && (
                           <ChartBarIcon className="w-5 h-5 text-purple-400" />
                         )}
+                        {activity.tipo === "pago" && (
+                          <BuildingLibraryIcon className="w-5 h-5 text-cyan-400" />
+                        )}
+                        {activity.tipo === "usuario" && (
+                          <UserGroupIcon className="w-5 h-5 text-blue-400" />
+                        )}
                         {activity.tipo === "alumno" && (
                           <AcademicCapIcon className="w-5 h-5 text-green-400" />
                         )}
                         {activity.tipo === "profesor" && (
                           <UserGroupIcon className="w-5 h-5 text-blue-400" />
+                        )}
+                        {activity.tipo === "sistema" && (
+                          <BellIcon className="w-5 h-5 text-cyan-400" />
                         )}
                       </div>
                       <div>
@@ -368,7 +537,7 @@ function DashboardAdmin({user}) {
                           {activity.mensaje}
                         </p>
                         <p className="text-gray-400 text-sm mt-1">
-                          Hace {activity.tiempo}
+                          {activity.tiempo ? `Hace ${activity.tiempo}` : ""}
                         </p>
                       </div>
                     </div>

@@ -89,13 +89,17 @@ function SeccionesPage() {
       const res = await api.get(services.grados, {
         headers: {Authorization: `Bearer ${token}`},
       });
-      setGrados(res.data);
-      if (res.data.length > 0 && !formData.id_grado) {
-        setFormData((prev) => ({...prev, id_grado: res.data[0].id_grado}));
+      // El backend puede devolver {success: true, data: [...]} o directamente [...]
+      const data = res.data?.data || res.data || [];
+      const gradosArray = Array.isArray(data) ? data : [];
+      setGrados(gradosArray);
+      if (gradosArray.length > 0 && !formData.id_grado) {
+        setFormData((prev) => ({...prev, id_grado: gradosArray[0].id_grado}));
       }
     } catch (error) {
       console.error("Error al cargar grados:", error);
       showToast("Error al cargar grados", "error");
+      setGrados([]);
     }
   };
 
@@ -401,7 +405,7 @@ function SeccionesPage() {
                     onChange={(e) => setFilterGrado(e.target.value)}
                   >
                     <option value="">Todos los grados</option>
-                    {grados.map((grado) => (
+                    {(Array.isArray(grados) ? grados : []).map((grado) => (
                       <option key={grado.id_grado} value={grado.id_grado}>
                         {grado.nombre}
                       </option>
@@ -885,7 +889,7 @@ function SeccionesPage() {
                         disabled={editId}
                       >
                         <option value="">Seleccionar grado</option>
-                        {grados.map((g) => (
+                        {(Array.isArray(grados) ? grados : []).map((g) => (
                           <option key={g.id_grado} value={g.id_grado}>
                             {g.nombre}
                           </option>

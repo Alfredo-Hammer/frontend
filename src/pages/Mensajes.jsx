@@ -29,7 +29,6 @@ const Mensajes = () => {
   const [enviando, setEnviando] = useState(false);
   const [busqueda, setBusqueda] = useState("");
   const [todosUsuarios, setTodosUsuarios] = useState([]); // Todos los usuarios de la escuela
-  const [contactosPadres, setContactosPadres] = useState([]); // Contactos de padres para profesor
   const [filtroEstado, setFiltroEstado] = useState("todos"); // todos, noLeidos, leidos
   const [selectedTab, setSelectedTab] = useState("conversaciones"); // conversaciones | personal | padres
   const [mostrarInfo, setMostrarInfo] = useState(false);
@@ -44,6 +43,17 @@ const Mensajes = () => {
   const showToast = (message, type = "success") => {
     setToast({show: true, message, type});
   };
+
+  const rolUI = String(usuarioActual?.rol || "").toLowerCase();
+  const esFamilia = rolUI === "padre" || rolUI === "familiar";
+
+  useEffect(() => {
+    if (!esFamilia) return;
+    if (selectedTab !== "personal") {
+      setSelectedTab("personal");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [esFamilia]);
 
   const mensajesEndRef = useRef(null);
   const mensajesContainerRef = useRef(null);
@@ -70,26 +80,6 @@ const Mensajes = () => {
     cargarConversaciones();
     cargarTodosUsuarios();
     cargarInfoEscuela();
-
-    // Si es profesor, cargar contactos de padres desde la vista
-    if (parsed?.rol === "profesor") {
-      cargarContactosPadres(parsed.id_profesor);
-    }
-    // Cargar contactos de padres para profesor desde la vista
-    const cargarContactosPadres = async (id_profesor) => {
-      try {
-        const response = await axios.get(
-          `${API_URL}/profesores/${id_profesor}/contactos`,
-          {
-            headers: {Authorization: `Bearer ${token}`},
-          }
-        );
-        setContactosPadres(response.data.data || []);
-      } catch (error) {
-        setContactosPadres([]);
-        console.error("Error al cargar contactos de padres:", error);
-      }
-    };
 
     // Polling para actualizar lista de conversaciones cada 15 segundos
     const intervalConversaciones = setInterval(() => {
@@ -258,18 +248,67 @@ const Mensajes = () => {
       );
       console.log("API_URL:", API_URL);
 
-      const url = `${API_URL}/mensajes/usuarios`;
-      console.log("🌐 URL completa:", url);
+      const rolActual = String(parsedUser?.rol || "").toLowerCase();
 
-      const response = await axios.get(url, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
+      if (rolActual === "profesor") {
+        const urlUsuarios = `${API_URL}/mensajes/usuarios`;
+        const urlContactos = `${API_URL}/mensajes/contactos`;
+        console.log("🌐 URL usuarios:", urlUsuarios);
+        console.log("🌐 URL contactos:", urlContactos);
 
-      console.log("✅ Respuesta de usuarios:", response.data);
-      console.log("📊 Cantidad de usuarios:", response.data.data?.length || 0);
-      console.log("📋 Usuarios recibidos:", response.data.data);
+        const [respUsuarios, respContactos] = await Promise.all([
+          axios.get(urlUsuarios, {headers: {Authorization: `Bearer ${token}`}}),
+          axios.get(urlContactos, {
+            headers: {Authorization: `Bearer ${token}`},
+          }),
+        ]);
 
-      setTodosUsuarios(response.data.data || []);
+        const usuarios = respUsuarios.data?.data || [];
+        const staff = usuarios.filter((u) => u.tipo_contacto === "usuario");
+
+        const contactos = respContactos.data?.data || [];
+        const padres = contactos.map((c) => {
+          const nombreEstudiante = c?.hijos?.[0]?.nombre_hijo || "";
+          return {
+            id_usuario: c.id_usuario_destinatario,
+            nombre: c.nombre_padre,
+            apellido: "",
+            email: "",
+            imagen: null,
+            rol: "padre",
+            tipo_contacto: "padre",
+            nombre_estudiante: nombreEstudiante,
+            en_linea: false,
+            contacto_detalle: c,
+          };
+        });
+
+        const mergedById = new Map();
+        for (const u of staff) mergedById.set(u.id_usuario, u);
+        for (const p of padres) mergedById.set(p.id_usuario, p);
+        const merged = Array.from(mergedById.values());
+
+        console.log("✅ Staff cargado:", staff.length);
+        console.log("✅ Padres permitidos cargados:", padres.length);
+
+        setTodosUsuarios(merged);
+      } else {
+        const url = `${API_URL}/mensajes/usuarios`;
+        console.log("🌐 URL completa:", url);
+
+        const response = await axios.get(url, {
+          headers: {Authorization: `Bearer ${token}`},
+        });
+
+        console.log("✅ Respuesta de usuarios:", response.data);
+        console.log(
+          "📊 Cantidad de usuarios:",
+          response.data.data?.length || 0
+        );
+        console.log("📋 Usuarios recibidos:", response.data.data);
+
+        setTodosUsuarios(response.data.data || []);
+      }
     } catch (error) {
       console.error("❌ ERROR COMPLETO al cargar todos los usuarios:", error);
       console.error("Error message:", error.message);
@@ -306,34 +345,6 @@ const Mensajes = () => {
     });
 
     console.log("🗺️ Conversaciones mapeadas:", conversacionesPorUsuario);
-
-    // Si el usuario es profesor y está en la pestaña "padres", usar contactosPadres
-    if (usuarioActual?.rol === "profesor" && selectedTab === "padres") {
-      return contactosPadres.map((contacto) => ({
-        id_usuario: contacto.id_padre,
-        tipo: "usuario",
-        titulo: `${contacto.nombre_padre}`,
-        otros_participantes: [
-          {
-            id_usuario: contacto.id_padre,
-            nombre: contacto.nombre_padre,
-            foto: contacto.foto_padre,
-            email: contacto.email_padre,
-            rol: "Padre",
-            contexto: `Padre de ${contacto.nombre_estudiante} - ${contacto.nombre_seccion}`,
-          },
-        ],
-        usuario_info: {
-          id_usuario: contacto.id_padre,
-          nombre: contacto.nombre_padre,
-          foto: contacto.foto_padre,
-          email: contacto.email_padre,
-          rol: "Padre",
-          contexto: `Padre de ${contacto.nombre_estudiante} - ${contacto.nombre_seccion}`,
-        },
-        no_leidos: 0,
-      }));
-    }
 
     // Combinar usuarios con sus conversaciones (sin duplicados)
     const listaCompleta = todosUsuarios
@@ -541,7 +552,7 @@ const Mensajes = () => {
                 <div>
                   <p className="text-slate-400">Rol</p>
                   <p className="text-white font-semibold mt-1 capitalize">
-                    {JSON.parse(localStorage.getItem("user"))?.rol || "N/A"}
+                    {usuarioActual?.rol || "N/A"}
                   </p>
                 </div>
                 <div>
@@ -573,7 +584,9 @@ const Mensajes = () => {
                     selectedTab === "conversaciones"
                       ? "Buscar conversación..."
                       : selectedTab === "personal"
-                      ? "Buscar personal..."
+                      ? esFamilia
+                        ? "Buscar profesor..."
+                        : "Buscar personal..."
                       : "Buscar padres..."
                   }
                   value={busqueda}
@@ -583,11 +596,14 @@ const Mensajes = () => {
               </div>
             </div>
             <div className="flex gap-2">
-              {[
-                {key: "conversaciones", label: "Conversaciones"},
-                {key: "personal", label: "Personal"},
-                {key: "padres", label: "Padres de Familia"},
-              ].map((tab) => (
+              {(esFamilia
+                ? [{key: "personal", label: "Profesor"}]
+                : [
+                    {key: "conversaciones", label: "Conversaciones"},
+                    {key: "personal", label: "Personal"},
+                    {key: "padres", label: "Padres de Familia"},
+                  ]
+              ).map((tab) => (
                 <button
                   key={tab.key}
                   onClick={() => setSelectedTab(tab.key)}
@@ -612,7 +628,9 @@ const Mensajes = () => {
                   {selectedTab === "conversaciones"
                     ? "No hay conversaciones"
                     : selectedTab === "personal"
-                    ? "No hay personal disponible"
+                    ? esFamilia
+                      ? "No hay profesores disponibles"
+                      : "No hay personal disponible"
                     : "No hay padres vinculados"}
                 </p>
                 <p className="text-sm mt-2">
@@ -621,7 +639,9 @@ const Mensajes = () => {
                     : selectedTab === "conversaciones"
                     ? "Aún no has iniciado chats. Selecciona un contacto para empezar."
                     : selectedTab === "personal"
-                    ? "Verifica que existan usuarios con roles admin/director/profesor/secretariado en tu escuela activa."
+                    ? esFamilia
+                      ? "Verifica que tus hijos estén vinculados y tengan profesores asignados en su grado/sección."
+                      : "Verifica que existan usuarios con roles admin/director/profesor/secretariado en tu escuela activa."
                     : "Verifica que tus estudiantes estén matriculados y vinculados con sus padres."}
                 </p>
               </div>

@@ -43,6 +43,7 @@ function RegistroAlumno() {
     Math.floor(100000 + Math.random() * 900000).toString()
   );
   const [nombre_padre, setNombrePadre] = useState("");
+  const [tutor_apellido, setTutorApellido] = useState("");
   const [correo_padre, setCorreoPadre] = useState("");
   const [telefono_padre, setTelefonoPadre] = useState("");
   const [movil_alumno, setMovilAlumno] = useState("");
@@ -182,6 +183,7 @@ function RegistroAlumno() {
         formData.append("enfermedad", enfermedad);
         formData.append("pin", pin);
         formData.append("nombre_padre", nombre_padre);
+        formData.append("tutor_apellido", tutor_apellido);
         formData.append("correo_padre", correo_padre);
         formData.append("telefono_padre", telefono_padre);
         formData.append("movil_alumno", movil_alumno);
@@ -211,6 +213,7 @@ function RegistroAlumno() {
           enfermedad,
           pin,
           nombre_padre,
+          tutor_apellido,
           correo_padre,
           telefono_padre,
           movil_alumno,
@@ -903,14 +906,14 @@ function RegistroAlumno() {
                   Información del Tutor/Padre
                 </h3>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Nombre del Tutor
+                    Nombre
                   </label>
                   <input
                     type="text"
-                    placeholder="Nombre completo del padre/tutor"
+                    placeholder="Nombre"
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200"
                     value={nombre_padre}
                     onChange={(e) => setNombrePadre(e.target.value)}
@@ -918,11 +921,23 @@ function RegistroAlumno() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Teléfono del Tutor
+                    Apellido
                   </label>
                   <input
                     type="text"
-                    placeholder="Número de contacto del tutor"
+                    placeholder="Apellido"
+                    className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200"
+                    value={tutor_apellido}
+                    onChange={(e) => setTutorApellido(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Teléfono
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="8888-8888"
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200"
                     value={telefono_padre}
                     onChange={(e) => setTelefonoPadre(e.target.value)}
@@ -930,11 +945,11 @@ function RegistroAlumno() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Email del Tutor
+                    Correo
                   </label>
                   <input
                     type="email"
-                    placeholder="correo@tutor.com"
+                    placeholder="correo@ejemplo.com"
                     className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 transition-all duration-200"
                     value={correo_padre}
                     onChange={(e) => setCorreoPadre(e.target.value)}

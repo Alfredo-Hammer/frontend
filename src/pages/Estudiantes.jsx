@@ -1,64 +1,73 @@
-import {useState, useEffect} from "react";
-import {useLocation} from "react-router-dom";
+import {useEffect, useState} from "react";
 import api from "../api/axiosConfig";
 import services from "../api/services";
 import {hasPermission} from "../config/roles";
 import FormularioEstudianteCompleto from "../components/FormularioEstudianteCompleto";
 import PageHeader from "../components/PageHeader";
 import {
-  PlusIcon,
-  MagnifyingGlassIcon,
-  FunnelIcon,
-  XMarkIcon,
-  UserIcon,
   AcademicCapIcon,
-  EnvelopeIcon,
-  PhoneIcon,
-  MapPinIcon,
-  CalendarIcon,
+  ArrowDownTrayIcon,
   CheckCircleIcon,
+  EnvelopeIcon,
   ExclamationTriangleIcon,
   EyeIcon,
-  PencilIcon,
-  TrashIcon,
-  PrinterIcon,
-  IdentificationIcon,
+  FunnelIcon,
   HeartIcon,
   HomeIcon,
+  IdentificationIcon,
+  MagnifyingGlassIcon,
+  MapPinIcon,
+  PencilIcon,
+  PhoneIcon,
+  PlusIcon,
+  TrashIcon,
+  UserIcon,
   UsersIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import {CheckCircleIcon as CheckCircleSolid} from "@heroicons/react/24/solid";
 
 const API_BASE_URL = "http://localhost:4000";
 
 function Estudiantes() {
-  const location = useLocation();
   const token = localStorage.getItem("token");
+
   const [user, setUser] = useState(null);
+  const [escuela, setEscuela] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [estudiantes, setEstudiantes] = useState([]);
-  const [secciones, setSecciones] = useState([]);
-  const [grados, setGrados] = useState([]);
-  const [seccionesDisponibles, setSeccionesDisponibles] = useState([]);
-
-  const [showModal, setShowModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-  const [showDetalleModal, setShowDetalleModal] = useState(false);
-
-  const [estudianteToDelete, setEstudianteToDelete] = useState(null);
-  const [estudianteDetalle, setEstudianteDetalle] = useState(null);
-
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterGrado, setFilterGrado] = useState("");
-  const [filterSeccion, setFilterSeccion] = useState("");
-  const [filterEstado, setFilterEstado] = useState("todos");
 
   const [toast, setToast] = useState({
     show: false,
     message: "",
     type: "success",
   });
+
+  const [estudiantes, setEstudiantes] = useState([]);
+  const [grados, setGrados] = useState([]);
+  const [secciones, setSecciones] = useState([]);
+  const [seccionesDisponibles, setSeccionesDisponibles] = useState([]);
+
+  const [departamentos, setDepartamentos] = useState([]);
+  const [municipiosPorDepartamento, setMunicipiosPorDepartamento] = useState(
+    {}
+  );
+  const [municipiosFiltrados, setMunicipiosFiltrados] = useState([]);
+
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterGrado, setFilterGrado] = useState("");
+  const [filterSeccion, setFilterSeccion] = useState("");
+  const [filterEstado, setFilterEstado] = useState("todos");
+
+  const [showModal, setShowModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDetalleModal, setShowDetalleModal] = useState(false);
+  const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
+  const [estudianteDetalle, setEstudianteDetalle] = useState(null);
+  const [estudianteEditar, setEstudianteEditar] = useState(null);
+  const [estudianteToDelete, setEstudianteToDelete] = useState(null);
+
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   const [formData, setFormData] = useState({
     nombre: "",
@@ -90,106 +99,98 @@ function Estudiantes() {
   const [imagenFile, setImagenFile] = useState(null);
   const [documentoSaludFile, setDocumentoSaludFile] = useState(null);
   const [previewImagen, setPreviewImagen] = useState(null);
-  const [estudianteEditar, setEstudianteEditar] = useState(null);
 
-  // Estados para datos de Nicaragua
-  const [departamentos, setDepartamentos] = useState([]);
-  const [municipiosPorDepartamento, setMunicipiosPorDepartamento] = useState(
-    {}
-  );
-  const [municipiosFiltrados, setMunicipiosFiltrados] = useState([]);
+  const handleInputChange = (e) => {
+    const {name, value} = e.target;
+    setFormData((prev) => ({...prev, [name]: value}));
+  };
 
-  const [escuela, setEscuela] = useState(null);
-
-  // ============ EFECTOS ============
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const gradoParam = params.get("grado");
-    const seccionParam = params.get("seccion");
-
-    if (gradoParam) setFilterGrado(gradoParam);
-    if (seccionParam) setFilterSeccion(seccionParam);
-  }, [location.search]);
-
-  useEffect(() => {
-    fetchUser();
-
-    // Timeout de seguridad para evitar loader infinito
-    const timeout = setTimeout(() => {
-      if (isLoading) {
-        console.error("Timeout: La carga está tomando demasiado tiempo");
-        setIsLoading(false);
-        showToast(
-          "Error: La carga está tomando demasiado tiempo. Verifica tu conexión.",
-          "error"
-        );
-      }
-    }, 10000); // 10 segundos
-
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line
-  }, []);
-
-  useEffect(() => {
-    if (user) {
-      cargarDatosIniciales();
-      cargarDatosNicaragua();
+  const cargarDatosNicaragua = async () => {
+    try {
+      const res = await api.get(services.nicaraguaTodos);
+      const {departamentos: deps, municipiosPorDepartamento: muns} = res.data;
+      setDepartamentos(deps || []);
+      setMunicipiosPorDepartamento(muns || {});
+    } catch (error) {
+      console.error("❌ Error al cargar datos de Nicaragua:", error);
     }
-    // eslint-disable-next-line
-  }, [user]);
+  };
 
-  // Actualizar secciones cuando cambia el grado en el formulario
-  useEffect(() => {
-    if (formData.id_grado) {
-      cargarSeccionesPorGrado(formData.id_grado);
-    } else {
+  const cargarGrados = async () => {
+    try {
+      const res = await api.get(services.grados, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const data = res.data?.data || res.data || [];
+      setGrados(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error(
+        "❌ Error al cargar grados:",
+        error.response?.data || error.message
+      );
+      showToast("Error al cargar grados", "error");
+      setGrados([]);
+    }
+  };
+
+  const cargarSecciones = async () => {
+    try {
+      const res = await api.get(services.secciones, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const data = Array.isArray(res.data?.data) ? res.data.data : res.data;
+      setSecciones(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error(
+        "❌ Error al cargar secciones:",
+        error.response?.data || error.message
+      );
+      showToast("Error al cargar secciones", "error");
+      setSecciones([]);
+    }
+  };
+
+  const cargarSeccionesPorGrado = async (idGrado) => {
+    try {
+      const res = await api.get(services.secciones, {
+        params: {id_grado: idGrado},
+      });
+      const seccionesData = Array.isArray(res.data?.data) ? res.data.data : [];
+      setSeccionesDisponibles(seccionesData);
+    } catch (error) {
+      console.error(
+        "❌ Error al cargar secciones del grado:",
+        error.response?.data || error.message
+      );
+      showToast("Error al cargar secciones del grado", "error");
       setSeccionesDisponibles([]);
-      setFormData((prev) => ({...prev, id_seccion: ""}));
     }
-    // eslint-disable-next-line
-  }, [formData.id_grado]);
+  };
 
-  // Calcular edad automáticamente cuando cambia fecha de nacimiento
-  useEffect(() => {
-    if (formData.fecha_nacimiento) {
-      const hoy = new Date();
-      const nacimiento = new Date(formData.fecha_nacimiento);
-      let edadCalculada = hoy.getFullYear() - nacimiento.getFullYear();
-      const m = hoy.getMonth() - nacimiento.getMonth();
-      if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) {
-        edadCalculada--;
-      }
-      if (edadCalculada >= 0) {
-        setFormData((prev) => ({...prev, edad: edadCalculada.toString()}));
-      }
+  const cargarEstudiantes = async () => {
+    try {
+      const res = await api.get(services.alumnos, {
+        headers: {Authorization: `Bearer ${token}`},
+      });
+      const data = res.data?.data || res.data || [];
+      setEstudiantes(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error(
+        "❌ Error al cargar estudiantes:",
+        error.response?.data || error.message
+      );
+      showToast("Error al cargar estudiantes", "error");
+      setEstudiantes([]);
     }
-  }, [formData.fecha_nacimiento]);
+  };
 
-  // Filtrar municipios cuando cambia el departamento
-  useEffect(() => {
-    if (
-      formData.departamento &&
-      municipiosPorDepartamento[formData.departamento]
-    ) {
-      setMunicipiosFiltrados(municipiosPorDepartamento[formData.departamento]);
-    } else {
-      setMunicipiosFiltrados([]);
-    }
-    setFormData((prev) => ({...prev, municipio: ""})); // Resetear municipio
-    // eslint-disable-next-line
-  }, [formData.departamento]);
-
-  // ============ FUNCIONES DE CARGA DE DATOS ============
   const fetchUser = async () => {
     try {
-      console.log("🔍 Cargando usuario...");
       const res = await api.get("/api/usuarios/perfil", {
         headers: {Authorization: `Bearer ${token}`},
       });
 
       const userRole = res.data.usuario?.rol || res.data.rol;
-      console.log("✅ Usuario cargado. Rol:", userRole);
-
       setUser({
         rol: userRole,
         id_profesor: res.data.usuario?.id_profesor || res.data.id_profesor,
@@ -207,137 +208,73 @@ function Estudiantes() {
     } catch (error) {
       console.error("❌ Error al obtener usuario:", error);
       showToast("Error al cargar información del usuario", "error");
-      setIsLoading(false); // Detener el loading si falla
     }
   };
 
-  const cargarDatosIniciales = async () => {
-    setIsLoading(true);
-    try {
-      const results = await Promise.allSettled([
-        cargarEstudiantes(),
-        cargarSecciones(),
+  useEffect(() => {
+    let mounted = true;
+
+    const init = async () => {
+      setIsLoading(true);
+      await fetchUser();
+      if (!mounted) return;
+
+      await Promise.all([
         cargarGrados(),
+        cargarSecciones(),
+        cargarDatosNicaragua(),
+        cargarEstudiantes(),
       ]);
+      if (!mounted) return;
 
-      // Verificar si alguna promesa falló
-      const failed = results.filter((r) => r.status === "rejected");
-      if (failed.length > 0) {
-        console.error("Algunas cargas fallaron:", failed);
-      }
-    } catch (error) {
-      console.error("Error al cargar datos iniciales:", error);
-      showToast("Error al cargar datos del sistema", "error");
-    } finally {
       setIsLoading(false);
-    }
-  };
+    };
 
-  const cargarEstudiantes = async () => {
-    try {
-      console.log("📚 Cargando estudiantes desde:", services.alumnos);
-      const res = await api.get(services.alumnos, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      const data = res.data?.data || res.data || [];
-      console.log(
-        "✅ Estudiantes cargados:",
-        Array.isArray(data) ? data.length : 0
-      );
-      setEstudiantes(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error(
-        "❌ Error al cargar estudiantes:",
-        error.response?.data || error.message
-      );
-      showToast("Error al cargar estudiantes", "error");
-      setEstudiantes([]);
-    }
-  };
+    init();
 
-  const cargarSecciones = async () => {
-    try {
-      console.log("🏫 Cargando secciones...");
-      const res = await api.get(services.secciones, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      const data = res.data?.data || res.data || [];
-      console.log(
-        "✅ Secciones cargadas:",
-        Array.isArray(data) ? data.length : 0
-      );
-      setSecciones(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error(
-        "❌ Error al cargar secciones:",
-        error.response?.data || error.message
-      );
-      showToast("Error al cargar secciones", "error");
-      setSecciones([]);
-    }
-  };
+    return () => {
+      mounted = false;
+    };
+    // eslint-disable-next-line
+  }, []);
 
-  const cargarGrados = async () => {
-    try {
-      console.log("🎓 Cargando grados...");
-      const res = await api.get(services.grados, {
-        headers: {Authorization: `Bearer ${token}`},
-      });
-      const data = res.data?.data || res.data || [];
-      console.log("✅ Grados cargados:", Array.isArray(data) ? data.length : 0);
-      setGrados(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error(
-        "❌ Error al cargar grados:",
-        error.response?.data || error.message
-      );
-      showToast("Error al cargar grados", "error");
-      setGrados([]);
-    }
-  };
-
-  const cargarSeccionesPorGrado = async (idGrado) => {
-    try {
-      console.log("🔍 Cargando secciones para grado:", idGrado);
-      const res = await api.get(services.secciones, {
-        params: {id_grado: idGrado},
-      });
-      console.log("✅ Respuesta completa:", res.data);
-
-      // La respuesta viene en formato {success: true, data: [...]}
-      const secciones = Array.isArray(res.data?.data) ? res.data.data : [];
-      console.log("✅ Secciones cargadas:", secciones.length);
-      setSeccionesDisponibles(secciones);
-    } catch (error) {
-      console.error(
-        "❌ Error al cargar secciones del grado:",
-        error.response?.data || error.message
-      );
-      showToast("Error al cargar secciones del grado", "error");
+  useEffect(() => {
+    if (formData.id_grado) {
+      cargarSeccionesPorGrado(formData.id_grado);
+    } else {
       setSeccionesDisponibles([]);
+      setFormData((prev) => ({...prev, id_seccion: ""}));
     }
-  };
+    // eslint-disable-next-line
+  }, [formData.id_grado]);
 
-  const cargarDatosNicaragua = async () => {
-    try {
-      console.log("🇳🇮 Cargando datos de Nicaragua...");
-      const res = await api.get(services.nicaraguaTodos);
-      console.log("✅ Datos de Nicaragua cargados:", res.data);
-
-      const {departamentos: deps, municipiosPorDepartamento: muns} = res.data;
-      setDepartamentos(deps || []);
-      setMunicipiosPorDepartamento(muns || {});
-    } catch (error) {
-      console.error("❌ Error al cargar datos de Nicaragua:", error);
-      // No mostramos toast para no saturar, pero registramos el error
+  useEffect(() => {
+    if (formData.fecha_nacimiento) {
+      const hoy = new Date();
+      const nacimiento = new Date(formData.fecha_nacimiento);
+      let edadCalculada = hoy.getFullYear() - nacimiento.getFullYear();
+      const m = hoy.getMonth() - nacimiento.getMonth();
+      if (m < 0 || (m === 0 && hoy.getDate() < nacimiento.getDate())) {
+        edadCalculada--;
+      }
+      if (edadCalculada >= 0) {
+        setFormData((prev) => ({...prev, edad: edadCalculada.toString()}));
+      }
     }
-  };
+  }, [formData.fecha_nacimiento]);
 
-  // ============ FUNCIONES DE FORMULARIO ============
-  const handleInputChange = (e) => {
-    const {name, value} = e.target;
-    setFormData((prev) => ({...prev, [name]: value}));
-  };
+  useEffect(() => {
+    if (
+      formData.departamento &&
+      municipiosPorDepartamento[formData.departamento]
+    ) {
+      setMunicipiosFiltrados(municipiosPorDepartamento[formData.departamento]);
+    } else {
+      setMunicipiosFiltrados([]);
+    }
+    setFormData((prev) => ({...prev, municipio: ""}));
+    // eslint-disable-next-line
+  }, [formData.departamento]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -658,10 +595,20 @@ function Estudiantes() {
 
   // ============ FUNCIÓN EXPORTAR PDF ============
   const exportarPDF = () => {
-    if (!estudianteDetalle) return;
+    if (!estudianteDetalle || generatingPDF) return;
+
+    setGeneratingPDF(true);
 
     // Crear una ventana temporal con el contenido a imprimir
     const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      showToast(
+        "No se pudo abrir la ventana de impresión. Revisa si el navegador bloqueó los pop-ups.",
+        "error"
+      );
+      setGeneratingPDF(false);
+      return;
+    }
 
     printWindow.document.write(`
       <!DOCTYPE html>
@@ -924,8 +871,12 @@ function Estudiantes() {
 
     // Esperar a que carguen las imágenes antes de imprimir
     setTimeout(() => {
-      printWindow.print();
-      printWindow.close();
+      try {
+        printWindow.print();
+        printWindow.close();
+      } finally {
+        setGeneratingPDF(false);
+      }
     }, 500);
   };
 
@@ -1453,9 +1404,9 @@ function Estudiantes() {
           <div className="fixed inset-0 bg-gray-900 bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
             <div className="relative bg-gray-800 rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
               {/* Header del Modal */}
-              <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 flex items-center justify-between rounded-t-lg z-10">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-full overflow-hidden border-4 border-white shadow-lg">
+              <div className="sticky top-0 bg-gradient-to-r from-blue-600 to-indigo-700 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 rounded-t-lg z-10">
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="w-16 h-16 rounded-2xl overflow-hidden border-4 border-white/90 shadow-lg bg-white/10">
                     {estudianteDetalle.foto_url ? (
                       <img
                         src={`${API_BASE_URL}${estudianteDetalle.foto_url}`}
@@ -1468,22 +1419,45 @@ function Estudiantes() {
                       </div>
                     )}
                   </div>
-                  <div>
-                    <h3 className="text-2xl font-bold text-white">
+                  <div className="min-w-0">
+                    <h3 className="text-2xl font-bold text-white truncate">
                       {estudianteDetalle.nombre} {estudianteDetalle.apellido}
                     </h3>
-                    <p className="text-blue-100 text-sm">
-                      Ficha Completa del Estudiante
+                    <p className="text-blue-100/90 text-sm truncate">
+                      {escuela?.nombre
+                        ? escuela.nombre
+                        : "Ficha Completa del Estudiante"}
                     </p>
+
+                    <div className="flex flex-wrap items-center gap-2 mt-2">
+                      {estudianteDetalle.codigo_mined && (
+                        <span className="px-3 py-1 bg-white/15 rounded-full text-xs font-semibold text-white">
+                          MINED: {estudianteDetalle.codigo_mined}
+                        </span>
+                      )}
+                      <span className="px-3 py-1 bg-white/15 rounded-full text-xs font-semibold text-white">
+                        {estudianteDetalle.matricula_actual
+                          ? estudianteDetalle.matricula_actual.seccion_nombre
+                          : "Sin matrícula"}
+                      </span>
+                    </div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={exportarPDF}
-                    className="p-2 bg-white/20 hover:bg-white/30 rounded-lg text-white transition-colors"
-                    title="Exportar a PDF"
+                    disabled={generatingPDF}
+                    className={`px-4 py-2 rounded-xl text-white transition-all flex items-center gap-2 ${
+                      generatingPDF
+                        ? "bg-white/20 cursor-not-allowed"
+                        : "bg-white/20 hover:bg-white/30"
+                    }`}
+                    title="Exportar PDF"
                   >
-                    <PrinterIcon className="h-6 w-6" />
+                    <ArrowDownTrayIcon className="h-5 w-5" />
+                    <span className="text-sm font-semibold">
+                      {generatingPDF ? "Generando..." : "Exportar PDF"}
+                    </span>
                   </button>
                   <button
                     onClick={cerrarDetalleModal}
@@ -1752,13 +1726,6 @@ function Estudiantes() {
                     className="px-6 py-2 border border-gray-600 text-gray-300 rounded-lg hover:bg-gray-700 font-medium transition-colors"
                   >
                     Cerrar
-                  </button>
-                  <button
-                    onClick={exportarPDF}
-                    className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-lg hover:from-blue-700 hover:to-indigo-800 font-medium transition-all flex items-center gap-2"
-                  >
-                    <PrinterIcon className="h-5 w-5" />
-                    Exportar a PDF
                   </button>
                 </div>
               </div>

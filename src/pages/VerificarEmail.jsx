@@ -19,18 +19,37 @@ function VerificarEmail() {
 
   const verificarToken = async () => {
     try {
-      console.log('🔍 Verificando token:', token);
+      console.log("🔍 Verificando token:", token);
       const response = await api.get(`/api/auth/verificar-email/${token}`);
 
-      console.log('✅ Respuesta del servidor:', response.data);
+      console.log("✅ Respuesta del servidor:", response.data);
       setEstado("exito");
       setMensaje(response.data.mensaje);
       setNombreUsuario(response.data.nombre);
     } catch (error) {
-      console.error('❌ Error al verificar:', error.response?.data || error.message);
+      console.error(
+        "❌ Error al verificar:",
+        error.response?.data || error.message
+      );
+      const data = error.response?.data;
+      const mensajeServidor =
+        data?.mensaje || data?.message || data?.error || data?.details || "";
+
+      // Si el backend indica que ya estaba verificado, lo mostramos como éxito.
+      if (
+        typeof mensajeServidor === "string" &&
+        (mensajeServidor.toLowerCase().includes("ya fue utilizado") ||
+          mensajeServidor.toLowerCase().includes("ya está verificado") ||
+          mensajeServidor.toLowerCase().includes("ya esta verificado"))
+      ) {
+        setEstado("exito");
+        setMensaje(mensajeServidor);
+        return;
+      }
+
       setEstado("error");
       setMensaje(
-        error.response?.data?.mensaje ||
+        mensajeServidor ||
           "No se pudo verificar el email. El enlace puede ser inválido o estar expirado."
       );
     }

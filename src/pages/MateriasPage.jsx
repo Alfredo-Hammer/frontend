@@ -6,9 +6,7 @@ import {
   PlusIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
-  AcademicCapIcon,
   ChartBarIcon,
-  ClockIcon,
 } from "@heroicons/react/24/solid";
 import PageHeader from "../components/PageHeader";
 import Toast from "../components/Toast";
@@ -18,7 +16,7 @@ function MateriasPage() {
   const [materias, setMaterias] = useState([]);
   const [nombre, setNombre] = useState("");
   const [descripcion, setDescripcion] = useState("");
-  const [categoria, setCategoria] = useState("General");
+  const [categoria, setCategoria] = useState("Ciencias Sociales");
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,16 +49,19 @@ function MateriasPage() {
 
   // Categorías disponibles según MINED Nicaragua
   const CATEGORIAS_MATERIAS = [
-    "General",
-    "Ciencias Exactas",
-    "Ciencias Naturales",
     "Ciencias Sociales",
-    "Idiomas",
-    "Arte y Cultura",
-    "Educación Física",
-    "Tecnología",
-    "Formación Ciudadana",
+    "Creciendo en Valores",
+    "Ciencias de la Vida y el Ambiente",
+    "Desarrollo Personal, Social y Emocional",
+    "Desarrollo  de las Habilidades de la comunicacion y Talento Artístico",
+    "Desarrollo del Pensamiento Logico y Cientifico",
     "Educación Técnica",
+    "Educación Física y Práctica Deportiva",
+    "Educación para Aprender, Emprender, Prosperar",
+    "Formación Ciudadana",
+    "Religión",
+    "General",
+    "Otra",
   ];
 
   const token = localStorage.getItem("token");
@@ -291,8 +292,13 @@ function MateriasPage() {
   const estadisticas = {
     total: Array.isArray(materias) ? materias.length : 0,
     conGrados: Array.isArray(materias)
-      ? materias.filter((m) => m.grados_nombres && m.grados_nombres.length > 0)
-          .length
+      ? materias.filter((m) => {
+          const totalGrados = Number(m.total_grados || 0);
+          if (totalGrados > 0) return true;
+          // Fallback por compatibilidad si viene string
+          const nombres = (m.grados_nombres ?? "").toString().trim();
+          return nombres.length > 0;
+        }).length
       : 0,
   };
 
@@ -762,6 +768,7 @@ function MateriasPage() {
                         className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all duration-200"
                         value={nombre}
                         onChange={(e) => setNombre(e.target.value)}
+                        maxLength={255}
                         required
                       />
                     </div>

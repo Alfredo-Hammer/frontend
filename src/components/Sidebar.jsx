@@ -133,6 +133,13 @@ const menuSections = [
     title: "Evaluación y Notas",
     items: [
       {
+        key: "calificaciones_hijos",
+        label: "Calificaciones de mis hijos",
+        icon: <UserGroupIcon className="h-5 w-5" />,
+        path: "/calificaciones-hijos",
+        color: "text-pink-400",
+      },
+      {
         key: "calificaciones",
         label: "Calificaciones",
         icon: <ClipboardDocumentCheckIcon className="h-5 w-5" />,
@@ -276,6 +283,41 @@ const menuSections = [
         color: "text-gray-400",
       },
       {
+        key: "ciclos_escolares",
+        label: "Ciclos Escolares",
+        icon: <CalendarDaysIcon className="h-5 w-5" />,
+        path: "/ciclosescolares",
+        color: "text-cyan-400",
+      },
+      {
+        key: "periodos_evaluacion",
+        label: "Semáforo de Notas",
+        icon: <ClipboardDocumentCheckIcon className="h-5 w-5" />,
+        path: "/periodos-evaluacion",
+        color: "text-pink-400",
+      },
+      {
+        key: "logs_seguridad",
+        label: "Logs de Seguridad",
+        icon: <ShieldCheckIcon className="h-5 w-5" />,
+        path: "/logs-seguridad",
+        color: "text-red-500",
+      },
+      {
+        key: "auditoria",
+        label: "Auditoría del Sistema",
+        icon: <ShieldCheckIcon className="h-5 w-5" />,
+        path: "/auditoria",
+        color: "text-purple-500",
+      },
+      {
+        key: "traslado_estudiante",
+        label: "Traslado de Estudiantes",
+        icon: <UserGroupIcon className="h-5 w-5" />,
+        path: "/traslado-estudiante",
+        color: "text-blue-500",
+      },
+      {
         key: "backup",
         label: "Respaldos",
         icon: <FolderIcon className="h-5 w-5" />,
@@ -319,7 +361,7 @@ const menuSections = [
   },
 ];
 
-function Sidebar({setToken, user}) {
+function Sidebar({setToken, user, onCollapsedChange, isOpen, onClose}) {
   const [collapsed, setCollapsed] = useState(false);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [escuela, setEscuela] = useState(null);
@@ -329,7 +371,6 @@ function Sidebar({setToken, user}) {
   });
   const [filteredMenu, setFilteredMenu] = useState([]);
   const {contadorNoLeidos} = useMensajes();
-
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -377,42 +418,51 @@ function Sidebar({setToken, user}) {
 
   return (
     <div
-      className={`min-h-screen ${
-        collapsed ? "w-20" : "w-80"
-      } bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white flex flex-col shadow-2xl transition-all duration-500 ease-in-out border-r border-gray-700`}
+      className={`h-screen w-80 ${
+        collapsed ? "lg:w-20" : "lg:w-80"
+      } bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 text-white flex flex-col shadow-2xl transition-all duration-500 ease-in-out border-r border-gray-700 fixed left-0 top-0 z-50
+      ${isOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-gray-700 bg-gradient-to-r from-cyan-900/50 to-blue-900/50">
-        {!collapsed && (
-          <div className="flex items-center gap-3 overflow-hidden">
-            <div className="p-2 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl flex-shrink-0">
-              {escuela?.logo ? (
-                <img
-                  src={`${api.defaults.baseURL}${escuela.logo}`}
-                  alt="Logo"
-                  className="h-8 w-8 object-cover rounded-lg bg-white"
-                />
-              ) : (
-                <AcademicCapIcon className="h-8 w-8 text-white" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <span className="block text-xl font-extrabold tracking-wide whitespace-nowrap">
-                <span className="text-white">Sistema</span>
-                <span className="text-cyan-400 ml-1">AOC</span>
-              </span>
-              <span
-                className="block text-xs text-gray-400 font-medium truncate"
-                title={escuela?.nombre || "Gestión Escolar"}
-              >
-                {escuela?.nombre || "Gestión Escolar"}
-              </span>
-            </div>
+      <div className="flex items-center justify-between p-6 border-b border-gray-700 bg-gradient-to-r from-cyan-900/50 to-blue-900/50 flex-shrink-0">
+        <div
+          className={`flex items-center gap-3 overflow-hidden ${
+            collapsed ? "lg:hidden" : ""
+          }`}
+        >
+          <div className="p-2 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-xl flex-shrink-0">
+            {escuela?.logo ? (
+              <img
+                src={`${api.defaults.baseURL}${escuela.logo}`}
+                alt="Logo"
+                className="h-8 w-8 object-cover rounded-lg bg-white"
+              />
+            ) : (
+              <AcademicCapIcon className="h-8 w-8 text-white" />
+            )}
           </div>
-        )}
+          <div className="min-w-0 flex-1">
+            <span className="block text-xl font-extrabold tracking-wide whitespace-nowrap">
+              <span className="text-white">Sistema</span>
+              <span className="text-cyan-400 ml-1">AOC</span>
+            </span>
+            <span
+              className="block text-xs text-gray-400 font-medium truncate"
+              title={escuela?.nombre || "Gestión Escolar"}
+            >
+              {escuela?.nombre || "Gestión Escolar"}
+            </span>
+          </div>
+        </div>
         <button
-          className="p-2 rounded-xl hover:bg-gray-700 transition-all duration-300 ring-1 ring-gray-600 hover:ring-cyan-400"
-          onClick={() => setCollapsed((prev) => !prev)}
+          className="hidden lg:block p-2 rounded-xl hover:bg-gray-700 transition-all duration-300 ring-1 ring-gray-600 hover:ring-cyan-400"
+          onClick={() => {
+            setCollapsed((prev) => {
+              const newValue = !prev;
+              onCollapsedChange?.(newValue);
+              return newValue;
+            });
+          }}
         >
           {collapsed ? (
             <Bars3Icon className="h-6 w-6 text-cyan-400" />
@@ -422,117 +472,139 @@ function Sidebar({setToken, user}) {
         </button>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-gray-800">
-        <div className="p-2">
-          {filteredMenu.map((section, sectionIndex) => (
-            <div key={section.title} className="mb-4">
-              {/* Section Header */}
-              {!collapsed && (
-                <button
-                  onClick={() => toggleSection(section.title)}
-                  className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider hover:text-white transition-colors duration-200"
-                >
-                  <span className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500"></div>
-                    {section.title}
-                  </span>
-                  {expandedSections[section.title] ? (
-                    <ChevronDownIcon className="h-4 w-4" />
-                  ) : (
-                    <ChevronRightIcon className="h-4 w-4" />
-                  )}
-                </button>
-              )}
+      {/* Navigation - Scroll independiente */}
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-2 py-4 custom-scrollbar">
+        <style jsx>{`
+          .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+          }
+          .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(17, 24, 39, 0.5);
+            border-radius: 10px;
+            margin: 8px 0;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: linear-gradient(180deg, #06b6d4 0%, #3b82f6 100%);
+            border-radius: 10px;
+            transition: all 0.3s ease;
+          }
+          .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(180deg, #22d3ee 0%, #60a5fa 100%);
+            width: 8px;
+          }
+          .custom-scrollbar {
+            scrollbar-width: thin;
+            scrollbar-color: #06b6d4 rgba(17, 24, 39, 0.5);
+          }
+        `}</style>
+        {filteredMenu.map((section, sectionIndex) => (
+          <div key={section.title} className="mb-4">
+            {/* Section Header */}
+            {!collapsed && (
+              <button
+                onClick={() => toggleSection(section.title)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold text-gray-400 uppercase tracking-wider hover:text-white transition-colors duration-200"
+              >
+                <span className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-cyan-400 to-blue-500"></div>
+                  {section.title}
+                </span>
+                {expandedSections[section.title] ? (
+                  <ChevronDownIcon className="h-4 w-4" />
+                ) : (
+                  <ChevronRightIcon className="h-4 w-4" />
+                )}
+              </button>
+            )}
 
-              {/* Section Items */}
-              {(collapsed || expandedSections[section.title]) && (
-                <div className="space-y-1 mt-2">
-                  {section.items.map((item) => (
-                    <button
-                      key={item.key}
-                      className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden ${
+            {/* Section Items */}
+            {(collapsed || expandedSections[section.title]) && (
+              <div className="space-y-1 mt-2">
+                {section.items.map((item) => (
+                  <button
+                    key={item.key}
+                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden ${
+                      isItemActive(item.path)
+                        ? "bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-white ring-1 ring-cyan-500/50 shadow-lg shadow-cyan-500/25"
+                        : "hover:bg-gradient-to-r hover:from-gray-700 hover:to-gray-600 text-gray-300 hover:text-white"
+                    }`}
+                    onClick={() => {
+                      navigate(item.path);
+                      onClose?.();
+                    }}
+                    title={collapsed ? item.label : undefined}
+                  >
+                    {/* Active indicator */}
+                    {isItemActive(item.path) && (
+                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-cyan-400 to-blue-500 rounded-r-full"></div>
+                    )}
+
+                    {/* Icon */}
+                    <div
+                      className={`flex-shrink-0 ${item.color} ${
                         isItemActive(item.path)
-                          ? "bg-gradient-to-r from-cyan-500/20 to-blue-500/20 text-white ring-1 ring-cyan-500/50 shadow-lg shadow-cyan-500/25"
-                          : "hover:bg-gradient-to-r hover:from-gray-700 hover:to-gray-600 text-gray-300 hover:text-white"
-                      }`}
-                      onClick={() => navigate(item.path)}
-                      title={collapsed ? item.label : undefined}
+                          ? "transform scale-110"
+                          : "group-hover:scale-105"
+                      } transition-transform duration-200`}
                     >
-                      {/* Active indicator */}
-                      {isItemActive(item.path) && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-cyan-400 to-blue-500 rounded-r-full"></div>
-                      )}
+                      {item.icon}
+                    </div>
 
-                      {/* Icon */}
-                      <div
-                        className={`flex-shrink-0 ${item.color} ${
-                          isItemActive(item.path)
-                            ? "transform scale-110"
-                            : "group-hover:scale-105"
-                        } transition-transform duration-200`}
-                      >
-                        {item.icon}
-                      </div>
-
-                      {/* Label and Badge */}
-                      {!collapsed && (
-                        <div className="flex items-center justify-between flex-1 min-w-0">
-                          <span
-                            className={`font-medium truncate ${
-                              isItemActive(item.path)
-                                ? "text-white"
-                                : "group-hover:text-white"
-                            }`}
-                          >
-                            {item.label}
-                          </span>
-                          {/* Badge dinámico para mensajes */}
-                          {item.badgeDynamic && contadorNoLeidos > 0 && (
-                            <span className="flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full min-w-[1.25rem] h-5 animate-pulse">
-                              {contadorNoLeidos}
-                            </span>
-                          )}
-                          {/* Badge estático para otras notificaciones */}
-                          {item.badge && !item.badgeDynamic && (
-                            <span className="flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full min-w-[1.25rem] h-5 animate-pulse">
-                              {item.badge}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Badge for collapsed mode */}
-                      {collapsed &&
-                        item.badgeDynamic &&
-                        contadorNoLeidos > 0 && (
-                          <div className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full animate-pulse">
+                    {/* Label and Badge */}
+                    {!collapsed && (
+                      <div className="flex items-center justify-between flex-1 min-w-0">
+                        <span
+                          className={`font-medium truncate ${
+                            isItemActive(item.path)
+                              ? "text-white"
+                              : "group-hover:text-white"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                        {/* Badge dinámico para mensajes */}
+                        {item.badgeDynamic && contadorNoLeidos > 0 && (
+                          <span className="flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full min-w-[1.25rem] h-5 animate-pulse">
                             {contadorNoLeidos}
-                          </div>
+                          </span>
                         )}
-                      {collapsed && item.badge && !item.badgeDynamic && (
-                        <div className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full animate-pulse">
-                          {item.badge}
-                        </div>
-                      )}
+                        {/* Badge estático para otras notificaciones */}
+                        {item.badge && !item.badgeDynamic && (
+                          <span className="flex items-center justify-center px-2 py-1 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full min-w-[1.25rem] h-5 animate-pulse">
+                            {item.badge}
+                          </span>
+                        )}
+                      </div>
+                    )}
 
-                      {/* Hover effect */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"></div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+                    {/* Badge for collapsed mode */}
+                    {collapsed && item.badgeDynamic && contadorNoLeidos > 0 && (
+                      <div className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full animate-pulse">
+                        {contadorNoLeidos}
+                      </div>
+                    )}
+                    {collapsed && item.badge && !item.badgeDynamic && (
+                      <div className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-gradient-to-r from-red-500 to-pink-500 rounded-full animate-pulse">
+                        {item.badge}
+                      </div>
+                    )}
+
+                    {/* Hover effect */}
+                    <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl"></div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
       </nav>
 
-      {/* User Profile & Logout */}
-      <div className="p-4 border-t border-gray-700 bg-gradient-to-r from-gray-800 to-gray-900">
+      {/* User Profile - Fixed at bottom */}
+      <div className="p-4 border-t border-gray-700 bg-gradient-to-r from-gray-800 to-gray-900 flex-shrink-0">
         {!collapsed && user && (
           <button
             onClick={() => navigate("/perfil")}
-            className="w-full flex items-center gap-3 mb-3 p-3 rounded-xl bg-gradient-to-r from-gray-700/50 to-gray-600/50 ring-1 ring-gray-600 hover:ring-cyan-500/50 hover:from-cyan-900/30 hover:to-blue-900/30 transition-all duration-300 group"
+            className="w-full flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-gray-700/50 to-gray-600/50 ring-1 ring-gray-600 hover:ring-cyan-500/50 hover:from-cyan-900/30 hover:to-blue-900/30 transition-all duration-300 group"
           >
             <div className="flex-shrink-0">
               {user.imagen ? (
@@ -558,34 +630,28 @@ function Sidebar({setToken, user}) {
           </button>
         )}
 
-        <button
-          className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-300 text-red-400 hover:text-white hover:bg-gradient-to-r hover:from-red-600/20 hover:to-pink-600/20 ring-1 ring-transparent hover:ring-red-500/50 group ${
-            collapsed ? "justify-center" : ""
-          }`}
-          onClick={() => setShowLogoutModal(true)}
-          title={collapsed ? "Cerrar sesión" : undefined}
-        >
-          <ArrowLeftOnRectangleIcon className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-          {!collapsed && <span className="font-medium">Cerrar sesión</span>}
-        </button>
+        {collapsed && user && (
+          <button
+            onClick={() => navigate("/perfil")}
+            className="w-full flex items-center justify-center p-3 rounded-xl bg-gradient-to-r from-gray-700/50 to-gray-600/50 ring-1 ring-gray-600 hover:ring-cyan-500/50 hover:from-cyan-900/30 hover:to-blue-900/30 transition-all duration-300 group"
+            title="Perfil"
+          >
+            <div className="flex-shrink-0">
+              {user.imagen ? (
+                <img
+                  src={user.imagen}
+                  alt={`${user.nombre} ${user.apellido}`}
+                  className="w-10 h-10 rounded-full object-cover border-2 border-cyan-400 group-hover:border-cyan-300 group-hover:scale-110 transition-all duration-200"
+                />
+              ) : (
+                <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                  <UserIcon className="h-6 w-6 text-white" />
+                </div>
+              )}
+            </div>
+          </button>
+        )}
       </div>
-
-      {/* Logout Confirmation Modal */}
-      <ConfirmModal
-        open={showLogoutModal}
-        title="¿Cerrar sesión?"
-        message="¿Seguro que deseas cerrar sesión?"
-        confirmText="Cerrar sesión"
-        cancelText="Cancelar"
-        icon={
-          <ArrowLeftOnRectangleIcon className="h-12 w-12 text-red-500 mx-auto" />
-        }
-        onConfirm={() => {
-          setShowLogoutModal(false);
-          handleLogout();
-        }}
-        onCancel={() => setShowLogoutModal(false)}
-      />
     </div>
   );
 }

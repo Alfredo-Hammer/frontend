@@ -14,6 +14,7 @@ import RegistrarPagoTab from "../components/finanzas/RegistrarPagoTab";
 import EstadoCuentaTab from "../components/finanzas/EstadoCuentaTab";
 import BecasTab from "../components/finanzas/BecasTab";
 import ReportesFinanzasTab from "../components/finanzas/ReportesFinanzasTab";
+import CierreCaja from "./finanzas/CierreCaja";
 
 const FinanzasPage = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
@@ -22,6 +23,7 @@ const FinanzasPage = () => {
     {id: "dashboard", name: "Dashboard", icon: ChartBarIcon},
     {id: "conceptos", name: "Conceptos de Pago", icon: DocumentTextIcon},
     {id: "pagos", name: "Registrar Pago", icon: CurrencyDollarIcon},
+    {id: "cierre-caja", name: "Cierre de Caja", icon: CurrencyDollarIcon},
     {
       id: "estado-cuenta",
       name: "Estado de Cuenta",
@@ -39,6 +41,8 @@ const FinanzasPage = () => {
         return <ConceptosPagoTab />;
       case "pagos":
         return <RegistrarPagoTab />;
+      case "cierre-caja":
+        return <CierreCaja />;
       case "estado-cuenta":
         return <EstadoCuentaTab />;
       case "becas":

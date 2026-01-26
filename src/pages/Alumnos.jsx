@@ -408,22 +408,22 @@ function Alumnos() {
   const fetchGrados = async (id_escuela) => {
     if (!token || !id_escuela) return;
 
+    const normalizeArray = (value) => {
+      if (Array.isArray(value)) return value;
+      if (Array.isArray(value?.data)) return value.data;
+      return [];
+    };
+
     try {
       const res = await api.get("/api/grados", {
         headers: {Authorization: `Bearer ${token}`},
       });
 
-      if (Array.isArray(res.data)) {
-        // Filtra grados por escuela seleccionada
-        const gradosFiltrados = res.data.filter(
-          (g) => String(g.id_escuela) === String(id_escuela)
-        );
-        setGrados(gradosFiltrados);
-        if (gradosFiltrados.length > 0) setGradoId(gradosFiltrados[0].id_grado);
-        else setGradoId("");
-      } else {
-        setMensaje("Error en el formato de datos de grados");
-      }
+      const gradosData = normalizeArray(res.data);
+      // /api/grados ya viene filtrado por tenant, no es necesario filtrar por id_escuela.
+      setGrados(gradosData);
+      if (gradosData.length > 0) setGradoId(gradosData[0].id_grado);
+      else setGradoId("");
     } catch (err) {
       const message = err.response?.data?.message || "Error al cargar grados";
       setMensaje(message);
@@ -433,23 +433,26 @@ function Alumnos() {
   const fetchSecciones = async (id_grado) => {
     if (!token || !id_grado) return;
 
+    const normalizeArray = (value) => {
+      if (Array.isArray(value)) return value;
+      if (Array.isArray(value?.data)) return value.data;
+      return [];
+    };
+
     try {
       const res = await api.get("/api/secciones", {
         headers: {Authorization: `Bearer ${token}`},
       });
 
-      if (Array.isArray(res.data)) {
-        // Filtra secciones por grado seleccionado
-        const seccionesFiltradas = res.data.filter(
-          (s) => String(s.id_grado) === String(id_grado)
-        );
-        setSecciones(seccionesFiltradas);
-        if (seccionesFiltradas.length > 0)
-          setSeccionId(seccionesFiltradas[0].id_seccion);
-        else setSeccionId("");
-      } else {
-        setMensaje("Error en el formato de datos de secciones");
-      }
+      const seccionesData = normalizeArray(res.data);
+      // Filtra secciones por grado seleccionado
+      const seccionesFiltradas = seccionesData.filter(
+        (s) => String(s.id_grado) === String(id_grado)
+      );
+      setSecciones(seccionesFiltradas);
+      if (seccionesFiltradas.length > 0)
+        setSeccionId(seccionesFiltradas[0].id_seccion);
+      else setSeccionId("");
     } catch (err) {
       const message =
         err.response?.data?.message || "Error al cargar secciones";
@@ -504,16 +507,48 @@ function Alumnos() {
         formData.append("imagen", imagenFile);
       }
 
-      await api.post("/api/alumnos", formData, {
+      const res = await api.post("/api/alumnos", formData, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "multipart/form-data",
         },
       });
 
-      setToastMessage("Alumno registrado correctamente");
-      setToastType("success");
-      setShowToast(true);
+      const padreUsuarioCreado = !!res?.data?.padre_usuario_creado;
+      const padreCredenciales = res?.data?.padre_credenciales_temporales;
+      const padreEmailEnviado = !!res?.data?.padre_email_enviado;
+      const padreRequiereVerificacion =
+        !!res?.data?.padre_requiere_verificacion;
+
+      if (
+        padreUsuarioCreado &&
+        padreCredenciales?.email &&
+        padreCredenciales?.password
+      ) {
+        setToastMessage(
+          padreEmailEnviado
+            ? `Alumno registrado. Usuario padre creado: ${
+                padreCredenciales.email
+              }. Se enviaron credenciales por correo.${
+                padreRequiereVerificacion
+                  ? " Debe verificar el email antes de iniciar sesión."
+                  : ""
+              }`
+            : `Alumno registrado. Usuario padre creado: ${
+                padreCredenciales.email
+              }. Contraseña temporal: ${padreCredenciales.password}.${
+                padreRequiereVerificacion
+                  ? " Debe verificar el email antes de iniciar sesión."
+                  : ""
+              }`
+        );
+        setToastType("info");
+        setShowToast(true);
+      } else {
+        setToastMessage("Alumno registrado correctamente");
+        setToastType("success");
+        setShowToast(true);
+      }
 
       setShowModal(false);
       setNombre("");
@@ -855,7 +890,7 @@ function Alumnos() {
             <>
               {user && hasPermission(user.rol, "alumnos", "crear") && (
                 <button
-                  onClick={() => navigate("/estudiantes")}
+                  onClick={() => navigate("/estudiantes/nuevo")}
                   className="px-4 py-2 bg-white text-blue-600 rounded-xl font-semibold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 flex items-center space-x-2"
                 >
                   <PlusIcon className="w-5 h-5" />
@@ -1001,7 +1036,7 @@ function Alumnos() {
               </p>
               {user && hasPermission(user.rol, "alumnos", "crear") && (
                 <button
-                  onClick={() => navigate("/estudiantes")}
+                  onClick={() => navigate("/estudiantes/nuevo")}
                   className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-4 rounded-2xl shadow-lg transform hover:scale-105 transition-all duration-200"
                 >
                   <PlusIcon className="w-5 h-5 mr-2 inline" />
@@ -2253,13 +2288,13 @@ function Alumnos() {
                 </button>
                 <button
                   onClick={imprimirReporte}
-                  className="block w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-lg transition-colors flex items-center justify-center"
+                  className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-lg transition-colors flex items-center justify-center"
                 >
                   🖨️ Imprimir Reporte
                 </button>
                 <button
                   onClick={exportarCSV}
-                  className="block w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium shadow-lg transition-colors flex items-center justify-center"
+                  className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium shadow-lg transition-colors flex items-center justify-center"
                 >
                   📊 Exportar CSV
                 </button>

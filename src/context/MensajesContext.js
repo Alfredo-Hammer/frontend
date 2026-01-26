@@ -84,3 +84,6 @@ export const useMensajes = () => {
   }
   return context;
 };
+
+// Compatibilidad: permite importar como default o como named
+export default MensajesProvider;

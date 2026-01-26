@@ -1,0 +1,694 @@
+import React, {useState, useEffect} from "react";
+import api from "../api/axiosConfig";
+import {format} from "date-fns";
+import {es} from "date-fns/locale";
+
+const TrasladoEstudiantePage = () => {
+  const [activeTab, setActiveTab] = useState("traslado"); // 'traslado' o 'historial'
+  const [loading, setLoading] = useState(false);
+
+  // Búsqueda de estudiante
+  const [busqueda, setBusqueda] = useState("");
+  const [resultadosBusqueda, setResultadosBusqueda] = useState([]);
+  const [estudianteSeleccionado, setEstudianteSeleccionado] = useState(null);
+
+  // Tipo de traslado
+  const [tipoTraslado, setTipoTraslado] = useState(""); // 'interno' o 'externo'
+
+  // Escuelas disponibles (traslado interno)
+  const [escuelasDisponibles, setEscuelasDisponibles] = useState([]);
+  const [escuelaDestino, setEscuelaDestino] = useState("");
+
+  // Escuela externa (traslado externo)
+  const [escuelaExterna, setEscuelaExterna] = useState({
+    nombre: "",
+    direccion: "",
+    telefono: "",
+    email: "",
+    contacto: "",
+  });
+
+  // Datos del traslado
+  const [motivo, setMotivo] = useState("");
+  const [fechaTraslado, setFechaTraslado] = useState(
+    format(new Date(), "yyyy-MM-dd")
+  );
+
+  // Historial
+  const [historialTraslados, setHistorialTraslados] = useState([]);
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 20,
+    totalPages: 0,
+  });
+
+  useEffect(() => {
+    if (activeTab === "historial") {
+      cargarHistorialTraslados();
+    }
+  }, [activeTab, pagination.page]);
+
+  useEffect(() => {
+    if (tipoTraslado === "interno") {
+      cargarEscuelasDisponibles();
+    }
+  }, [tipoTraslado]);
+
+  const buscarEstudiante = async () => {
+    if (busqueda.length < 3) {
+      alert("Ingrese al menos 3 caracteres para buscar");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await api.get(
+        `/api/traslados/buscar-estudiante?busqueda=${busqueda}`
+      );
+      setResultadosBusqueda(response.data.estudiantes);
+    } catch (error) {
+      console.error("Error al buscar estudiante:", error);
+      alert("Error al buscar estudiante");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const seleccionarEstudiante = (estudiante) => {
+    setEstudianteSeleccionado(estudiante);
+    setResultadosBusqueda([]);
+    setBusqueda("");
+  };
+
+  const cargarEscuelasDisponibles = async () => {
+    try {
+      const response = await api.get("/api/traslados/escuelas-disponibles");
+      setEscuelasDisponibles(response.data.escuelas);
+    } catch (error) {
+      console.error("Error al cargar escuelas:", error);
+    }
+  };
+
+  const cargarHistorialTraslados = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get(
+        `/api/traslados/historial?page=${pagination.page}&limit=${pagination.limit}`
+      );
+      setHistorialTraslados(response.data.traslados);
+      setPagination(response.data.pagination);
+    } catch (error) {
+      console.error("Error al cargar historial:", error);
+      alert("Error al cargar el historial de traslados");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const validarFormulario = () => {
+    if (!estudianteSeleccionado) {
+      alert("Debe seleccionar un estudiante");
+      return false;
+    }
+
+    if (!tipoTraslado) {
+      alert("Debe seleccionar el tipo de traslado");
+      return false;
+    }
+
+    if (tipoTraslado === "interno" && !escuelaDestino) {
+      alert("Debe seleccionar la escuela destino");
+      return false;
+    }
+
+    if (tipoTraslado === "externo") {
+      if (!escuelaExterna.nombre || !escuelaExterna.direccion) {
+        alert(
+          "Debe completar al menos el nombre y dirección de la escuela externa"
+        );
+        return false;
+      }
+    }
+
+    if (!motivo || motivo.length < 10) {
+      alert("Debe ingresar un motivo del traslado (mínimo 10 caracteres)");
+      return false;
+    }
+
+    return true;
+  };
+
+  const realizarTraslado = async () => {
+    if (!validarFormulario()) return;
+
+    const confirmacion = window.confirm(
+      `¿Está seguro de realizar el traslado de ${estudianteSeleccionado.nombre_completo}?\n\n` +
+        `Tipo: ${
+          tipoTraslado === "interno" ? "Traslado Interno" : "Traslado Externo"
+        }\n` +
+        `${
+          tipoTraslado === "interno"
+            ? `Destino: ${
+                escuelasDisponibles.find(
+                  (e) => e.id_escuela === parseInt(escuelaDestino)
+                )?.nombre
+              }`
+            : `Destino: ${escuelaExterna.nombre}`
+        }\n\n` +
+        `Esta acción no se puede deshacer.`
+    );
+
+    if (!confirmacion) return;
+
+    setLoading(true);
+    try {
+      const data = {
+        id_estudiante: estudianteSeleccionado.id_estudiante,
+        tipo_traslado: tipoTraslado,
+        motivo,
+        fecha_traslado: fechaTraslado,
+      };
+
+      if (tipoTraslado === "interno") {
+        data.id_escuela_destino = parseInt(escuelaDestino);
+      } else {
+        data.escuela_externa = escuelaExterna;
+      }
+
+      const response = await api.post("/api/traslados/realizar", data);
+
+      alert(
+        `✅ ${response.data.mensaje}\n\n` +
+          `Estudiante: ${response.data.estudiante}\n` +
+          `Tipo: ${response.data.tipo}`
+      );
+
+      // Limpiar formulario
+      resetFormulario();
+    } catch (error) {
+      console.error("Error al realizar traslado:", error);
+      alert(
+        `Error al realizar el traslado: ${
+          error.response?.data?.error || error.message
+        }`
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetFormulario = () => {
+    setEstudianteSeleccionado(null);
+    setTipoTraslado("");
+    setEscuelaDestino("");
+    setEscuelaExterna({
+      nombre: "",
+      direccion: "",
+      telefono: "",
+      email: "",
+      contacto: "",
+    });
+    setMotivo("");
+    setFechaTraslado(format(new Date(), "yyyy-MM-dd"));
+    setBusqueda("");
+    setResultadosBusqueda([]);
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-6">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-800">
+          Traslado de Estudiantes
+        </h1>
+        <p className="text-gray-600 mt-2">
+          Gestión de traslados internos y externos del sistema
+        </p>
+      </div>
+
+      {/* Tabs */}
+      <div className="bg-white rounded-lg shadow mb-6">
+        <div className="border-b border-gray-200">
+          <nav className="flex -mb-px">
+            <button
+              onClick={() => setActiveTab("traslado")}
+              className={`px-6 py-3 text-sm font-medium ${
+                activeTab === "traslado"
+                  ? "border-b-2 border-blue-500 text-blue-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Realizar Traslado
+            </button>
+            <button
+              onClick={() => setActiveTab("historial")}
+              className={`px-6 py-3 text-sm font-medium ${
+                activeTab === "historial"
+                  ? "border-b-2 border-blue-500 text-blue-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Historial de Traslados
+            </button>
+          </nav>
+        </div>
+
+        {activeTab === "traslado" ? (
+          <div className="p-6">
+            {/* Paso 1: Buscar Estudiante */}
+            <div className="mb-6">
+              <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                1. Buscar Estudiante
+              </h2>
+
+              {!estudianteSeleccionado ? (
+                <div>
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      value={busqueda}
+                      onChange={(e) => setBusqueda(e.target.value)}
+                      onKeyPress={(e) =>
+                        e.key === "Enter" && buscarEstudiante()
+                      }
+                      placeholder="Nombre, código o email del estudiante..."
+                      className="flex-1 px-4 py-2 border border-gray-300 rounded-md"
+                    />
+                    <button
+                      onClick={buscarEstudiante}
+                      disabled={loading}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      Buscar
+                    </button>
+                  </div>
+
+                  {resultadosBusqueda.length > 0 && (
+                    <div className="border border-gray-200 rounded-md">
+                      <div className="max-h-64 overflow-y-auto">
+                        {resultadosBusqueda.map((estudiante) => (
+                          <div
+                            key={estudiante.id_estudiante}
+                            onClick={() => seleccionarEstudiante(estudiante)}
+                            className="p-4 border-b border-gray-200 hover:bg-gray-50 cursor-pointer"
+                          >
+                            <div className="font-medium text-gray-900">
+                              {estudiante.nombre_completo}
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              Código: {estudiante.codigo_estudiante || "N/A"} |
+                              Email: {estudiante.email}
+                            </div>
+                            {estudiante.grado && (
+                              <div className="text-sm text-gray-500">
+                                {estudiante.grado} - {estudiante.seccion} |{" "}
+                                {estudiante.estado_matricula}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-semibold text-blue-900">
+                        {estudianteSeleccionado.nombre_completo}
+                      </div>
+                      <div className="text-sm text-blue-700 mt-1">
+                        Código:{" "}
+                        {estudianteSeleccionado.codigo_estudiante || "N/A"}
+                      </div>
+                      <div className="text-sm text-blue-700">
+                        Email: {estudianteSeleccionado.email}
+                      </div>
+                      {estudianteSeleccionado.grado && (
+                        <div className="text-sm text-blue-700">
+                          Grado: {estudianteSeleccionado.grado} -{" "}
+                          {estudianteSeleccionado.seccion}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setEstudianteSeleccionado(null)}
+                      className="text-blue-600 hover:text-blue-800"
+                    >
+                      Cambiar
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Paso 2: Tipo de Traslado */}
+            {estudianteSeleccionado && (
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                  2. Tipo de Traslado
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div
+                    onClick={() => setTipoTraslado("interno")}
+                    className={`border-2 rounded-lg p-4 cursor-pointer ${
+                      tipoTraslado === "interno"
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="radio"
+                        checked={tipoTraslado === "interno"}
+                        onChange={() => setTipoTraslado("interno")}
+                        className="mr-2"
+                      />
+                      <span className="font-semibold text-gray-900">
+                        Traslado Interno
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      El estudiante se traslada a otra escuela que usa este
+                      sistema. Se mantiene su usuario y se crea automáticamente
+                      su perfil en la nueva escuela.
+                    </p>
+                  </div>
+
+                  <div
+                    onClick={() => setTipoTraslado("externo")}
+                    className={`border-2 rounded-lg p-4 cursor-pointer ${
+                      tipoTraslado === "externo"
+                        ? "border-blue-500 bg-blue-50"
+                        : "border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="radio"
+                        checked={tipoTraslado === "externo"}
+                        onChange={() => setTipoTraslado("externo")}
+                        className="mr-2"
+                      />
+                      <span className="font-semibold text-gray-900">
+                        Traslado Externo
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-600">
+                      El estudiante se traslada a una escuela que no usa este
+                      sistema. Se dará de baja y se registrará información de
+                      referencia.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Paso 3: Seleccionar Escuela */}
+            {tipoTraslado === "interno" && (
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                  3. Seleccionar Escuela Destino
+                </h2>
+                <select
+                  value={escuelaDestino}
+                  onChange={(e) => setEscuelaDestino(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-md"
+                >
+                  <option value="">Seleccione una escuela...</option>
+                  {escuelasDisponibles.map((escuela) => (
+                    <option key={escuela.id_escuela} value={escuela.id_escuela}>
+                      {escuela.nombre} - {escuela.direccion}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {tipoTraslado === "externo" && (
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                  3. Datos de Escuela Externa
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nombre de la Escuela *
+                    </label>
+                    <input
+                      type="text"
+                      value={escuelaExterna.nombre}
+                      onChange={(e) =>
+                        setEscuelaExterna({
+                          ...escuelaExterna,
+                          nombre: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Dirección *
+                    </label>
+                    <input
+                      type="text"
+                      value={escuelaExterna.direccion}
+                      onChange={(e) =>
+                        setEscuelaExterna({
+                          ...escuelaExterna,
+                          direccion: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Teléfono
+                    </label>
+                    <input
+                      type="tel"
+                      value={escuelaExterna.telefono}
+                      onChange={(e) =>
+                        setEscuelaExterna({
+                          ...escuelaExterna,
+                          telefono: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      value={escuelaExterna.email}
+                      onChange={(e) =>
+                        setEscuelaExterna({
+                          ...escuelaExterna,
+                          email: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Persona de Contacto
+                    </label>
+                    <input
+                      type="text"
+                      value={escuelaExterna.contacto}
+                      onChange={(e) =>
+                        setEscuelaExterna({
+                          ...escuelaExterna,
+                          contacto: e.target.value,
+                        })
+                      }
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Paso 4: Detalles del Traslado */}
+            {tipoTraslado && (
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-gray-800 mb-4">
+                  4. Detalles del Traslado
+                </h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Fecha del Traslado
+                    </label>
+                    <input
+                      type="date"
+                      value={fechaTraslado}
+                      onChange={(e) => setFechaTraslado(e.target.value)}
+                      className="w-full md:w-64 px-4 py-2 border border-gray-300 rounded-md"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Motivo del Traslado *
+                    </label>
+                    <textarea
+                      value={motivo}
+                      onChange={(e) => setMotivo(e.target.value)}
+                      rows="4"
+                      placeholder="Describa el motivo del traslado (mínimo 10 caracteres)..."
+                      className="w-full px-4 py-2 border border-gray-300 rounded-md"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Botón de Confirmar */}
+            {tipoTraslado && (
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={resetFormulario}
+                  className="px-6 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={realizarTraslado}
+                  disabled={loading}
+                  className="px-6 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                >
+                  {loading ? "Procesando..." : "Confirmar Traslado"}
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Historial de Traslados */
+          <div className="p-6">
+            <div className="overflow-x-auto">
+              {loading ? (
+                <div className="p-8 text-center text-gray-500">Cargando...</div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Fecha
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Tipo
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Descripción
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                        Realizado Por
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {historialTraslados.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="4"
+                          className="px-6 py-4 text-center text-gray-500"
+                        >
+                          No hay traslados registrados
+                        </td>
+                      </tr>
+                    ) : (
+                      historialTraslados.map((traslado) => (
+                        <tr key={traslado.id_log} className="hover:bg-gray-50">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {format(
+                              new Date(traslado.fecha_hora),
+                              "dd/MM/yyyy HH:mm",
+                              {locale: es}
+                            )}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span
+                              className={`px-2 py-1 text-xs font-medium rounded-full ${
+                                traslado.tipo_accion === "TRASLADO_INTERNO"
+                                  ? "bg-blue-100 text-blue-800"
+                                  : "bg-orange-100 text-orange-800"
+                              }`}
+                            >
+                              {traslado.tipo_accion === "TRASLADO_INTERNO"
+                                ? "Interno"
+                                : "Externo"}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-700 max-w-md">
+                            {traslado.descripcion}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {traslado.realizado_por}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Paginación */}
+            {pagination.totalPages > 1 && (
+              <div className="mt-4 flex items-center justify-between">
+                <div className="text-sm text-gray-700">
+                  Mostrando {(pagination.page - 1) * pagination.limit + 1} a{" "}
+                  {Math.min(
+                    pagination.page * pagination.limit,
+                    pagination.total
+                  )}{" "}
+                  de {pagination.total} registros
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() =>
+                      setPagination({...pagination, page: pagination.page - 1})
+                    }
+                    disabled={pagination.page === 1}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Anterior
+                  </button>
+                  <span className="px-3 py-1 text-sm text-gray-700">
+                    Página {pagination.page} de {pagination.totalPages}
+                  </span>
+                  <button
+                    onClick={() =>
+                      setPagination({...pagination, page: pagination.page + 1})
+                    }
+                    disabled={pagination.page === pagination.totalPages}
+                    className="px-3 py-1 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default TrasladoEstudiantePage;

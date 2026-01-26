@@ -56,12 +56,38 @@ function Login({setToken}) {
         return;
       }
 
-      // Manejar errores específicos
-      if (err.response?.data?.error === "CUENTA_INACTIVA") {
+      // Manejar cuenta bloqueada por intentos fallidos
+      if (err.response?.status === 403 && err.response?.data?.bloqueado) {
+        setError(
+          "🔒 Cuenta bloqueada temporalmente por demasiados intentos fallidos. Por seguridad, espera 1 hora antes de intentar nuevamente."
+        );
+      }
+      // Manejar contraseña incorrecta con contador de intentos (401 o 400)
+      else if (
+        (err.response?.status === 401 || err.response?.status === 400) &&
+        err.response?.data?.intentosRestantes !== undefined
+      ) {
+        const intentosRestantes = err.response.data.intentosRestantes;
+        if (intentosRestantes > 0) {
+          setError(
+            `❌ Credenciales inválidas. Te quedan ${intentosRestantes} intento${
+              intentosRestantes !== 1 ? "s" : ""
+            } antes del bloqueo temporal.`
+          );
+        } else {
+          setError(
+            "⚠️ Credenciales inválidas. Próximo intento fallido bloqueará tu cuenta por 1 hora."
+          );
+        }
+      }
+      // Manejar cuenta inactiva
+      else if (err.response?.data?.error === "CUENTA_INACTIVA") {
         setError(
           "⚠️ Tu cuenta ha sido desactivada. Contacta al administrador del sistema."
         );
-      } else {
+      }
+      // Error genérico
+      else {
         setError(
           err.response?.data?.mensaje ||
             err.response?.data?.message ||

@@ -44,12 +44,43 @@ const BecasTab = () => {
     cargarDatos();
   }, []);
 
+  const normalizarBeca = (beca) => {
+    // Soporta ambos esquemas:
+    // - Esquema moderno: { id_beca, nombre, descripcion, tipo: 'Porcentaje'|'MontoFijo', valor, activo, ... }
+    // - Esquema legacy:  { id_beca, nombre, descripcion, tipo_descuento: 'porcentaje'|'monto_fijo', valor_descuento, ... }
+    const tipoRaw = beca?.tipo ?? beca?.tipo_descuento;
+    const tipo_descuento =
+      tipoRaw === "Porcentaje" || tipoRaw === "porcentaje"
+        ? "porcentaje"
+        : tipoRaw === "MontoFijo" || tipoRaw === "monto_fijo"
+        ? "monto_fijo"
+        : "porcentaje";
+
+    const valorRaw =
+      beca?.valor_descuento !== undefined ? beca.valor_descuento : beca?.valor;
+
+    const conceptosRaw = Array.isArray(beca?.conceptos_aplicables)
+      ? beca.conceptos_aplicables
+      : [];
+    const conceptos_aplicables = conceptosRaw
+      .map((v) => parseInt(v, 10))
+      .filter((v) => Number.isFinite(v));
+
+    return {
+      ...beca,
+      tipo_descuento,
+      valor_descuento:
+        valorRaw === null || valorRaw === undefined ? "" : parseFloat(valorRaw),
+      conceptos_aplicables,
+    };
+  };
+
   const cargarDatos = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("token");
 
-      const [becasRes, conceptosRes] = await Promise.all([
+      const [becasRes, conceptosRes] = await Promise.allSettled([
         api.get(services.finanzasBecas, {
           headers: {Authorization: `Bearer ${token}`},
         }),
@@ -58,9 +89,23 @@ const BecasTab = () => {
         }),
       ]);
 
-      // El backend devuelve { becas: [...] } y { conceptos: [...] }
-      setBecas(becasRes.data.becas || []);
-      setConceptos((conceptosRes.data.conceptos || []).filter((c) => c.activo));
+      // Becas (no depender de conceptos para renderizar)
+      if (becasRes.status === "fulfilled") {
+        const becasRaw = becasRes.value.data?.becas || [];
+        setBecas(becasRaw.map(normalizarBeca));
+      } else {
+        console.error("Error cargando becas:", becasRes.reason);
+        setBecas([]);
+      }
+
+      // Conceptos (opcional)
+      if (conceptosRes.status === "fulfilled") {
+        const conceptosRaw = conceptosRes.value.data?.conceptos || [];
+        setConceptos(conceptosRaw.filter((c) => c.activo));
+      } else {
+        console.error("Error cargando conceptos:", conceptosRes.reason);
+        setConceptos([]);
+      }
     } catch (error) {
       console.error("Error cargando datos:", error);
     } finally {
@@ -80,6 +125,9 @@ const BecasTab = () => {
         tipo:
           formData.tipo_descuento === "porcentaje" ? "Porcentaje" : "MontoFijo",
         valor: parseFloat(formData.valor_descuento),
+        fecha_inicio: formData.fecha_inicio || null,
+        fecha_fin: formData.fecha_fin || null,
+        conceptos_aplicables: formData.conceptos_aplicables,
         activo: formData.activo,
       };
 
@@ -122,20 +170,21 @@ const BecasTab = () => {
   };
 
   const handleEdit = (beca) => {
-    setEditingBeca(beca);
+    const becaNormalizada = normalizarBeca(beca);
+    setEditingBeca(becaNormalizada);
     setFormData({
-      nombre: beca.nombre,
-      descripcion: beca.descripcion || "",
-      tipo_descuento: beca.tipo_descuento,
-      valor_descuento: beca.valor_descuento,
-      conceptos_aplicables: beca.conceptos_aplicables || [],
-      fecha_inicio: beca.fecha_inicio
-        ? format(new Date(beca.fecha_inicio), "yyyy-MM-dd")
+      nombre: becaNormalizada.nombre,
+      descripcion: becaNormalizada.descripcion || "",
+      tipo_descuento: becaNormalizada.tipo_descuento,
+      valor_descuento: becaNormalizada.valor_descuento,
+      conceptos_aplicables: becaNormalizada.conceptos_aplicables || [],
+      fecha_inicio: becaNormalizada.fecha_inicio
+        ? format(new Date(becaNormalizada.fecha_inicio), "yyyy-MM-dd")
         : "",
-      fecha_fin: beca.fecha_fin
-        ? format(new Date(beca.fecha_fin), "yyyy-MM-dd")
+      fecha_fin: becaNormalizada.fecha_fin
+        ? format(new Date(becaNormalizada.fecha_fin), "yyyy-MM-dd")
         : "",
-      activo: beca.activo,
+      activo: becaNormalizada.activo,
     });
     setShowModal(true);
   };
@@ -296,11 +345,16 @@ const BecasTab = () => {
                         .slice(0, 3)
                         .map((idConcepto) => {
                           const concepto = conceptos.find(
-                            (c) => c.id_concepto_pago === idConcepto
+                            (c) =>
+                              (c.id_concepto ?? c.id_concepto_pago) ===
+                              idConcepto
                           );
                           return concepto ? (
                             <span
-                              key={concepto.id_concepto_pago}
+                              key={
+                                concepto.id_concepto ??
+                                concepto.id_concepto_pago
+                              }
                               className="px-2 py-1 text-xs rounded-full bg-gray-700 text-gray-300 border border-gray-600"
                             >
                               {concepto.nombre.slice(0, 15)}
@@ -443,16 +497,18 @@ const BecasTab = () => {
                   <div className="bg-gray-900/50 border border-gray-600 rounded-lg p-4 max-h-60 overflow-y-auto space-y-2">
                     {conceptos.map((concepto) => (
                       <label
-                        key={concepto.id_concepto_pago}
+                        key={concepto.id_concepto ?? concepto.id_concepto_pago}
                         className="flex items-center p-2 hover:bg-gray-700/50 rounded cursor-pointer"
                       >
                         <input
                           type="checkbox"
                           checked={formData.conceptos_aplicables.includes(
-                            concepto.id_concepto_pago
+                            concepto.id_concepto ?? concepto.id_concepto_pago
                           )}
                           onChange={() =>
-                            toggleConcepto(concepto.id_concepto_pago)
+                            toggleConcepto(
+                              concepto.id_concepto ?? concepto.id_concepto_pago
+                            )
                           }
                           className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />

@@ -1,4 +1,6 @@
 import React, {useState, useEffect} from "react";
+import api from "../api/axiosConfig";
+import services from "../api/services";
 import {
   Users,
   BookOpen,
@@ -32,87 +34,238 @@ function DashboardPadre({user}) {
   const [loading, setLoading] = useState(true);
   const [selectedChild, setSelectedChild] = useState(0);
   const [escuela, setEscuela] = useState(null);
-  const token = localStorage.getItem("token");
-
-  // Datos simulados de los hijos
-  const hijos = [
-    {
-      id: 1,
-      nombre: "María González",
-      grado: "5to Grado",
-      seccion: "A",
-      promedio: 87.5,
-      asistencia: 95,
-      imagen: null,
-      materias: [
-        {nombre: "Matemáticas", calificacion: 85, profesor: "Prof. García"},
-        {nombre: "Español", calificacion: 92, profesor: "Prof. Martínez"},
-        {nombre: "Ciencias", calificacion: 88, profesor: "Prof. López"},
-        {nombre: "Historia", calificacion: 86, profesor: "Prof. Rodríguez"},
-        {nombre: "Inglés", calificacion: 90, profesor: "Prof. Fernández"},
-      ],
-      proximosEventos: [
-        {
-          tipo: "examen",
-          titulo: "Examen de Matemáticas",
-          fecha: "2025-11-28",
-          materia: "Matemáticas",
-        },
-        {
-          tipo: "tarea",
-          titulo: "Ensayo de Historia",
-          fecha: "2025-11-26",
-          materia: "Historia",
-        },
-      ],
-      comportamiento: "Excelente",
-      notasProfesor: [
-        {
-          profesor: "Prof. García",
-          comentario: "Excelente participación en clase",
-          fecha: "Hace 2 días",
-        },
-        {
-          profesor: "Prof. Martínez",
-          comentario: "Muy buena redacción en sus trabajos",
-          fecha: "Hace 5 días",
-        },
-      ],
-    },
-  ];
-
-  // Datos de progreso mensual del hijo seleccionado
-  const progresoMensual = [
-    {mes: "Ene", promedio: 82, asistencia: 90},
-    {mes: "Feb", promedio: 85, asistencia: 92},
-    {mes: "Mar", promedio: 87, asistencia: 94},
-    {mes: "Abr", promedio: 86, asistencia: 93},
-    {mes: "May", promedio: 88, asistencia: 95},
-    {mes: "Jun", promedio: 87.5, asistencia: 95},
-  ];
+  const [hijos, setHijos] = useState([]);
+  const [progresoMensual, setProgresoMensual] = useState([]);
+  const [detallePorHijo, setDetallePorHijo] = useState({});
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
-    setTimeout(() => {
-      setLoading(false);
-    }, 500);
-    cargarEscuela();
+    const init = async () => {
+      setLoading(true);
+      setErrorMsg("");
+
+      try {
+        await Promise.all([cargarEscuela(), cargarHijos()]);
+      } catch (err) {
+        console.error("Error inicializando dashboard padre:", err);
+        setErrorMsg(
+          err.response?.data?.message ||
+            err.response?.data?.error ||
+            "No se pudo cargar la información del dashboard."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const hijo = hijos?.[selectedChild];
+    if (!hijo) return;
+    cargarDetalleHijo(hijo);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChild, hijos?.length]);
 
   const cargarEscuela = async () => {
     try {
       if (user?.id_escuela) {
-        const res = await fetch(
-          `http://localhost:4000/api/escuelas/${user.id_escuela}`,
-          {
-            headers: {Authorization: `Bearer ${token}`},
-          }
-        );
-        const data = await res.json();
-        setEscuela(data);
+        const res = await api.get(`${services.escuelas}/${user.id_escuela}`);
+        setEscuela(res.data);
       }
     } catch (error) {
       console.error("Error al cargar escuela:", error);
+    }
+  };
+
+  const cargarHijos = async () => {
+    const res = await api.get(services.padresMisHijos);
+    const lista = res?.data?.hijos || [];
+    setHijos(lista);
+    setSelectedChild(0);
+  };
+
+  const _promedioBimestres = (row) => {
+    const valores = [
+      Number(row?.bimestre_1 || 0),
+      Number(row?.bimestre_2 || 0),
+      Number(row?.bimestre_3 || 0),
+      Number(row?.bimestre_4 || 0),
+    ].filter((v) => Number.isFinite(v) && v > 0);
+
+    if (!valores.length) return 0;
+    const sum = valores.reduce((acc, v) => acc + v, 0);
+    return Math.round(sum / valores.length);
+  };
+
+  const _mesLabel = (dateObj) => {
+    const labels = [
+      "Ene",
+      "Feb",
+      "Mar",
+      "Abr",
+      "May",
+      "Jun",
+      "Jul",
+      "Ago",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dic",
+    ];
+    return labels[dateObj.getMonth()];
+  };
+
+  const _buildProgresoMensual = ({asistencias = [], promedio = 0}) => {
+    const hoy = new Date();
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+      months.push({
+        key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+        mes: _mesLabel(d),
+        y: d.getFullYear(),
+        m: d.getMonth(),
+      });
+    }
+
+    const byMonth = new Map(
+      months.map((m) => [m.key, {total: 0, presentes: 0, tardanzas: 0}])
+    );
+
+    for (const a of asistencias) {
+      const fecha = a?.fecha ? new Date(a.fecha) : null;
+      if (!fecha || Number.isNaN(fecha.getTime())) continue;
+      const key = `${fecha.getFullYear()}-${String(
+        fecha.getMonth() + 1
+      ).padStart(2, "0")}`;
+      const bucket = byMonth.get(key);
+      if (!bucket) continue;
+
+      bucket.total += 1;
+      if (a.estado === "P") bucket.presentes += 1;
+      else if (a.estado === "T") bucket.tardanzas += 1;
+    }
+
+    return months.map((m) => {
+      const bucket = byMonth.get(m.key) || {
+        total: 0,
+        presentes: 0,
+        tardanzas: 0,
+      };
+      const asistencia = bucket.total
+        ? Math.round(
+            ((bucket.presentes + bucket.tardanzas) / bucket.total) * 100
+          )
+        : 0;
+
+      return {
+        mes: m.mes,
+        promedio: Number(promedio) || 0,
+        asistencia,
+      };
+    });
+  };
+
+  const cargarDetalleHijo = async (hijo) => {
+    const key = String(hijo?.id_usuario_alumno || "");
+    if (!key) return;
+
+    // Cache: si ya lo cargamos, solo reflejamos progreso.
+    if (detallePorHijo[key]) {
+      setProgresoMensual(detallePorHijo[key].progresoMensual || []);
+      return;
+    }
+
+    try {
+      const promCalifReq = api.get(
+        `${services.calificacionesMateriasAlumno}/${hijo.id_usuario_alumno}`
+      );
+      const asistenciaReq = hijo?.id_estudiante
+        ? api.get(services.asistenciaEstudiante(hijo.id_estudiante))
+        : Promise.resolve({
+            data: {asistencias: [], estadisticas: {porcentaje_asistencia: 0}},
+          });
+
+      const eventosReq = api.get(
+        services.padresMisEventosHijo(hijo.id_usuario_alumno)
+      );
+
+      const [materiasRes, asistenciaRes] = await Promise.all([
+        promCalifReq,
+        asistenciaReq,
+      ]);
+
+      const eventosRes = await eventosReq.catch(() => ({data: {eventos: []}}));
+
+      const materiasRaw = Array.isArray(materiasRes?.data)
+        ? materiasRes.data
+        : [];
+      const materias = materiasRaw.map((m) => ({
+        nombre: m?.materia || m?.nombre || "Materia",
+        calificacion: _promedioBimestres(m),
+        profesor: m?.profesor_nombre || m?.profesor || "—",
+      }));
+
+      const eventosRaw = Array.isArray(eventosRes?.data?.eventos)
+        ? eventosRes.data.eventos
+        : [];
+      const proximosEventos = eventosRaw
+        .filter((e) => e?.fecha)
+        .map((e) => {
+          const tipoEvaluacion = String(e?.tipo_evaluacion || "").toLowerCase();
+          const tipo =
+            tipoEvaluacion === "parcial" ||
+            tipoEvaluacion === "examen" ||
+            tipoEvaluacion === "final"
+              ? "examen"
+              : "tarea";
+
+          return {
+            tipo,
+            titulo: e?.titulo || "Evaluación",
+            materia: e?.materia || "Materia",
+            fecha: e.fecha,
+          };
+        });
+
+      const califs = materias
+        .map((m) => Number(m.calificacion || 0))
+        .filter((v) => v > 0);
+      const promedio = califs.length
+        ? Math.round(
+            (califs.reduce((acc, v) => acc + v, 0) / califs.length) * 10
+          ) / 10
+        : 0;
+
+      const asistenciaPct =
+        Number(asistenciaRes?.data?.estadisticas?.porcentaje_asistencia) || 0;
+
+      const asistenciasList = Array.isArray(asistenciaRes?.data?.asistencias)
+        ? asistenciaRes.data.asistencias
+        : [];
+
+      const progreso = _buildProgresoMensual({
+        asistencias: asistenciasList,
+        promedio,
+      });
+
+      const nuevoDetalle = {
+        promedio,
+        asistencia: asistenciaPct,
+        materias,
+        progresoMensual: progreso,
+        proximosEventos,
+        notasProfesor: [],
+        comportamiento: "N/D",
+      };
+
+      setDetallePorHijo((prev) => ({...prev, [key]: nuevoDetalle}));
+      setProgresoMensual(progreso);
+    } catch (err) {
+      console.error("Error cargando detalle del hijo:", err);
     }
   };
 
@@ -127,7 +280,25 @@ function DashboardPadre({user}) {
     );
   }
 
-  const hijoActual = hijos[selectedChild];
+  const hijoBase = hijos[selectedChild];
+  const hijoDetalle = hijoBase
+    ? detallePorHijo[String(hijoBase.id_usuario_alumno)]
+    : null;
+
+  const hijoActual = hijoBase
+    ? {
+        id: hijoBase.id_usuario_alumno,
+        nombre: `${hijoBase.nombre} ${hijoBase.apellido}`.trim(),
+        grado: hijoBase.grado || "—",
+        seccion: hijoBase.seccion || "—",
+        promedio: hijoDetalle?.promedio ?? 0,
+        asistencia: hijoDetalle?.asistencia ?? 0,
+        materias: hijoDetalle?.materias ?? [],
+        proximosEventos: hijoDetalle?.proximosEventos ?? [],
+        notasProfesor: hijoDetalle?.notasProfesor ?? [],
+        comportamiento: hijoDetalle?.comportamiento ?? "N/D",
+      }
+    : null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
@@ -148,6 +319,9 @@ function DashboardPadre({user}) {
                 <p className="text-purple-100 text-lg">
                   Seguimiento del progreso académico de tus hijos
                 </p>
+                {errorMsg && (
+                  <p className="text-rose-100 text-sm mt-2">{errorMsg}</p>
+                )}
               </div>
 
               {/* Selector de hijos */}
@@ -160,11 +334,11 @@ function DashboardPadre({user}) {
                   >
                     {hijos.map((hijo, index) => (
                       <option
-                        key={hijo.id}
+                        key={hijo.id_usuario_alumno || index}
                         value={index}
                         className="bg-gray-800"
                       >
-                        {hijo.nombre}
+                        {`${hijo.nombre} ${hijo.apellido}`.trim()}
                       </option>
                     ))}
                   </select>
@@ -187,10 +361,12 @@ function DashboardPadre({user}) {
                 </div>
                 <div>
                   <div className="text-2xl font-bold text-white">
-                    {hijoActual.nombre}
+                    {hijoActual?.nombre || "Sin hijos vinculados"}
                   </div>
                   <div className="text-purple-100 text-sm">
-                    {hijoActual.grado} - Sección {hijoActual.seccion}
+                    {hijoActual
+                      ? `${hijoActual.grado} - Sección ${hijoActual.seccion}`
+                      : ""}
                   </div>
                 </div>
               </div>
@@ -209,7 +385,7 @@ function DashboardPadre({user}) {
               <Award className="h-5 w-5 text-yellow-400" />
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {hijoActual.promedio}
+              {hijoActual?.promedio ?? 0}
             </h3>
             <p className="text-blue-200 text-sm">Promedio General</p>
             <div className="mt-2 text-xs text-green-300 flex items-center gap-1">
@@ -227,7 +403,7 @@ function DashboardPadre({user}) {
               <Trophy className="h-5 w-5 text-yellow-400" />
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {hijoActual.asistencia}%
+              {(hijoActual?.asistencia ?? 0) + "%"}
             </h3>
             <p className="text-green-200 text-sm">Asistencia</p>
             <div className="mt-2 text-xs text-yellow-300 flex items-center gap-1">
@@ -245,7 +421,7 @@ function DashboardPadre({user}) {
               <Activity className="h-5 w-5 text-cyan-400" />
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {hijoActual.materias.length}
+              {hijoActual?.materias?.length || 0}
             </h3>
             <p className="text-purple-200 text-sm">Materias Activas</p>
             <div className="mt-2 text-xs text-purple-300 flex items-center gap-1">
@@ -263,7 +439,7 @@ function DashboardPadre({user}) {
               <Star className="h-5 w-5 text-yellow-400" />
             </div>
             <h3 className="text-2xl font-bold text-white mb-1">
-              {hijoActual.comportamiento}
+              {hijoActual?.comportamiento || "N/D"}
             </h3>
             <p className="text-rose-200 text-sm">Comportamiento</p>
             <div className="mt-2 text-xs text-yellow-300 flex items-center gap-1">
@@ -282,7 +458,7 @@ function DashboardPadre({user}) {
               Calificaciones por Materia
             </h2>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={hijoActual.materias}>
+              <BarChart data={hijoActual?.materias || []}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
                 <XAxis
                   dataKey="nombre"
@@ -306,7 +482,7 @@ function DashboardPadre({user}) {
                   }}
                 />
                 <Bar dataKey="calificacion" radius={[8, 8, 0, 0]}>
-                  {hijoActual.materias.map((entry, index) => (
+                  {(hijoActual?.materias || []).map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={
@@ -381,32 +557,38 @@ function DashboardPadre({user}) {
               Materias y Profesores
             </h2>
             <div className="space-y-3">
-              {hijoActual.materias.map((materia, index) => (
-                <div
-                  key={index}
-                  className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 hover:border-purple-500/50 transition-colors"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-white font-semibold">
-                      {materia.nombre}
-                    </h3>
-                    <span
-                      className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                        materia.calificacion >= 90
-                          ? "bg-green-500/20 text-green-300"
-                          : materia.calificacion >= 80
-                          ? "bg-blue-500/20 text-blue-300"
-                          : materia.calificacion >= 70
-                          ? "bg-yellow-500/20 text-yellow-300"
-                          : "bg-red-500/20 text-red-300"
-                      }`}
-                    >
-                      {materia.calificacion}
-                    </span>
-                  </div>
-                  <p className="text-gray-400 text-sm">{materia.profesor}</p>
+              {(hijoActual?.materias || []).length === 0 ? (
+                <div className="text-gray-400 text-sm">
+                  No hay calificaciones disponibles.
                 </div>
-              ))}
+              ) : (
+                (hijoActual?.materias || []).map((materia, index) => (
+                  <div
+                    key={index}
+                    className="bg-gray-900/50 border border-gray-700 rounded-lg p-4 hover:border-purple-500/50 transition-colors"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-white font-semibold">
+                        {materia.nombre}
+                      </h3>
+                      <span
+                        className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                          materia.calificacion >= 90
+                            ? "bg-green-500/20 text-green-300"
+                            : materia.calificacion >= 80
+                            ? "bg-blue-500/20 text-blue-300"
+                            : materia.calificacion >= 70
+                            ? "bg-yellow-500/20 text-yellow-300"
+                            : "bg-red-500/20 text-red-300"
+                        }`}
+                      >
+                        {materia.calificacion}
+                      </span>
+                    </div>
+                    <p className="text-gray-400 text-sm">{materia.profesor}</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
@@ -417,47 +599,53 @@ function DashboardPadre({user}) {
               Próximos Eventos
             </h2>
             <div className="space-y-4">
-              {hijoActual.proximosEventos.map((evento, index) => (
-                <div
-                  key={index}
-                  className={`${
-                    evento.tipo === "examen"
-                      ? "bg-red-500/10 border-red-500/30"
-                      : "bg-blue-500/10 border-blue-500/30"
-                  } border rounded-lg p-4`}
-                >
-                  <div className="flex items-start gap-4">
-                    <div
-                      className={`p-2 bg-gray-800/50 rounded-lg ${
-                        evento.tipo === "examen"
-                          ? "text-red-400"
-                          : "text-blue-400"
-                      }`}
-                    >
-                      {evento.tipo === "examen" ? (
-                        <FileText className="h-5 w-5" />
-                      ) : (
-                        <BookOpen className="h-5 w-5" />
-                      )}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="text-white font-semibold mb-1">
-                        {evento.titulo}
-                      </h3>
-                      <p className="text-gray-400 text-sm mb-2">
-                        {evento.materia}
-                      </p>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Calendar className="h-3 w-3" />
-                        {new Date(evento.fecha).toLocaleDateString("es-ES", {
-                          day: "numeric",
-                          month: "long",
-                        })}
+              {(hijoActual?.proximosEventos || []).length === 0 ? (
+                <div className="text-gray-400 text-sm">
+                  No hay eventos registrados.
+                </div>
+              ) : (
+                (hijoActual?.proximosEventos || []).map((evento, index) => (
+                  <div
+                    key={index}
+                    className={`${
+                      evento.tipo === "examen"
+                        ? "bg-red-500/10 border-red-500/30"
+                        : "bg-blue-500/10 border-blue-500/30"
+                    } border rounded-lg p-4`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div
+                        className={`p-2 bg-gray-800/50 rounded-lg ${
+                          evento.tipo === "examen"
+                            ? "text-red-400"
+                            : "text-blue-400"
+                        }`}
+                      >
+                        {evento.tipo === "examen" ? (
+                          <FileText className="h-5 w-5" />
+                        ) : (
+                          <BookOpen className="h-5 w-5" />
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-white font-semibold mb-1">
+                          {evento.titulo}
+                        </h3>
+                        <p className="text-gray-400 text-sm mb-2">
+                          {evento.materia}
+                        </p>
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <Calendar className="h-3 w-3" />
+                          {new Date(evento.fecha).toLocaleDateString("es-ES", {
+                            day: "numeric",
+                            month: "long",
+                          })}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
 
               {/* Recordatorio */}
               <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
@@ -466,8 +654,7 @@ function DashboardPadre({user}) {
                   <span className="font-semibold text-sm">Recordatorio</span>
                 </div>
                 <p className="text-gray-300 text-sm">
-                  Tu hijo tiene un examen de Matemáticas en 3 días. Recuerda
-                  ayudarle a repasar.
+                  Mantente atento a las comunicaciones de la escuela.
                 </p>
               </div>
             </div>
@@ -481,29 +668,35 @@ function DashboardPadre({user}) {
             Comentarios de Profesores
           </h2>
           <div className="space-y-4">
-            {hijoActual.notasProfesor.map((nota, index) => (
-              <div
-                key={index}
-                className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="p-2 bg-cyan-500/20 rounded-lg">
-                    <MessageCircle className="h-5 w-5 text-cyan-400" />
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="text-white font-semibold">
-                        {nota.profesor}
-                      </h3>
-                      <span className="text-xs text-gray-500">
-                        {nota.fecha}
-                      </span>
+            {(hijoActual?.notasProfesor || []).length === 0 ? (
+              <div className="text-gray-400 text-sm">
+                No hay comentarios registrados.
+              </div>
+            ) : (
+              (hijoActual?.notasProfesor || []).map((nota, index) => (
+                <div
+                  key={index}
+                  className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-4"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 bg-cyan-500/20 rounded-lg">
+                      <MessageCircle className="h-5 w-5 text-cyan-400" />
                     </div>
-                    <p className="text-gray-300 text-sm">{nota.comentario}</p>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-white font-semibold">
+                          {nota.profesor}
+                        </h3>
+                        <span className="text-xs text-gray-500">
+                          {nota.fecha}
+                        </span>
+                      </div>
+                      <p className="text-gray-300 text-sm">{nota.comentario}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -518,8 +711,8 @@ function DashboardPadre({user}) {
                 ¡Excelente progreso! 🎉
               </h3>
               <p className="text-purple-100">
-                {hijoActual.nombre} ha mejorado su promedio un 5% este mes. Tu
-                apoyo es fundamental para su éxito académico.
+                {(hijoActual?.nombre || "Tu hijo") +
+                  " está avanzando en su proceso académico. Tu apoyo es fundamental para su éxito."}
               </p>
             </div>
           </div>

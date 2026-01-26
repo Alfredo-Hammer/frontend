@@ -15,6 +15,7 @@ export const ROLES = {
   PROFESOR: 'profesor',
   ALUMNO: 'alumno',
   PADRE: 'padre',
+  FAMILIAR: 'familiar',
   SECRETARIADO: 'secretariado',
 };
 
@@ -108,7 +109,7 @@ export const PERMISSIONS = {
   calificaciones: {
     ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.SECRETARIADO],
     verPropias: [ROLES.ALUMNO], // Ver solo sus propias calificaciones
-    verHijos: [ROLES.PADRE], // Ver calificaciones de sus hijos
+    verHijos: [ROLES.PADRE, ROLES.FAMILIAR], // Ver calificaciones de sus hijos
     crear: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
     editar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR],
     eliminar: [ROLES.ADMIN, ROLES.DIRECTOR],
@@ -198,6 +199,25 @@ export const PERMISSIONS = {
     eliminar: [ROLES.ADMIN],
   },
 
+  // Logs de Seguridad y Auditoría
+  logs_seguridad: {
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR],
+    exportar: [ROLES.ADMIN, ROLES.DIRECTOR],
+  },
+
+  // Auditoría del Sistema
+  auditoria: {
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR],
+    exportar: [ROLES.ADMIN, ROLES.DIRECTOR],
+  },
+
+  // Traslado de Estudiantes
+  traslado_estudiante: {
+    ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    realizar: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+    verHistorial: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.SECRETARIADO],
+  },
+
   // Soporte
   soporte: {
     ver: [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR, ROLES.ALUMNO, ROLES.PADRE, ROLES.SECRETARIADO],
@@ -212,6 +232,12 @@ export const PERMISSIONS = {
   // Configuración
   configuracion: {
     ver: [ROLES.ADMIN, ROLES.DIRECTOR],
+    editar: [ROLES.ADMIN],
+  },
+
+  // Semáforo de Notas (periodos de evaluación)
+  periodos_evaluacion: {
+    ver: [ROLES.ADMIN],
     editar: [ROLES.ADMIN],
   },
 
@@ -265,6 +291,11 @@ export const canAccessRoute = (userRole, path) => {
     return [ROLES.ADMIN, ROLES.DIRECTOR, ROLES.PROFESOR].includes(userRole);
   }
 
+  // Calificaciones de hijos (padre/familiar)
+  if (path.startsWith('/calificaciones-hijos')) {
+    return hasPermission(userRole, 'calificaciones', 'verHijos');
+  }
+
   // Mapeo de rutas a módulos
   const routeModuleMap = {
     '/': 'dashboard',
@@ -276,6 +307,7 @@ export const canAccessRoute = (userRole, path) => {
     '/alumnos': 'alumnos',
     '/alumnos/detalle': 'alumnos',
     '/estudiantes': 'estudiantes', // Ruta moderna para estudiantes
+    '/estudiantes/nuevo': 'estudiantes', // Registro de nuevo estudiante
     '/profesores': 'profesores',
     '/usuarios': 'usuarios',
     '/padres': 'alumnos', // Los padres usan el mismo módulo
@@ -294,6 +326,10 @@ export const canAccessRoute = (userRole, path) => {
     '/mensajes': 'mensajes',
     '/notificaciones': 'notificaciones',
     '/configuracion': 'configuracion',
+    '/periodos-evaluacion': 'periodos_evaluacion',
+    '/logs-seguridad': 'logs_seguridad',
+    '/auditoria': 'auditoria',
+    '/traslado-estudiante': 'traslado_estudiante',
     '/soporte': 'soporte',
     '/perfil': 'dashboard', // Todos pueden ver su perfil
     '/registro': 'configuracion',
@@ -371,7 +407,9 @@ export const getDefaultRoute = (userRole) => {
     case ROLES.ALUMNO:
       return '/calificaciones';
     case ROLES.PADRE:
-      return '/calificaciones';
+      return '/';
+    case ROLES.FAMILIAR:
+      return '/';
     default:
       return '/';
   }

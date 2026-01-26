@@ -112,14 +112,13 @@ const FormularioEstudianteCompleto = ({
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Email <span className="text-red-500">*</span>
+              Email
             </label>
             <input
               type="email"
               name="email"
               value={formData.email}
               onChange={handleInputChange}
-              required
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="estudiante@escuela.edu.ni"
             />
@@ -148,7 +147,7 @@ const FormularioEstudianteCompleto = ({
               name="edad"
               value={formData.edad}
               readOnly
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg bg-gray-50 text-gray-400"
+              className="w-full px-3 py-2 bg-gray-800 border border-gray-600 text-gray-400 placeholder-gray-400 rounded-lg"
               placeholder="Se calcula automáticamente"
             />
           </div>
@@ -217,7 +216,7 @@ const FormularioEstudianteCompleto = ({
             </select>
           </div>
           <div className="md:col-span-2 lg:col-span-3">
-            <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-300 mb-1 flex items-center gap-2">
               <HeartIcon className="h-4 w-4 text-red-500" />
               Condición de Salud / Enfermedad
             </label>
@@ -349,10 +348,10 @@ const FormularioEstudianteCompleto = ({
           <UsersIcon className="h-5 w-5 text-yellow-400" />
           Información del Tutor / Padre
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Nombre Completo del Padre/Tutor
+              Nombre
             </label>
             <input
               type="text"
@@ -360,12 +359,25 @@ const FormularioEstudianteCompleto = ({
               value={formData.nombre_padre}
               onChange={handleInputChange}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Nombre completo"
+              placeholder="Nombre"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Correo del Padre/Tutor
+              Apellido
+            </label>
+            <input
+              type="text"
+              name="tutor_apellido"
+              value={formData.tutor_apellido || ""}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Apellido"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-300 mb-1">
+              Correo
             </label>
             <input
               type="email"
@@ -373,12 +385,12 @@ const FormularioEstudianteCompleto = ({
               value={formData.correo_padre}
               onChange={handleInputChange}
               className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="padre@ejemplo.com"
+              placeholder="correo@ejemplo.com"
             />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">
-              Teléfono del Padre/Tutor
+              Teléfono
             </label>
             <input
               type="tel"
@@ -490,19 +502,6 @@ const FormularioEstudianteCompleto = ({
               <option value="Tarde">Tarde</option>
               <option value="Nocturno">Nocturno</option>
             </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-300 mb-1">
-              Nivel Educativo
-            </label>
-            <input
-              type="text"
-              name="nivel_educativo"
-              value={formData.nivel_educativo}
-              onChange={handleInputChange}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 text-white placeholder-gray-400 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Primaria, Secundaria, etc."
-            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">

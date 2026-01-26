@@ -23,6 +23,9 @@ const services = {
   calificacionesAlumnosLista: `${API_BASE}/calificaciones/alumnos-lista`,
   calificacionesMateriasAlumno: `${API_BASE}/calificaciones/materias-alumno`,
   calificacionesAlumnoInfo: `${API_BASE}/calificaciones/alumno-info`,
+  evaluacionesPorCiclo: (idCiclo) => `${API_BASE}/evaluaciones/ciclo/${idCiclo}`,
+  notasAlumno: (idAlumno) => `${API_BASE}/notas/alumno/${idAlumno}`,
+  notasGuardar: `${API_BASE}/notas/guardar`,
   reportes: `${API_BASE}/reportes`,
   reportesConsolidado: `${API_BASE}/reportes/consolidado`,
   // Datos de Nicaragua
@@ -45,10 +48,23 @@ const services = {
   finanzasEstadisticas: `${API_BASE}/finanzas/estadisticas`,
   finanzasMorosidad: `${API_BASE}/finanzas/morosidad`,
 
+  // Caja (Cierre de Caja)
+  finanzasCajaAbrir: `${API_BASE}/finanzas/caja/abrir`,
+  finanzasCajaResumen: `${API_BASE}/finanzas/caja/resumen`,
+  finanzasCajaCerrar: `${API_BASE}/finanzas/caja/cerrar`,
+
   // Dashboard
   dashboardAdmin: `${API_BASE}/dashboard/admin`,
+  dashboardActividadReciente: `${API_BASE}/dashboard/actividad-reciente`,
   dashboardProfesor: `${API_BASE}/dashboard/profesor`,
   dashboardEstudiante: `${API_BASE}/dashboard/estudiante`,
+
+  // Padres
+  padresMisHijos: `${API_BASE}/padres/mis-hijos`,
+  padresMisEventosHijo: (idUsuarioAlumno) => `${API_BASE}/padres/mis-eventos/${idUsuarioAlumno}`,
+
+  // Asistencia
+  asistenciaEstudiante: (idEstudiante) => `${API_BASE}/asistencia/estudiante/${idEstudiante}`,
 
   // Carga Académica
   cargaAcademica: `${API_BASE}/carga-academica`,
@@ -63,6 +79,26 @@ const services = {
   horarios: `${API_BASE}/horarios`,
   horariosPorId: (id) => `${API_BASE}/horarios/${id}`,
   horariosEstadisticas: `${API_BASE}/horarios/estadisticas`,
+
+  // Logs de Seguridad
+  logsSistema: `${API_BASE}/logs/sistema`,
+  logsIntentosLogin: `${API_BASE}/logs/intentos-login`,
+  logsEstadisticas: `${API_BASE}/logs/estadisticas`,
+  logsTiposAccion: `${API_BASE}/logs/tipos-accion`,
+
+  // Auditoría del Sistema
+  auditoria: `${API_BASE}/auditoria`,
+  auditoriaHistorial: (tabla, id) => `${API_BASE}/auditoria/historial/${tabla}/${id}`,
+  auditoriaEstadisticas: `${API_BASE}/auditoria/estadisticas`,
+  auditoriaActividadSospechosa: `${API_BASE}/auditoria/actividad-sospechosa`,
+  auditoriaTablas: `${API_BASE}/auditoria/tablas`,
+  auditoriaExportar: `${API_BASE}/auditoria/exportar`,
+
+  // Traslado de Estudiantes
+  trasladoBuscarEstudiante: `${API_BASE}/traslados/buscar-estudiante`,
+  trasladoEscuelasDisponibles: `${API_BASE}/traslados/escuelas-disponibles`,
+  trasladoRealizar: `${API_BASE}/traslados/realizar`,
+  trasladoHistorial: `${API_BASE}/traslados/historial`,
 };
 
 export default services;

@@ -92,7 +92,8 @@ function ReportesPage() {
         });
       } else {
         const gradosRes = await api.get("/api/grados");
-        gradosUnicos = Array.isArray(gradosRes.data) ? gradosRes.data : [];
+        const gradosData = gradosRes.data?.data || gradosRes.data;
+        gradosUnicos = Array.isArray(gradosData) ? gradosData : [];
       }
       setGrados(Array.isArray(gradosUnicos) ? gradosUnicos : []);
     } catch (error) {
@@ -552,6 +553,76 @@ function ReportesPage() {
     if (!reporteData?.estudiantes?.length)
       return showToast("Sin datos", "warning");
 
+    const normalizeText = (value) =>
+      String(value || "")
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const abbreviateMateria = (nombre, maxLen = 8) => {
+      const clean = normalizeText(nombre).toUpperCase();
+      if (!clean) return "MAT";
+      if (clean.length <= maxLen) return clean;
+
+      const stop = new Set([
+        "DE",
+        "DEL",
+        "LA",
+        "LAS",
+        "EL",
+        "LOS",
+        "Y",
+        "E",
+        "EN",
+        "A",
+        "AL",
+        "PARA",
+        "CON",
+      ]);
+      const words = clean.split(" ").filter((w) => w && !stop.has(w));
+
+      // 1) Iniciales (hasta 4)
+      if (words.length >= 2) {
+        const initials = words
+          .slice(0, 4)
+          .map((w) => w[0])
+          .join("");
+        if (initials.length >= 3) return initials.slice(0, maxLen);
+      }
+
+      // 2) 2 primeras palabras recortadas
+      if (words.length >= 2) {
+        const a = words[0].slice(0, Math.min(4, words[0].length));
+        const b = words[1].slice(0, Math.min(4, words[1].length));
+        return (a + b).slice(0, maxLen);
+      }
+
+      // 3) Recorte simple
+      return clean.slice(0, maxLen);
+    };
+
+    const buildMateriaAbbr = (materias) => {
+      const maxLen = (materias?.length || 0) > 6 ? 6 : 8;
+      const used = new Map();
+      const map = new Map();
+      (materias || []).forEach((m) => {
+        const base = abbreviateMateria(m.nombre, maxLen);
+        const key = base;
+        const count = (used.get(key) || 0) + 1;
+        used.set(key, count);
+        const abbr = count === 1 ? base : `${base}${count}`.slice(0, maxLen);
+        map.set(m.id_materia, abbr);
+      });
+      return map;
+    };
+
+    const materiasCount = reporteData.materias?.length || 0;
+    const baseFontSize = materiasCount > 10 ? 5.5 : materiasCount > 6 ? 6 : 7;
+    const basePadding =
+      materiasCount > 10 ? 0.025 : materiasCount > 6 ? 0.03 : 0.04;
+    const materiaAbbrMap = buildMateriaAbbr(reporteData.materias);
+
     const doc = new jsPDF({
       orientation: "landscape",
       unit: "in",
@@ -569,6 +640,11 @@ function ReportesPage() {
           rowSpan: 3,
           styles: {valign: "middle"},
         },
+        {
+          content: "Código MINED",
+          rowSpan: 3,
+          styles: {valign: "middle"},
+        },
       ],
     ];
     const subHeader1 = []; // Bimestres/Semestres
@@ -576,8 +652,9 @@ function ReportesPage() {
 
     // Llenar headers por materia
     reporteData.materias.forEach((mat) => {
+      const matHeader = materiaAbbrMap.get(mat.id_materia) || mat.nombre;
       headers[0].push({
-        content: mat.nombre,
+        content: matHeader,
         colSpan: cols.colSpan,
         styles: {halign: "center"},
       });
@@ -643,7 +720,9 @@ function ReportesPage() {
 
     // Construir Body
     const body = reporteData.estudiantes.map((est) => {
-      const row = [est.numero, est.nombre_completo];
+      const codigoMined =
+        est.codigo_mined || est.codigo_estudiante || est.codigo || "-";
+      const row = [est.numero, est.nombre_completo, codigoMined];
       reporteData.materias.forEach((mat) => {
         const cal = est.calificaciones[mat.id_materia] || {};
 
@@ -720,8 +799,8 @@ function ReportesPage() {
       body: body,
       theme: "grid",
       styles: {
-        fontSize: 7,
-        cellPadding: 0.04,
+        fontSize: baseFontSize,
+        cellPadding: basePadding,
         lineColor: [200, 200, 200],
         lineWidth: 0.01,
       },
@@ -733,6 +812,11 @@ function ReportesPage() {
         valign: "middle",
         lineColor: [0, 0, 0],
         lineWidth: 0.02,
+      },
+      columnStyles: {
+        0: {cellWidth: 0.3},
+        1: {cellWidth: 2.7},
+        2: {cellWidth: 0.9},
       },
       alternateRowStyles: {
         fillColor: [250, 250, 250],
@@ -790,6 +874,20 @@ function ReportesPage() {
         );
       },
     });
+
+    // Nota corta cuando hay muchas materias (encabezados abreviados)
+    if (materiasCount > 6) {
+      const y = doc.lastAutoTable.finalY + 0.12;
+      if (y < pageHeight - 0.6) {
+        doc.setFontSize(8);
+        doc.setTextColor(90, 90, 90);
+        doc.text(
+          "Nota: los encabezados de materias están abreviados para mejor legibilidad.",
+          0.5,
+          y
+        );
+      }
+    }
 
     doc.save(
       `Sabana_Calificaciones_${gradoTxt}_${seccionTxt}_${new Date().getFullYear()}.pdf`
@@ -970,39 +1068,39 @@ function ReportesPage() {
 
           {/* TABLA HTML (VISUALIZACIÓN RÁPIDA) */}
           {reporteData && reporteData.estudiantes && reporteData.materias ? (
-            <div className="bg-white rounded-xl overflow-hidden shadow-2xl overflow-x-auto border border-gray-200">
-              {/* Encabezado del Reporte (Estilo Papel) */}
-              <div className="bg-white p-6 border-b border-gray-200 text-center">
-                <h2 className="text-2xl font-bold text-gray-800 uppercase tracking-wide">
+            <div className="bg-gray-800 rounded-xl overflow-hidden shadow-2xl overflow-x-auto border border-gray-700">
+              {/* Encabezado del Reporte (UI semi-oscura) */}
+              <div className="bg-gradient-to-r from-gray-800 to-gray-900 p-6 border-b border-gray-700 text-center">
+                <h2 className="text-2xl font-bold text-gray-100 uppercase tracking-wide">
                   {escuela?.nombre || "Centro Educativo"}
                 </h2>
-                <h3 className="text-lg font-semibold text-gray-600 mt-1">
+                <h3 className="text-lg font-semibold text-gray-300 mt-1">
                   Sábana de Calificaciones - Año Lectivo{" "}
                   {new Date().getFullYear()}
                 </h3>
-                <h4 className="text-md font-medium text-gray-500 mt-0.5">
+                <h4 className="text-md font-medium text-gray-400 mt-0.5">
                   {getTituloReporte()}
                 </h4>
-                <div className="flex flex-wrap justify-center gap-6 mt-4 text-sm text-gray-600 font-medium">
-                  <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
+                <div className="flex flex-wrap justify-center gap-6 mt-4 text-sm text-gray-300 font-medium">
+                  <div className="bg-gray-900/40 px-4 py-2 rounded-lg border border-gray-700">
                     <span className="text-gray-400 mr-2">Grado:</span>
-                    <span className="text-gray-800">
+                    <span className="text-gray-100">
                       {grados.find((g) => g.id_grado == selectedGrado)
                         ?.nombre || "N/A"}
                     </span>
                   </div>
-                  <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
+                  <div className="bg-gray-900/40 px-4 py-2 rounded-lg border border-gray-700">
                     <span className="text-gray-400 mr-2">Sección:</span>
-                    <span className="text-gray-800">
+                    <span className="text-gray-100">
                       {Array.isArray(secciones)
                         ? secciones.find((s) => s.id_seccion == selectedSeccion)
                             ?.nombre
                         : "N/A"}
                     </span>
                   </div>
-                  <div className="bg-gray-50 px-4 py-2 rounded-lg border border-gray-100">
+                  <div className="bg-gray-900/40 px-4 py-2 rounded-lg border border-gray-700">
                     <span className="text-gray-400 mr-2">Profesor Guía:</span>
-                    <span className="text-gray-800">
+                    <span className="text-gray-100">
                       {reporteData.profesor
                         ? `${reporteData.profesor.nombre} ${reporteData.profesor.apellido}`
                         : "No asignado"}
@@ -1011,18 +1109,18 @@ function ReportesPage() {
                 </div>
               </div>
 
-              <table className="w-full text-xs border-collapse text-gray-700">
-                <thead className="bg-gray-50 text-gray-800">
+              <table className="w-full text-xs border-collapse text-gray-200">
+                <thead className="bg-gray-900/40 text-gray-100">
                   <tr>
                     <th
                       rowSpan={3}
-                      className="p-2 border border-gray-300 sticky left-0 bg-gray-50 z-10 font-bold"
+                      className="p-2 border border-gray-700 sticky left-0 bg-gray-900/60 z-10 font-bold"
                     >
                       No.
                     </th>
                     <th
                       rowSpan={3}
-                      className="p-2 border border-gray-300 sticky left-8 bg-gray-50 z-10 min-w-[200px] font-bold"
+                      className="p-2 border border-gray-700 sticky left-8 bg-gray-900/60 z-10 min-w-[200px] font-bold"
                     >
                       Nombre
                     </th>
@@ -1031,7 +1129,7 @@ function ReportesPage() {
                         <th
                           key={mat.id_materia}
                           colSpan={getColumnasVisibles().colSpan}
-                          className="border border-gray-300 p-1 text-center font-bold bg-gray-100"
+                          className="border border-gray-700 p-2 text-center font-bold bg-gray-800 text-indigo-200"
                         >
                           {mat.nombre}
                         </th>
@@ -1047,7 +1145,7 @@ function ReportesPage() {
                             {cols.b1 && (
                               <th
                                 colSpan={2}
-                                className="border border-gray-300 p-1 text-xs bg-blue-50 text-blue-800 font-semibold"
+                                className="border border-gray-700 p-1 text-xs bg-indigo-500/10 text-indigo-200 font-semibold"
                               >
                                 I BIM
                               </th>
@@ -1055,7 +1153,7 @@ function ReportesPage() {
                             {cols.b2 && (
                               <th
                                 colSpan={2}
-                                className="border border-gray-300 p-1 text-xs bg-blue-50 text-blue-800 font-semibold"
+                                className="border border-gray-700 p-1 text-xs bg-indigo-500/10 text-indigo-200 font-semibold"
                               >
                                 II BIM
                               </th>
@@ -1063,7 +1161,7 @@ function ReportesPage() {
                             {cols.s1 && (
                               <th
                                 colSpan={2}
-                                className="border border-gray-300 p-1 text-xs bg-blue-100 text-blue-900 font-bold"
+                                className="border border-gray-700 p-1 text-xs bg-indigo-500/20 text-indigo-100 font-bold"
                               >
                                 SEM 1
                               </th>
@@ -1071,7 +1169,7 @@ function ReportesPage() {
                             {cols.b3 && (
                               <th
                                 colSpan={2}
-                                className="border border-gray-300 p-1 text-xs bg-purple-50 text-purple-800 font-semibold"
+                                className="border border-gray-700 p-1 text-xs bg-purple-500/10 text-purple-200 font-semibold"
                               >
                                 III BIM
                               </th>
@@ -1079,7 +1177,7 @@ function ReportesPage() {
                             {cols.b4 && (
                               <th
                                 colSpan={2}
-                                className="border border-gray-300 p-1 text-xs bg-purple-50 text-purple-800 font-semibold"
+                                className="border border-gray-700 p-1 text-xs bg-purple-500/10 text-purple-200 font-semibold"
                               >
                                 IV BIM
                               </th>
@@ -1087,7 +1185,7 @@ function ReportesPage() {
                             {cols.s2 && (
                               <th
                                 colSpan={2}
-                                className="border border-gray-300 p-1 text-xs bg-purple-100 text-purple-900 font-bold"
+                                className="border border-gray-700 p-1 text-xs bg-purple-500/20 text-purple-100 font-bold"
                               >
                                 SEM 2
                               </th>
@@ -1095,7 +1193,7 @@ function ReportesPage() {
                             {cols.final && (
                               <th
                                 colSpan={2}
-                                className="border border-gray-300 p-1 text-xs bg-yellow-100 text-yellow-900 font-bold"
+                                className="border border-gray-700 p-1 text-xs bg-amber-500/15 text-amber-100 font-bold"
                               >
                                 FINAL
                               </th>
@@ -1114,10 +1212,10 @@ function ReportesPage() {
                           <React.Fragment key={`headers-${mat.id_materia}`}>
                             {[...Array(totalCols)].map((_, i) => (
                               <React.Fragment key={i}>
-                                <th className="border border-gray-300 p-1 text-[10px] bg-white text-gray-500 font-normal">
+                                <th className="border border-gray-700 p-1 text-[10px] bg-gray-800 text-gray-400 font-normal">
                                   Cual
                                 </th>
-                                <th className="border border-gray-300 p-1 text-[10px] bg-white text-gray-500 font-normal">
+                                <th className="border border-gray-700 p-1 text-[10px] bg-gray-800 text-gray-400 font-normal">
                                   Cuant
                                 </th>
                               </React.Fragment>
@@ -1132,12 +1230,12 @@ function ReportesPage() {
                     reporteData.estudiantes.map((est) => (
                       <tr
                         key={est.id_estudiante}
-                        className="hover:bg-blue-50 text-gray-800 transition-colors"
+                        className="hover:bg-gray-700/60 text-gray-100 transition-colors"
                       >
-                        <td className="p-2 border border-gray-300 text-center sticky left-0 bg-white font-medium">
+                        <td className="p-2 border border-gray-700 text-center sticky left-0 bg-gray-800 font-medium">
                           {est.numero}
                         </td>
-                        <td className="p-2 border border-gray-300 sticky left-8 bg-white font-medium text-gray-900">
+                        <td className="p-2 border border-gray-700 sticky left-8 bg-gray-800 font-medium text-gray-100">
                           {est.nombre_completo}
                         </td>
                         {/* Celdas de notas renderizadas dinámicamente según getColumnasVisibles */}
@@ -1149,11 +1247,11 @@ function ReportesPage() {
                             <React.Fragment key={mat.id_materia}>
                               {cols.b1 && (
                                 <>
-                                  <td className="border border-gray-300 text-center">
+                                  <td className="border border-gray-700 text-center text-gray-200">
                                     {cal.bimestre_1?.cual || "-"}
                                   </td>
                                   <td
-                                    className={`border border-gray-300 text-center ${
+                                    className={`border border-gray-700 text-center text-gray-200 ${
                                       cal.bimestre_1?.cuant < 60 &&
                                       cal.bimestre_1?.cuant > 0
                                         ? "text-red-600 font-bold"
@@ -1166,11 +1264,11 @@ function ReportesPage() {
                               )}
                               {cols.b2 && (
                                 <>
-                                  <td className="border border-gray-300 text-center">
+                                  <td className="border border-gray-700 text-center text-gray-200">
                                     {cal.bimestre_2?.cual || "-"}
                                   </td>
                                   <td
-                                    className={`border border-gray-300 text-center ${
+                                    className={`border border-gray-700 text-center text-gray-200 ${
                                       cal.bimestre_2?.cuant < 60 &&
                                       cal.bimestre_2?.cuant > 0
                                         ? "text-red-600 font-bold"
@@ -1183,14 +1281,14 @@ function ReportesPage() {
                               )}
                               {cols.s1 && (
                                 <>
-                                  <td className="border border-gray-300 text-center bg-blue-50">
+                                  <td className="border border-gray-700 text-center bg-indigo-500/10 text-indigo-100">
                                     {cal.semestre_1?.cual || "-"}
                                   </td>
                                   <td
-                                    className={`border border-gray-300 text-center bg-blue-50 font-bold ${
+                                    className={`border border-gray-700 text-center bg-indigo-500/10 text-indigo-100 font-bold ${
                                       cal.semestre_1?.cuant < 60 &&
                                       cal.semestre_1?.cuant > 0
-                                        ? "text-red-600"
+                                        ? "text-red-400"
                                         : ""
                                     }`}
                                   >
@@ -1200,11 +1298,11 @@ function ReportesPage() {
                               )}
                               {cols.b3 && (
                                 <>
-                                  <td className="border border-gray-300 text-center">
+                                  <td className="border border-gray-700 text-center text-gray-200">
                                     {cal.bimestre_3?.cual || "-"}
                                   </td>
                                   <td
-                                    className={`border border-gray-300 text-center ${
+                                    className={`border border-gray-700 text-center text-gray-200 ${
                                       cal.bimestre_3?.cuant < 60 &&
                                       cal.bimestre_3?.cuant > 0
                                         ? "text-red-600 font-bold"
@@ -1217,11 +1315,11 @@ function ReportesPage() {
                               )}
                               {cols.b4 && (
                                 <>
-                                  <td className="border border-gray-300 text-center">
+                                  <td className="border border-gray-700 text-center text-gray-200">
                                     {cal.bimestre_4?.cual || "-"}
                                   </td>
                                   <td
-                                    className={`border border-gray-300 text-center ${
+                                    className={`border border-gray-700 text-center text-gray-200 ${
                                       cal.bimestre_4?.cuant < 60 &&
                                       cal.bimestre_4?.cuant > 0
                                         ? "text-red-600 font-bold"
@@ -1234,14 +1332,14 @@ function ReportesPage() {
                               )}
                               {cols.s2 && (
                                 <>
-                                  <td className="border border-gray-300 text-center bg-purple-50">
+                                  <td className="border border-gray-700 text-center bg-purple-500/10 text-purple-100">
                                     {cal.semestre_2?.cual || "-"}
                                   </td>
                                   <td
-                                    className={`border border-gray-300 text-center bg-purple-50 font-bold ${
+                                    className={`border border-gray-700 text-center bg-purple-500/10 text-purple-100 font-bold ${
                                       cal.semestre_2?.cuant < 60 &&
                                       cal.semestre_2?.cuant > 0
-                                        ? "text-red-600"
+                                        ? "text-red-400"
                                         : ""
                                     }`}
                                   >
@@ -1257,13 +1355,13 @@ function ReportesPage() {
                                   );
                                   return (
                                     <>
-                                      <td className="border border-gray-300 text-center bg-yellow-100">
+                                      <td className="border border-gray-700 text-center bg-amber-500/15 text-amber-100">
                                         {f.cual}
                                       </td>
                                       <td
-                                        className={`border border-gray-300 text-center bg-yellow-100 font-bold ${
+                                        className={`border border-gray-700 text-center bg-amber-500/15 text-amber-100 font-bold ${
                                           f.cuant < 60 && f.cuant > 0
-                                            ? "text-red-600"
+                                            ? "text-red-400"
                                             : ""
                                         }`}
                                       >

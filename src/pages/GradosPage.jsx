@@ -36,11 +36,12 @@ import {CSS} from "@dnd-kit/utilities";
 function GradosPage() {
   const [grados, setGrados] = useState([]);
   const [nombre, setNombre] = useState("");
-  const [nivelEducativo, setNivelEducativo] = useState("Primaria");
+  const [nivelEducativo, setNivelEducativo] = useState("Educación Primaria");
   const [orden, setOrden] = useState("");
   const [editId, setEditId] = useState(null);
   const [editNombre, setEditNombre] = useState("");
-  const [editNivelEducativo, setEditNivelEducativo] = useState("Primaria");
+  const [editNivelEducativo, setEditNivelEducativo] =
+    useState("Educación Primaria");
   const [editOrden, setEditOrden] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -92,6 +93,13 @@ function GradosPage() {
   };
 
   const token = localStorage.getItem("token");
+
+  const normalizeArray = (value) => {
+    if (Array.isArray(value)) return value;
+    if (Array.isArray(value?.data)) return value.data;
+    return [];
+  };
+
   const canEdit =
     user &&
     [
@@ -196,7 +204,7 @@ function GradosPage() {
       });
 
       console.log("✅ Respuesta de grados:", res.data);
-      setGrados(res.data || []);
+      setGrados(normalizeArray(res.data));
     } catch (err) {
       console.error("❌ Error al cargar grados:", err);
       console.error("Error details:", {
@@ -310,7 +318,9 @@ function GradosPage() {
   const startEdit = (grado) => {
     setEditId(grado.id_grado);
     setEditNombre(grado.nombre);
-    setEditNivelEducativo(grado.nivel_educativo || "Primaria");
+    setEditNivelEducativo(
+      grado.nivel_educativo || "Educación Inicial (Preescolar)"
+    );
     setEditOrden(grado.orden?.toString() || "");
     setShowEditModal(true);
   };
@@ -657,9 +667,11 @@ function GradosPage() {
           schoolName={escuela?.nombre}
           stats={{
             "Total de Grados": grados.length,
-            "Grados Activos": grados.filter(
-              (g) => Array.isArray(g.materias) && g.materias.length > 0
-            ).length,
+            "Grados Activos": grados.filter((g) => {
+              const totalMaterias = Number(g.total_materias || 0);
+              const totalSecciones = Number(g.total_secciones || 0);
+              return totalMaterias > 0 || totalSecciones > 0;
+            }).length,
           }}
           actions={
             <>
@@ -920,11 +932,14 @@ function GradosPage() {
                         onChange={(e) => setNivelEducativo(e.target.value)}
                         required
                       >
-                        <option value="Preescolar">Preescolar</option>
-                        <option value="Primaria">Primaria</option>
-                        <option value="Secundaria">Secundaria</option>
-                        <option value="Universidad">Universidad</option>
+                        <option value="Preescolar">Educación Inicial</option>
+                        <option value="Primaria">Educación Primaria</option>
+                        <option value="Secundaria">Educación Secundaria</option>
                         <option value="Sabatino">Sabatino</option>
+                        <option value="Tecnológica">Preparatoria</option>
+                        <option value="Universidad">Universidad</option>
+                        <option value="Profesional">Profesional</option>
+                        <option value="Postgrado">Postgrado</option>
                       </select>
                     </div>
 
@@ -1065,6 +1080,8 @@ function GradosPage() {
                   </button>
                 </div>
               </div>
+              {/* #HbfPFkqPM  hammeralfredo67@gmail.com  profe */}
+              {/* sK4PjdwN4d hammeralfredo69@gmail.com profe */}
 
               <form
                 onSubmit={(e) => {
@@ -1108,11 +1125,14 @@ function GradosPage() {
                         onChange={(e) => setEditNivelEducativo(e.target.value)}
                         required
                       >
-                        <option value="Preescolar">Preescolar</option>
-                        <option value="Primaria">Primaria</option>
-                        <option value="Secundaria">Secundaria</option>
-                        <option value="Universidad">Universidad</option>
+                        <option value="Preescolar">Educación Inicial</option>
+                        <option value="Primaria">Educación Primaria</option>
+                        <option value="Secundaria">Educación Secundaria</option>
                         <option value="Sabatino">Sabatino</option>
+                        <option value="Tecnológica">Preparatoria</option>
+                        <option value="Universidad">Universidad</option>
+                        <option value="Profesional">Profesional</option>
+                        <option value="Postgrado">Postgrado</option>
                       </select>
                     </div>
 
